@@ -1,0 +1,28 @@
+# activation: !!python/name:torch.nn.modules.activation.SELU ''
+batch_norm: true
+batch_size: 512
+do_label_correction: true
+dropout: 0.25
+encode_assay_sc: false
+encode_organ: false
+gain_weight_init: 0.75
+gain_weight_init_first_layer: 4.0
+input_normalization: zero_center
+layer_norm: false
+learning_rate: 1.0e-05
+log_param_histograms: false
+lr_scheduler: null
+lr_scheduler_kwargs: null
+min_class_freq: 500.0
+# optimizer: !!python/name:torch.optim.adamw.AdamW ''
+RETRIEVAL_BATCH_SIZE: 15000
+SHUFFLE_BUFFER_SIZE: 30000
+train_set_size: 10253295
+units:
+- 512
+- 512
+- 256
+- 256
+- 64
+val_set_size: 2197964
+weight_decay: 0.01
