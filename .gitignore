@@ -137,6 +137,12 @@ dmypy.json
 # Coala
 *.orig
 
+# Folders for package
+build/
+dist/
+*.egg-info/
+
+
 # Anndata objects - too large in sfairazero
 *.h5ad
 
