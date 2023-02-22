@@ -31,22 +31,23 @@ Installation
 4. Change the line in `/envs/celldreamer/lib/python3.9/site-packages/merlin/core/compat.py`
 from
 
-    .. code-block:: python
+   .. code-block:: python
 
-         HAS_GPU = nvml.device_get_count() > 0
+       HAS_GPU = nvml.device_get_count() > 0
 
 to
 
-        .. code-block:: python
+   .. code-block:: python
 
-            HAS_GPU = True
+       HAS_GPU = True
 
 5. In the `.bashrc` and `.profile` files add the lines
 
-        .. code-block:: bash
-            export PATH=/usr/local/cuda-11/bin${PATH:+:${PATH}}
-            export LD_LIBRARY_PATH=/usr/local/cuda-11/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-            export CUDA_HOME=/usr/local/cuda-11
+   .. code-block:: bash
+        
+       export PATH=/usr/local/cuda-11/bin${PATH:+:${PATH}}
+       export LD_LIBRARY_PATH=/usr/local/cuda-11/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+       export CUDA_HOME=/usr/local/cuda-11
 
 
 Requirements
