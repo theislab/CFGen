@@ -5,6 +5,7 @@ numpy
 pandas
 torch
 pytorch-lightning
+pytorch_tabnet
 torchmetrics
 tensorboard
 tqdm
