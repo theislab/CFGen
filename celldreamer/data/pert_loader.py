@@ -382,8 +382,11 @@ def load_dataset_splits(
         return splits
 
 if __name__ == '__main__':
+    from celldreamer.paths import PERT_DATA_DIR
+    from pathlib import Path
+    path = Path(PERT_DATA_DIR)
     load_dataset_splits(
-        dataset_path = '/home/icb/alessandro.palma/scgm/datasets/sciplex/sciplex_complete_middle_subset.h5ad',
+        dataset_path = path / 'sciplex' / 'sciplex_complete_middle_subset.h5ad',
         perturbation_key = 'condition',
         dose_key = 'dose',
         covariate_keys = 'cell_type',
