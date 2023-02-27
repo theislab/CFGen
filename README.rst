@@ -22,13 +22,29 @@ Installation
 
        conda activate celldreamer
 
-3. Install the package in development mode:
+3. Additional manual installation: 
+    .. code-block:: bash
+
+        python -m pip install cudf-cu11==22.12 rmm-cu11==22.12 dask-cudf-cu11==22.12 --extra-index-url https://pypi.nvidia.com/
+        
+4. Install CellNet from source:
+
+    .. code-block:: bash
+
+        cd directory_where_you_have_your_git_repos
+        git clone https://github.com/theislab/cellnet.git
+        cd cellnet/
+        pip install -e . --no-deps
+
+
+5. Install the CellDreamer package in development mode:
 
    .. code-block:: bash
+       cd directory_where_you_have_your_git_repos/celldreamer
+       pip install -e . --no-deps
+      
 
-       pip install -e .
-
-4. Change the line in `/envs/celldreamer/lib/python3.9/site-packages/merlin/core/compat.py`
+6. Change the line in `/envs/celldreamer/lib/python3.10/site-packages/merlin/core/compat.py`
 from
 
    .. code-block:: python
@@ -41,7 +57,7 @@ to
 
        HAS_GPU = True
 
-5. In the `.bashrc` and `.profile` files add the lines
+7. In the `.bashrc` and `.profile` files add the lines
 
    .. code-block:: bash
         
