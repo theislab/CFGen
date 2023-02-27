@@ -6,6 +6,45 @@ from os.path import join
 from sfairazero.estimators.torch.base import EstimatorAE
 import os
 
+from os.path import join
+from rdkit import Chem
+import scanpy as sc
+from typing import List, Optional, Union
+
+indx = lambda a, i: a[i] if a is not None else None
+
+
+class Args(dict):
+    """
+    Wrapper around a dictiornary to make its keys callable as attributes
+    """
+    def __init__(self, *args, **kwargs):
+        super(Args, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+
+def canonicalize_smiles(smiles: Optional[str]):
+    """
+    Canonicalize the SMILES
+    """
+    if smiles:
+        return Chem.CanonSmiles(smiles)
+    else:
+        return None
+
+def drug_names_to_once_canon_smiles(
+    drug_names: List[str], dataset: sc.AnnData, perturbation_key: str, smiles_key: str
+    ):
+    """
+    Converts a list of drug names to a list of SMILES. The ordering is of the list is preserved
+    """
+    name_to_smiles_map = {
+        drug: canonicalize_smiles(smiles)
+        for drug, smiles in dataset.obs.groupby(
+            [perturbation_key, smiles_key]
+        ).groups.keys()
+    }
+    return [name_to_smiles_map[name] for name in drug_names]
 
 def get_train_val_test_split(data_path: str = '/lustre/groups/ml01/workspace/felix.fischer.2/sfaira/data/store/'
                                               'dao_512_cxg_primary_subset_norm',
