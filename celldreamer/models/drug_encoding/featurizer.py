@@ -1,12 +1,12 @@
 import torch 
 import pandas as pd
-from scgm.paths import EMBEDDING_DIR
+from celldreamer.paths import EMBEDDING_DIR
 
 class Featurizer(torch.nn.Module):
     def __init__(self, 
                  args, 
                  smiles,
-                 device='cuda'):
+                 device):
         """Wrapper around drug pre-trained features.
         Args:
             args (Args): dictionary with training arguments
@@ -47,11 +47,14 @@ class Featurizer(torch.nn.Module):
     
 if __name__ == '__main__':
     import numpy as np
-    from scgm.utils import Args
-    smiles = pd.read_csv('/home/icb/alessandro.palma/scgm/datasets/sciplex/sciplex.smiles').SMILES
+    from celldreamer.data.utils import Args
+    from celldreamer.paths import PERT_DATA_DIR
+    from pathlib import Path 
+
+    smiles = pd.read_csv(Path(PERT_DATA_DIR) / 'sciplex' / 'sciplex.smiles').SMILES
     smiles = np.sort(smiles)
     args = Args({'freeze_embeddings': True, 
                  'feature_type': 'None'})
     for model in ['ECFP', 'grover', 'MPNN']:
         args['feature_type'] = model
-        f = Featurizer(args, smiles)
+        f = Featurizer(args, smiles, device='cpu')

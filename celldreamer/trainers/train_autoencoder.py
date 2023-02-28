@@ -4,7 +4,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, TQ
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities.model_summary import ModelSummary
 from lightning_fabric.utilities.seed import seed_everything
-from celldreamer.estimator.estimator import EstimatorAutoEncoder
+from celldreamer.estimator.estimator_autoencoder import EstimatorAutoEncoder
 from pathlib import Path
 import argparse
 
