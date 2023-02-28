@@ -1,9 +1,7 @@
 # This code is based on sfairazero_benchmarks, but without OOD
 
-import sfaira
 import numpy as np
 from os.path import join
-from sfairazero.estimators.torch.base import EstimatorAE
 import os
 
 from os.path import join
