@@ -1,3 +1,4 @@
+pynvml
 setuptools
 merlin-dataloader
 merlin-core
@@ -16,3 +17,6 @@ scanpy
 rdkit 
 jupyter
 scipy
+dgl
+dgllife
+descriptastorus
