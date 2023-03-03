@@ -2,7 +2,7 @@ import torch
 import pandas as pd
 from celldreamer.paths import EMBEDDING_DIR
 
-class Featurizer(torch.nn.Module):
+class DrugsFeaturizer(torch.nn.Module):
     def __init__(self, 
                  args, 
                  smiles,
@@ -57,4 +57,5 @@ if __name__ == '__main__':
                  'feature_type': 'None'})
     for model in ['ECFP', 'grover', 'MPNN']:
         args['feature_type'] = model
-        f = Featurizer(args, smiles, device='cpu')
+        f = DrugsFeaturizer(args, smiles, device='cpu')
+         

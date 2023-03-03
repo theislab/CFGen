@@ -77,7 +77,7 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
         return loss
 
     @abc.abstractmethod
-    def _step(self, batch) -> (torch.Tensor, torch.Tensor):
+    def _step(self, batch):
         """Calculate predictions (int64 tensor) and loss"""
         pass
 
