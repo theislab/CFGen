@@ -44,20 +44,8 @@ Installation
        pip install -e . --no-deps
       
 
-6. Change the line in `/envs/celldreamer/lib/python3.10/site-packages/merlin/core/compat.py`
-from
 
-   .. code-block:: python
-
-       HAS_GPU = nvml.device_get_count() > 0
-
-to
-
-   .. code-block:: python
-
-       HAS_GPU = True
-
-7. In the `.bashrc` and `.profile` files add the lines
+6. In the `.bashrc` and `.profile` files add the lines
 
    .. code-block:: bash
         
