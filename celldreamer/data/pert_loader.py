@@ -9,7 +9,7 @@ import torch
 from anndata import AnnData
 
 from sklearn.preprocessing import OneHotEncoder
-from utils import indx, drug_names_to_once_canon_smiles
+from celldreamer.data.utils import indx, drug_names_to_once_canon_smiles
 
 class PertDataset:
     covariate_keys: Optional[List[str]] 
@@ -370,8 +370,6 @@ def load_dataset_splits(
         "training_control": dataset.subset("train", "control"),
         "training_treated": dataset.subset("train", "treated"),
         "test": dataset.subset("test", "all"),
-        "test_control": dataset.subset("test", "control"),
-        "test_treated": dataset.subset("test", "treated"),
         "ood": dataset.subset("ood", "all"),
     }
 
