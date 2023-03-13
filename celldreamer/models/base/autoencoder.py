@@ -18,14 +18,11 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
 
     def __init__(
             self,
-            # fixed params
-            gene_dim: int,
+            number_of_genes: int,
             feature_means: np.ndarray,
-            # params from datamodule
             train_set_size: int,
             val_set_size: int,
             batch_size: int,
-            # model specific params
             reconst_loss: str = 'continuous_bernoulli',
             learning_rate: float = 0.005,
             weight_decay: float = 0.1,
@@ -36,7 +33,7 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
     ):
         super(BaseAutoEncoder, self).__init__()
 
-        self.gene_dim = gene_dim
+        self.number_of_genes = number_of_genes
         self.train_set_size = train_set_size
         self.val_set_size = val_set_size
         self.batch_size = batch_size
@@ -152,7 +149,7 @@ class MLP_AutoEncoder(BaseAutoEncoder):
     def __init__(
             self,
             # fixed params
-            gene_dim: int,
+            number_of_genes: int,
             feature_means: np.ndarray,
             # params from datamodule
             train_set_size: int,
@@ -173,7 +170,7 @@ class MLP_AutoEncoder(BaseAutoEncoder):
             lr_scheduler_kwargs: Dict = None,
     ):
         super(MLP_AutoEncoder, self).__init__(
-            gene_dim=gene_dim,
+            number_of_genes=number_of_genes,
             feature_means=feature_means,
             train_set_size=train_set_size,
             val_set_size=val_set_size,
@@ -189,7 +186,7 @@ class MLP_AutoEncoder(BaseAutoEncoder):
 
         # Define encoder network
         self.encoder = MLP(
-            in_channels=gene_dim,
+            in_channels=number_of_genes,
             hidden_channels=units_encoder,
             norm_layer=_get_norm_layer(batch_norm=batch_norm, layer_norm=layer_norm),
             activation_layer=activation,
@@ -200,7 +197,7 @@ class MLP_AutoEncoder(BaseAutoEncoder):
         self.decoder = nn.Sequential(
             MLP(
                 in_channels=units_encoder[-1],
-                hidden_channels=units_decoder + [gene_dim],
+                hidden_channels=units_decoder + [number_of_genes],
                 norm_layer=_get_norm_layer(batch_norm=batch_norm, layer_norm=layer_norm),
                 activation_layer=activation,
                 inplace=False,
