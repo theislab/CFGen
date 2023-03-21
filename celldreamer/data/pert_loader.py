@@ -41,7 +41,7 @@ class PertDataset:
             Example: cell type + drug name + drug dose. This is used during evaluation.
         :param use_drugs_idx: Whether or not to encode drugs via their index, instead of via a OneHot encoding
         """
-        
+                
         # Read AnnData 
         logging.info(f"Starting to read in data: {data}\n...")
         if isinstance(data, AnnData):
@@ -85,38 +85,36 @@ class PertDataset:
             self._drugs_name_to_idx = {
                 smiles: idx for idx, smiles in enumerate(self.drugs_names_unique_sorted)
             }
+            self.drug_dict = {val:key for key,val in self._drugs_name_to_idx.items()}
 
             # Collect smiles per drug 
             self.canon_smiles_unique_sorted = drug_names_to_once_canon_smiles(
                 list(self.drugs_names_unique_sorted), data, perturbation_key, smiles_key
             )
             
-            # Some cells faced couples of perturbations 
+            # Some cells may face a couple of perturbations 
             self.max_num_perturbations = max(
                 len(name.split("+")) for name in self.drugs_names
             )
 
             if not use_drugs_idx:
-                # prepare a OneHot encoding for each unique drug in the dataset
-                # use the same sorted ordering of drugs as for indexing
+                # One-hot encoding of drugs using same order as sorted names 
                 self.encoder_drug = OneHotEncoder(
                     sparse=False, categories=[list(self.drugs_names_unique_sorted)]
                 )
-                self.encoder_drug.fit(self.drugs_names_unique_sorted.reshape(-1, 1))
+                drugs_ohe = self.encoder_drug.fit_transform(self.drugs_names_unique_sorted.reshape(-1, 1))
                 # stores a drug name -> OHE mapping (np float array)
                 self.atomic_drugs_dict = dict(
                     zip(
                         self.drugs_names_unique_sorted,
-                        self.encoder_drug.transform(
-                            self.drugs_names_unique_sorted.reshape(-1, 1)
+                        drugs_ohe
                         ),
                     )
-                )
-                # get drug combination encoding: for each cell we calculate a single vector as:
+                
+                # Get drug combination encoding (if any): for each cell we calculate a single vector as:
                 # combination_encoding = dose1 * OneHot(drug1) + dose2  * OneHot(drug2) + ...
                 drugs = []
                 for i, comb in enumerate(self.drugs_names):
-                    # here (in encoder_drug.transform()) is where the init_dataset function spends most of it's time.
                     drugs_combos = self.encoder_drug.transform(
                         np.array(comb.split("+")).reshape(-1, 1)
                     )
@@ -129,19 +127,11 @@ class PertDataset:
                     drugs.append(drug_ohe)
                 self.drugs = torch.Tensor(np.array(drugs))  # Scale up the one hot encoding per drug 
 
-                # store a mapping from int -> drug_name, where the integer equals the position
-                # of the drug in the OneHot encoding. Very convoluted, should be refactored.
-                self.drug_dict = {}
-                atomic_ohe = self.encoder_drug.transform(
-                    self.drugs_names_unique_sorted.reshape(-1, 1)
-                )
-                for idrug, drug in enumerate(self.drugs_names_unique_sorted):
-                    i = np.where(atomic_ohe[idrug] == 1)[0][0]
-                    self.drug_dict[i] = drug
             else:
                 assert (
                     self.max_num_perturbations == 1
                 ), "Index-based drug encoding only works with single perturbations"
+                
                 drugs_idx = [self.drug_name_to_idx(drug) for drug in self.drugs_names]
                 self.drugs_idx = torch.tensor(
                     drugs_idx,
@@ -168,7 +158,7 @@ class PertDataset:
             if not len(covariate_keys) == len(set(covariate_keys)):
                 raise ValueError(f"Duplicate keys were given in: {covariate_keys}")
             
-            self.covariate_names = {}
+            self.covariate_names = {}  # the value of each covariate per observation  
             self.covariate_names_unique = {}
             self.atomic_сovars_dict = {}
             self.covariates = []
