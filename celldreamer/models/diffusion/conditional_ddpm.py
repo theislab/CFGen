@@ -4,16 +4,14 @@ Paper: https://arxiv.org/abs/2207.12598
 Code: https://github.com/Michedev/DDPMs-Pytorch/blob/72d621ea7b64793b82bc5cace3605b85dc5d0b03/model/classifier_free_ddpm.py
 """
 
-from typing import Literal, List, Union, Optional
-
 import pytorch_lightning as pl
 import torch
 from pathlib import Path
 from torch import nn
-from torch.nn.functional import one_hot
+from typing import Callable, Dict, List
 
-from celldreamer.models.base.variance_scheduler.abs_var_scheduler import Scheduler
-from celldreamer.models.base.distributions import x0_to_xt
+from celldreamer.models.diffusion.variance_scheduler.abs_var_scheduler import Scheduler
+from celldreamer.models.diffusion.distributions import x0_to_xt
 
 
 class ConditionalGaussianDDPM(pl.LightningModule):
@@ -23,6 +21,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
 
     def __init__(self,
                  denoising_model: nn.Module,  # MLP
+                 autoencoder_model: nn.Module, 
+                 feature_embeddings: dict, 
                  T: int,  # default: 4_000
                  w: float,  # default: 0.3
                  v: float, 
@@ -30,7 +30,9 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  p_uncond: float,
                  logging_freq: int,   
                  classifier_free: bool, 
-                 variance_scheduler: 'Scheduler'  # default: cosine
+                 task: str, 
+                 variance_scheduler: 'Scheduler',  # default: cosine
+                 optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
                  ):
         """
         :param denoising_module: The nn which computes the denoise step i.e. q(x_{t-1} | x_t, c)
@@ -50,6 +52,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         super().__init__()
         
         self.denoising_model = denoising_model
+        self.autoencoder_model = autoencoder_model
         self.num_classes = self.denoising_model.num_classes
         self.n_covariates = n_covariates
         self.T = T
@@ -57,6 +60,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.v = v
         self.p_uncond = p_uncond
         self.number_of_genes = self.denoising_model.in_dim 
+        self.task = task
+        self.feature_embeddings = feature_embeddings
         
         self.var_scheduler = variance_scheduler
         self.alphas_hat: torch.FloatTensor = self.var_scheduler.get_alpha_hat().to(self.device)
@@ -70,6 +75,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.iteration = 0
         self.gen_images = Path('training_gen_images')
         self.gen_images.mkdir(exist_ok=True)
+        
+        self.optim = optimizer
 
     def forward(self, x: torch.Tensor, t: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         """
@@ -87,12 +94,20 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         pass
 
-    def _step(self, X, y, dataset: Literal['train', 'valid']) -> torch.Tensor:
+    def _step(self, batch) -> torch.Tensor:
         """
         train/validation step of DDPM. The logic is mostly taken from the original DDPM paper,
         except for the class conditioning part.
         """
-        y = torch.cat(y, dim=1)
+        X = batch["X"]
+        y = []
+                
+        for feature_cat in batch["y"]:
+            y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])
+            y.append(y_cat)
+            
+        y = torch.cat(y, dim=1) # Concatenate covariate encodings 
+        
         if self.classifier_free:
             # dummy flags that with probability p_uncond, we train without class conditioning
             is_class_cond = torch.rand(size=(X.shape[0],1), device=X.device) >= self.p_uncond
@@ -106,74 +121,19 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
         loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
 
-        # log every batch on validation set, otherwise log every self.logging_freq batches on training set
-        if dataset == 'valid' or (self.iteration % self.logging_freq) == 0:
-            self.log(f'loss/{dataset}_loss', loss, on_step=True)
-            if dataset == 'train':
-                norm_params = sum(
-                    [torch.norm(p.grad) for p in self.parameters() if
-                     hasattr(p, 'grad') and p.grad is not None])
-                self.log('grad_norm', norm_params)
-            self.logger.experiment.add_image(f'{dataset}_pred_score', eps[0], self.iteration)
-            with torch.no_grad():
-                self.log(f'noise/{dataset}_mean_eps', eps.mean(), on_step=True)
-                self.log(f'noise/{dataset}_std_eps', eps.flatten(1).std(dim=1).mean(), on_step=True)
-                self.log(f'noise/{dataset}_max_eps', eps.max(), on_step=True)
-                self.log(f'noise/{dataset}_min_eps', eps.min(), on_step=True)
-
         self.iteration += 1
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(params=self.parameters(), lr=1e-4)
+        optimizer_config = {'optimizer': self.optim(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)}
+        return optimizer_config
 
     def on_fit_start(self) -> None:
         self.betas = self.betas.to(self.device)
         self.betas_hat = self.betas_hat.to(self.device)
         self.alphas = self.alphas.to(self.device)
         self.alphas_hat = self.alphas_hat.to(self.device)
-
-    # def generate(self, batch_size: Optional[int] = None, c: Optional[torch.Tensor] = None, T: Optional[int] = None,
-    #              get_intermediate_steps: bool = False) -> Union[torch.Tensor, List[torch.Tensor]]:
-    #     """
-    #     Generate a new sample starting from pure random noise sampled from a normal standard distribution
-    #     :param batch_size: the generated batch size
-    #     :param c: the class conditional matrix [batch_size, num_classes]. By default, it will be deactivated by passing a matrix of full zeroes
-    #     :param T: the number of generation steps. By default, it will be the number of steps of the training
-    #     :param get_intermediate_steps: if true, it will all return the intermediate steps of the generation
-    #     :return: the generated image or the list of intermediate steps
-    #     """
-    #     T = T or self.T
-    #     batch_size = batch_size or 1
-    #     is_c_none = c is None
-    #     if is_c_none:
-    #         c = torch.zeros(batch_size, self.num_classes, device=self.device)
-    #     if get_intermediate_steps:
-    #         steps = []
-    #     z_t = torch.randn(batch_size, self.input_channels,  # start with random noise sampled from N(0, 1)
-    #                       self.width, self.height, device=self.device)
-    #     for t in range(T - 1, 0, -1):
-    #         if get_intermediate_steps:
-    #             steps.append(z_t)
-    #         t = torch.LongTensor([t] * batch_size).to(self.device).view(-1, 1)
-    #         t_expanded = t.view(-1, 1)
-    #         if is_c_none:
-    #             # compute unconditioned noise
-    #             eps = self(z_t, t / T, c)  # predict via nn the noise
-    #         else:
-    #             # compute class conditioned noise
-    #             eps1 = (1 + self.w) * self(z_t, t / T, c)
-    #             eps2 = self.w * self(z_t, t / T, c * 0)
-    #             eps = eps1 - eps2
-    #         alpha_t = self.alphas[t_expanded]
-    #         z = torch.randn_like(z_t)
-    #         alpha_hat_t = self.alphas_hat[t_expanded]
-    #         # denoise step from x_t to x_{t-1} following the DDPM paper
-    #         z_t = (z_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_hat_t)) * eps) / (torch.sqrt(alpha_t)) + \
-    #               self.betas[t_expanded] * z
-
-    #     if get_intermediate_steps:
-    #         steps.append(z_t)
+        
 
 if __name__=="__main__":
     from celldreamer.models.diffusion.denoising_model import MLPTimeStep

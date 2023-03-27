@@ -132,11 +132,13 @@ class PertDataset:
                     self.max_num_perturbations == 1
                 ), "Index-based drug encoding only works with single perturbations"
                 
+                # Extract the drug id for each observation 
                 drugs_idx = [self.drug_name_to_idx(drug) for drug in self.drugs_names]
                 self.drugs_idx = torch.tensor(
                     drugs_idx,
                     dtype=torch.long,
                 )
+                # Extract floats for the dosages 
                 dosages = [float(dosage) for dosage in self.dose_names]
                 self.dosages = torch.tensor(
                     dosages,
@@ -158,24 +160,28 @@ class PertDataset:
             if not len(covariate_keys) == len(set(covariate_keys)):
                 raise ValueError(f"Duplicate keys were given in: {covariate_keys}")
             
-            self.covariate_names = {}  # the value of each covariate per observation  
+            self.covariate_names = {}  
             self.covariate_names_unique = {}
             self.atomic_сovars_dict = {}
             self.covariates = []
-            for cov in covariate_keys:
+            
+            # Derive one-hot encodings and names for covariates and their sub-categories
+            for cov in self.covariate_keys:
                 self.covariate_names[cov] = np.array(data.obs[cov].values)
                 self.covariate_names_unique[cov] = np.unique(self.covariate_names[cov])
 
+                # Fit one-hot encoder with the name of the covariates 
                 names = self.covariate_names_unique[cov]
                 encoder_cov = OneHotEncoder(sparse=False)
                 encoder_cov.fit(names.reshape(-1, 1))
 
+                # Dictionary relating unique category names to their one-hot encodings 
                 self.atomic_сovars_dict[cov] = dict(
                     zip(list(names), encoder_cov.transform(names.reshape(-1, 1)))
                 )
 
+                # Encode per obserdvation covariates
                 names = self.covariate_names[cov]
-                # Per observation
                 self.covariates.append(
                     torch.Tensor(encoder_cov.transform(names.reshape(-1, 1))).float()
                 )
@@ -185,8 +191,10 @@ class PertDataset:
             self.atomic_сovars_dict = None
             self.covariates = None
 
+        # Indicate if cell is control 
         self.ctrl = data.obs["control"].values
 
+        # Indicate control name in the perturbation column
         if perturbation_key is not None:
             self.ctrl_name = list(
                 np.unique(data[data.obs["control"] == 1].obs[self.perturbation_key])
@@ -194,6 +202,7 @@ class PertDataset:
         else:
             self.ctrl_name = None
 
+        # Number of covariates 
         if self.covariates is not None:
             self.num_covariates = [
                 len(names) for names in self.covariate_names_unique.values()
@@ -201,6 +210,7 @@ class PertDataset:
         else:
             self.num_covariates = [0]
 
+        # Number of genes 
         self.num_genes = self.genes.shape[1]
         self.num_drugs = (
             len(self.drugs_names_unique_sorted)
@@ -251,19 +261,19 @@ class PertDataset:
     def __getitem__(self, i):
         if self.use_drugs_idx:
             return (
-                self.genes[i],
-                indx(self.drugs_idx, i),
-                indx(self.dosages, i),
-                indx(self.degs, i),
-                *[indx(cov, i) for cov in self.covariates],
-            )
+                {"X": self.genes[i],
+                    "X_degs": indx(self.degs, i), 
+                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
+                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
+                )
+            
         else:
             return (
-                self.genes[i],
-                indx(self.drugs, i),
-                indx(self.degs, i),
-                *[indx(cov, i) for cov in self.covariates],
-            )
+                {"X": self.genes[i],
+                    "X_degs": indx(self.degs, i), 
+                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
+                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
+                )
 
     def __len__(self):
         return len(self.genes)
@@ -311,19 +321,19 @@ class SubPertDataset:
     def __getitem__(self, i):
         if self.use_drugs_idx:
             return (
-                self.genes[i],
-                indx(self.drugs_idx, i),
-                indx(self.dosages, i),
-                indx(self.degs, i),
-                *[indx(cov, i) for cov in self.covariates],
-            )
+                {"X": self.genes[i],
+                    "X_degs": indx(self.degs, i), 
+                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
+                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
+                )
+            
         else:
             return (
-                self.genes[i],
-                indx(self.drugs, i),
-                indx(self.degs, i),
-                *[indx(cov, i) for cov in self.covariates],
-            )
+                {"X": self.genes[i],
+                    "X_degs": indx(self.degs, i), 
+                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
+                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
+                )
 
     def __len__(self):
         return len(self.genes)

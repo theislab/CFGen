@@ -1,6 +1,7 @@
 import torch 
 import pandas as pd
 from celldreamer.paths import EMBEDDING_DIR
+from celldreamer.models.base.utils import MLP 
 
 class DrugsFeaturizer(torch.nn.Module):
     def __init__(self, 
@@ -19,18 +20,35 @@ class DrugsFeaturizer(torch.nn.Module):
         self.smiles = smiles
         self.device = device
         self.features = self._load_features()
+        
+        # Initialize doser 
+        self.dosers = MLP(hidden_channels = [self.drug_embeddings.embedding_dim + 1]
+                          + [self.hparams["dosers_width"]] * self.hparams["dosers_depth"]
+                          + [1],
+                          norm_layer=None,
+                          activation_layer=torch.nn.ReLU, 
+                          inplace=True, 
+                          bias=True, 
+                          dropout=0.0)
     
-    def forward(self, batch_idx):
+    def forward(self, batch, dose):
         """Given the SMILE IDs of a batch, collect the pre-trained features
         Args:
             batch_idx (Union[float, int, list, torch.Tensor]): The indices to extract from the matrix of pre-trained embeddings 
         Returns:
             torch.Tensor: features of the extracted batch ids 
         """
+        batch_idx, dose = batch
         if type(batch_idx) != torch.Tensor:
             batch_idx = torch.tensor(batch_idx).long()
+            
+        if type(dose) != torch.Tensor:
+            dose = torch.tensor(dose)
+            
         batch_idx = batch_idx.to(self.device)
-        return self.features(batch_idx)
+        drug_features = self.features(batch_idx)
+        scaled_dosages = self.doser(torch.cat([drug_features, dose], dim=1))
+        return drug_features @ scaled_dosages 
 
     def _load_features(self):
         """Load features from a pre-defined model.

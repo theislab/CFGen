@@ -11,17 +11,23 @@ import torch
 import torch.nn.functional as F
 
 from cellnet.datamodules import MerlinDataModule
+from celldreamer.models.base.autoencoder import MLP_AutoEncoder
 from celldreamer.data.pert_loader import PertDataset
 from celldreamer.models.featurizers.drug_featurizer import DrugsFeaturizer
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
 
 from celldreamer.models.diffusion.denoising_model import MLPTimeStep
-from celldreamer.models.diffusion.classifier_free_ddpm import ConditionalGaussianDDPM
+from celldreamer.models.diffusion.conditional_ddpm import ConditionalGaussianDDPM
+
 
 class CellDreamerEstimator:
     def __init__(self, args):
         self.args = args
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.init_datamodule()  # Initialize the data module 
+        self.get_fixed_rna_model_params()  # Initialize the data derived model params 
+        self.init_feature_embeddings()  # Initialize the feature embeddings 
+        self.init_model()  # Initialize
     
     def init_datamodule(self):
         """
@@ -65,6 +71,21 @@ class CellDreamerEstimator:
                                                         batch_size=self.args.batch_size,
                                                         shuffle=True,
                                     )})
+    
+    
+    def get_fixed_rna_model_params(self):
+        """Set the model parameters extracted from the data loader object
+        """
+        if self.args.task == "perturbation_modelling":
+            self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
+            self.args.generative_model_kwargs["n_covariates"] = len(self.dataset.covariate_names)
+        else:
+            self.args.denoising_module_kwargs["in_dim"] = len(pd.read_parquet(join(self.args.data_path, 'var.parquet')))
+            self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)        
+        
+        if self.args.use_latent_repr:
+            self.args.autoencoder_kwargs["in_dim"] = self.args.denoising_module_kwargs["in_dim"]
+            
             
     def init_feature_embeddings(self):
         """
@@ -99,21 +120,23 @@ class CellDreamerEstimator:
                 num_classes[cov] = n_cat
         
         self.args.denoising_module_kwargs["num_classes"] = num_classes
-    
-    def get_fixed_rna_model_params(self):
-        if self.args.task == "perturbation_modelling":
-            self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
-            self.args.model_kwargs["n_covariates"] = len(self.dataset.covariate_names)
-        else:
-            self.args.denoising_module_kwargs["in_dim"] = len(pd.read_parquet(join(self.args.data_path, 'var.parquet')))
-            self.args.model_kwargs["n_covariates"] = len(self.args.categories)
-    
+
+
     def init_model(self):
+        """Initialize the (optional) autoencoder and generative model 
+        """
+        if self.args.use_latent_repr:
+            self.autoencoder = MLP_AutoEncoder(**self.args.autoencoder_kwargs)
+        else:
+            self.autoencoder = None 
+        
         if self.args.generative_model == 'diffusion':
             if self.args.denoising_model == 'mlp':
                 denoising_model = MLPTimeStep(**self.args.denoising_module_kwargs)
-                self.model = ConditionalGaussianDDPM(
+                self.generative_model = ConditionalGaussianDDPM(
                     denoising_model=denoising_model,
+                    autoencoder=self.autoencoder,
+                    task=self.args.task, 
                     **self.args.model_kwargs  # model_kwargs should contain the rest of the arguments
                 )
             else:
@@ -122,26 +145,36 @@ class CellDreamerEstimator:
             raise NotImplementedError
     
     def init_trainer(self):
-        self.trainer = pl.Trainer(**self.args.trainer_kwargs)
-
-    def _check_is_initialized(self):
-        pass
-
-    def find_lr(self):
-        pass
+        if self.args.train_autoencoder:
+            self.trainer_autoencoder = pl.Trainer(**self.args.trainer_autoencoder_kwargs)
+        self.trainer_generative = pl.Trainer(**self.args.trainer_generative_kwargs)
 
     def train(self):
-        pass
+        if self.args.use_latent_repr and self.latent_self.args.train_autoencoder:
+            # Fit autoencoder model 
+            self.trainer.fit(
+                self.autoencoder,
+                train_dataloaders=self.datamodule.train_dataloader(),
+                val_dataloaders=self.datamodule.val_dataloader(),
+                ckpt_path=None if not self.args.pretrained_autoencoder else self.args.checkpoint_autoencoder
+            )
+        
+        self.trainer_generative.fit(
+                self.generative_model,
+                train_dataloaders=self.datamodule.train_dataloader(),
+                val_dataloaders=self.datamodule.val_dataloader(),
+                ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative
+                )
+        
+    def validate(self, ckpt_path: str = None):
+        self._check_is_initialized()
+        return self.trainer_generative.validate(self.generative_model, 
+                                                dataloaders=self.datamodule.val_dataloader(), 
+                                                ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative)
 
-    def validate(self):
-        pass
-
-    def test(self):
-        pass
-
-    def predict(self) -> np.ndarray:
-        pass
-    
-    def generate(self):
-        pass
+    def test(self, ckpt_path: str = None):
+        self._check_is_initialized()
+        return self.trainer_generative.test(self.generative_model, 
+                                            dataloaders=self.datamodule.test_dataloader(), 
+                                            ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative)
     

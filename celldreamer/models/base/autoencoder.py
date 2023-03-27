@@ -14,39 +14,31 @@ from celldreamer.models.base.base import _get_norm_layer, MLP
 
 class BaseAutoEncoder(pl.LightningModule, abc.ABC):
 
-    autoencoder: nn.Module  # autoencoder mapping von gene_dim to gene_dim
+    autoencoder: nn.Module  # autoencoder mapping from gene_dim to gene_dim
 
     def __init__(
             self,
-            number_of_genes: int,
-            feature_means: np.ndarray,
-            train_set_size: int,
-            val_set_size: int,
+            in_dim: int,
             batch_size: int,
+            gc_frequency: int = 5, 
             reconst_loss: str = 'continuous_bernoulli',
             learning_rate: float = 0.005,
             weight_decay: float = 0.1,
             optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.AdamW,
             lr_scheduler: Callable = None,
-            lr_scheduler_kwargs: Dict = None,
-            gc_frequency: int = 5
+            lr_scheduler_kwargs: Dict = None      
     ):
         super(BaseAutoEncoder, self).__init__()
 
-        self.number_of_genes = number_of_genes
-        self.train_set_size = train_set_size
-        self.val_set_size = val_set_size
+        self.in_dim = in_dim
         self.batch_size = batch_size
         self.gc_freq = gc_frequency
-
+        self.reconst_loss = reconst_loss
         self.lr = learning_rate
         self.weight_decay = weight_decay
         self.optim = optimizer
-        self.reconst_loss = reconst_loss
         self.lr_scheduler = lr_scheduler
         self.lr_scheduler_kwargs = lr_scheduler_kwargs
-
-        self.register_buffer('feature_means', torch.tensor(feature_means))
 
         metrics = MetricCollection({
             'explained_var_weighted': ExplainedVariance(multioutput='variance_weighted'),
@@ -78,15 +70,8 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
         """Calculate predictions (int64 tensor) and loss"""
         pass
 
-    def on_after_batch_transfer(self, batch, dataloader_idx):
-        batch = batch[0]
-        # zero center data
-        # batch['X'] = batch['X'] - self.feature_means
-
-        return batch
-
     def forward(self, batch):
-        x_in = batch['X'] - self.feature_means  # zero center data
+        x_in = batch['X']
         # do not use covariates
         x_latent = self.encoder(x_in)
         x_reconst = self.decoder(x_latent)
@@ -96,10 +81,8 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
         preds, loss = self._step(batch)
         self.log('train_loss', loss, on_epoch=True)
         self.log_dict(self.train_metrics(preds, batch['X']), on_epoch=True)
-
         if batch_idx % self.gc_freq == 0:
             gc.collect()
-
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -116,7 +99,6 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
         preds, loss = self._step(batch)
         self.log('test_loss', loss)
         self.log_dict(self.test_metrics(preds, batch['X']))
-
         if batch_idx % self.gc_freq == 0:
             gc.collect()
 
@@ -140,7 +122,6 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
                 'monitor': monitor,
                 'frequency': frequency
             }
-
         return optimizer_config
 
 
@@ -149,45 +130,41 @@ class MLP_AutoEncoder(BaseAutoEncoder):
     def __init__(
             self,
             # fixed params
-            number_of_genes: int,
-            feature_means: np.ndarray,
-            # params from datamodule
-            train_set_size: int,
-            val_set_size: int,
-            batch_size: int,
+            in_dim: int,
             # model specific params
-            units_encoder: List[int],
-            units_decoder: List[int],
+            batch_size: int, 
+            hidden_dim_encoder: List[int],
+            hidden_dim_decoder: List[int],
             batch_norm: bool = True,
             layer_norm: bool = False,
             activation: Callable[[], torch.nn.Module] = nn.SELU,
             output_activation: Callable[[], torch.nn.Module] = nn.Sigmoid,
+            reconst_loss: int = "mse", 
             dropout: float = 0.2,
             learning_rate: float = 0.005,
             weight_decay: float = 0.1,
             optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.AdamW,
             lr_scheduler: Callable = None,
             lr_scheduler_kwargs: Dict = None,
-    ):
+    ): 
+            
         super(MLP_AutoEncoder, self).__init__(
-            number_of_genes=number_of_genes,
-            feature_means=feature_means,
-            train_set_size=train_set_size,
-            val_set_size=val_set_size,
+            in_dim=in_dim,
             batch_size=batch_size,
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            lr_scheduler_kwargs=lr_scheduler_kwargs
+            lr_scheduler_kwargs=lr_scheduler_kwargs, 
+            resconst_loss=reconst_loss
         )
         # save hyperparameters
         self.save_hyperparameters(ignore=['feature_means'])
 
         # Define encoder network
         self.encoder = MLP(
-            in_channels=number_of_genes,
-            hidden_channels=units_encoder,
+            in_channels=in_dim,
+            hidden_channels=hidden_dim_encoder,
             norm_layer=_get_norm_layer(batch_norm=batch_norm, layer_norm=layer_norm),
             activation_layer=activation,
             inplace=False,
@@ -196,8 +173,8 @@ class MLP_AutoEncoder(BaseAutoEncoder):
         # Define decoder network
         self.decoder = nn.Sequential(
             MLP(
-                in_channels=units_encoder[-1],
-                hidden_channels=units_decoder + [number_of_genes],
+                in_channels=hidden_dim_encoder[-1],
+                hidden_channels=hidden_dim_decoder + [in_dim],
                 norm_layer=_get_norm_layer(batch_norm=batch_norm, layer_norm=layer_norm),
                 activation_layer=activation,
                 inplace=False,
@@ -214,7 +191,7 @@ class MLP_AutoEncoder(BaseAutoEncoder):
         :return: loss, predictions, targets
         """
         # print('batch keys', batch.keys())
-        x_latent, x_reconst = self(batch)
+        _, x_reconst = self(batch)
         loss = self._calc_reconstruction_loss(x_reconst, batch['X'], reduction='mean')
 
         return x_reconst, loss
