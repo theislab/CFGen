@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 import torch
 from pathlib import Path
 from torch import nn
-from typing import Callable, Dict, List
+from typing import Callable, Union, Optional, List
 
 from celldreamer.models.diffusion.variance_scheduler.abs_var_scheduler import Scheduler
 from celldreamer.models.diffusion.distributions import x0_to_xt
@@ -123,6 +123,54 @@ class ConditionalGaussianDDPM(pl.LightningModule):
 
         self.iteration += 1
         return loss
+    
+    def generate(self, batch_size: Optional[int] = None, c: Optional[torch.Tensor] = None, T: Optional[int] = None,
+                 get_intermediate_steps: bool = False) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """
+        Generate a new sample starting from pure random noise sampled from a normal standard distribution
+        :param batch_size: the generated batch size
+        :param c: the class conditional matrix [batch_size, num_classes]. By default, it will be deactivated by passing a matrix of full zeroes
+        :param T: the number of generation steps. By default, it will be the number of steps of the training
+        :param get_intermediate_steps: if true, it will all return the intermediate steps of the generation
+        :return: the generated image or the list of intermediate steps
+        """
+        T = T or self.T
+        batch_size = batch_size or 1
+        is_c_none = c is None
+        # Optional conditioning
+        if is_c_none:
+            c = torch.zeros(batch_size, self.num_classes, device=self.device)
+        if get_intermediate_steps:
+            steps = []
+            
+        # Starting random noise 
+        z_t = torch.randn(batch_size, self.number_of_genes, device=self.device)
+        for t in range(T - 1, 0, -1):
+            if get_intermediate_steps:
+                steps.append(z_t)
+            t = torch.LongTensor([t] * batch_size).to(self.device).view(-1, 1)
+            t_expanded = t.view(-1, 1)
+            if is_c_none:
+                # compute unconditioned noise
+                eps = self(z_t, t / T, c)  # predict via nn the noise
+            else:
+                if self.classifier_free:
+                    # compute class conditioned noise
+                    eps1 = (1 + self.w) * self(z_t, t / T, c)
+                    eps2 = self.w * self(z_t, t / T, c * 0)
+                    eps = eps1 - eps2
+                else: 
+                    eps = self(z_t, t / T, c)
+                    
+            alpha_t = self.alphas[t_expanded]
+            z = torch.randn_like(z_t)
+            alpha_hat_t = self.alphas_hat[t_expanded]
+            # denoise step from x_t to x_{t-1} following the DDPM paper
+            z_t = (z_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_hat_t)) * eps) / (torch.sqrt(alpha_t)) + \
+                  self.betas[t_expanded] * z
+        if get_intermediate_steps:
+            steps.append(z_t)
+        return z_t if not get_intermediate_steps else steps
 
     def configure_optimizers(self):
         optimizer_config = {'optimizer': self.optim(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)}
