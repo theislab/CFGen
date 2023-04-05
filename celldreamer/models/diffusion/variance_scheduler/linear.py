@@ -1,11 +1,10 @@
 # https://github.com/Michedev/DDPMs-Pytorch/blob/72d621ea7b64793b82bc5cace3605b85dc5d0b03/variance_scheduler/linear.py
 
-from celldreamer.models.base.variance_scheduler.abs_var_scheduler import Scheduler
+from celldreamer.models.diffusion.variance_scheduler.abs_var_scheduler import Scheduler
 import torch
 
 
 class LinearScheduler(Scheduler):
-
     def __init__(self, T: int, beta_start: float, beta_end: float):
         self.T = T
         self.beta_start = beta_start

@@ -4,7 +4,7 @@ from math import exp
 import torch
 from numpy import arctan
 
-from celldreamer.models.base.variance_scheduler.abs_var_scheduler import Scheduler
+from celldreamer.models.diffusion.variance_scheduler.abs_var_scheduler import Scheduler
 
 
 class HyperbolicSecant(Scheduler):

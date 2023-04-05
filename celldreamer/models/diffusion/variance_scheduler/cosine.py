@@ -4,11 +4,11 @@ from math import pi
 
 import torch
 
-from celldreamer.models.base.variance_scheduler.abs_var_scheduler import Scheduler
+from celldreamer.models.diffusion.variance_scheduler.abs_var_scheduler import Scheduler
 
 class CosineScheduler(Scheduler):
 
-    def __init__(self, T: int, s: float = 0.0008):
+    def __init__(self, T: int = 4000, s: float = 0.0008):
         self.T = T
         self._alpha_hats = self.f(torch.arange(self.T), T, s)
         self._alpha_hats_t_minus_1 = torch.roll(self._alpha_hats, 1, 0)

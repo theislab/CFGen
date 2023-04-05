@@ -43,7 +43,6 @@ class MLP(torch.nn.Sequential):
             dropout: float = 0.0,
     ):
         params = {} if inplace is None else {"inplace": inplace}
-
         layers = []
         in_dim = in_channels
         for hidden_dim in hidden_channels[:-1]:

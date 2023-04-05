@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import ContinuousBernoulli
 from torchmetrics import ExplainedVariance, MeanSquaredError, MetricCollection
-from celldreamer.models.base.base import _get_norm_layer, MLP
+from celldreamer.models.base.utils import _get_norm_layer, MLP
 
 
 class BaseAutoEncoder(pl.LightningModule, abc.ABC):
@@ -151,13 +151,14 @@ class MLP_AutoEncoder(BaseAutoEncoder):
         super(MLP_AutoEncoder, self).__init__(
             in_dim=in_dim,
             batch_size=batch_size,
+            reconst_loss=reconst_loss,
             learning_rate=learning_rate,
             weight_decay=weight_decay,
-            optimizer=optimizer,
+            optimizer=optimizer, 
             lr_scheduler=lr_scheduler,
             lr_scheduler_kwargs=lr_scheduler_kwargs, 
-            resconst_loss=reconst_loss
         )
+        
         # save hyperparameters
         self.save_hyperparameters(ignore=['feature_means'])
 

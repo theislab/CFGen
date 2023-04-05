@@ -10,7 +10,7 @@ from pathlib import Path
 from torch import nn
 from typing import Callable, Union, Optional, List
 
-from celldreamer.models.diffusion.variance_scheduler.abs_var_scheduler import Scheduler
+from celldreamer.models.diffusion.variance_scheduler.cosine import CosineScheduler
 from celldreamer.models.diffusion.distributions import x0_to_xt
 
 
@@ -31,8 +31,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  logging_freq: int,   
                  classifier_free: bool, 
                  task: str, 
-                 variance_scheduler: 'Scheduler',  # default: cosine
                  optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
+                 variance_scheduler= CosineScheduler()  # default: cosine
                  ):
         """
         :param denoising_module: The nn which computes the denoise step i.e. q(x_{t-1} | x_t, c)
@@ -64,8 +64,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.feature_embeddings = feature_embeddings
         
         self.var_scheduler = variance_scheduler
-        self.alphas_hat: torch.FloatTensor = self.var_scheduler.get_alpha_hat().to(self.device)
-        self.alphas: torch.FloatTensor = self.var_scheduler.get_alphas().to(self.device)
+        self.alphas_hat = self.var_scheduler.get_alpha_hat().to(self.device)
+        self.alphas = self.var_scheduler.get_alphas().to(self.device)
         self.betas = self.var_scheduler.get_betas().to(self.device)
         self.betas_hat = self.var_scheduler.get_betas_hat().to(self.device)
         self.classifier_free = classifier_free
