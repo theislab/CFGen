@@ -101,14 +101,17 @@ class CellDreamerEstimator:
             self.feature_embeddings["drug"] = DrugsFeaturizer(self.args,
                                                    self.dataset.canon_smiles_unique_sorted,
                                                    self.device)
+            num_classes["drug"] = self.feature_embeddings["drug"].shape[1]
             
             for cov, cov_names in self.dataset.covariate_names_unique.items():
                 self.feature_embeddings[cov] = CategoricalFeaturizer(len(cov_names), 
                                                                         self.args.one_hot_encode_features, 
                                                                         self.device, 
                                                                         embedding_dimensions=self.args.embedding_dimensions)
-                num_classes[cov] = len(cov_names)
-            
+                if self.args.one_hot_encode_features:
+                    num_classes[cov] = len(cov_names)
+                else:
+                    num_classes[cov] = self.args.embedding_dimensions
         else:
             metadata_path = Path(self.args.metadata_path) / "categorical_lookup"
             for cat in self.args.categories:
@@ -117,8 +120,11 @@ class CellDreamerEstimator:
                                                                      self.args.one_hot_encode_features, 
                                                                      self.device, 
                                                                      embedding_dimensions=self.args.embedding_dimensions)
-                num_classes[cov] = n_cat
-        
+                if self.args.one_hot_encode_features:
+                    num_classes[cov] = n_cat
+                else:
+                    num_classes[cov] = self.args.embedding_dimensions
+                            
         self.args.denoising_module_kwargs["num_classes"] = num_classes
 
 
