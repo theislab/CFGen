@@ -97,53 +97,22 @@ class PertDataset:
                 len(name.split("+")) for name in self.drugs_names
             )
 
-            if not use_drugs_idx:
-                # One-hot encoding of drugs using same order as sorted names 
-                self.encoder_drug = OneHotEncoder(
-                    sparse=False, categories=[list(self.drugs_names_unique_sorted)]
-                )
-                drugs_ohe = self.encoder_drug.fit_transform(self.drugs_names_unique_sorted.reshape(-1, 1))
-                # stores a drug name -> OHE mapping (np float array)
-                self.atomic_drugs_dict = dict(
-                    zip(
-                        self.drugs_names_unique_sorted,
-                        drugs_ohe
-                        ),
-                    )
-                
-                # Get drug combination encoding (if any): for each cell we calculate a single vector as:
-                # combination_encoding = dose1 * OneHot(drug1) + dose2  * OneHot(drug2) + ...
-                drugs = []
-                for i, comb in enumerate(self.drugs_names):
-                    drugs_combos = self.encoder_drug.transform(
-                        np.array(comb.split("+")).reshape(-1, 1)
-                    )
-                    dose_combos = str(data.obs[dose_key].values[i]).split("+")
-                    for j, d in enumerate(dose_combos):
-                        if j == 0:
-                            drug_ohe = float(d) * drugs_combos[j]
-                        else:
-                            drug_ohe += float(d) * drugs_combos[j]
-                    drugs.append(drug_ohe)
-                self.drugs = torch.Tensor(np.array(drugs))  # Scale up the one hot encoding per drug 
-
-            else:
-                assert (
-                    self.max_num_perturbations == 1
-                ), "Index-based drug encoding only works with single perturbations"
-                
-                # Extract the drug id for each observation 
-                drugs_idx = [self.drug_name_to_idx(drug) for drug in self.drugs_names]
-                self.drugs_idx = torch.tensor(
-                    drugs_idx,
-                    dtype=torch.long,
-                )
-                # Extract floats for the dosages 
-                dosages = [float(dosage) for dosage in self.dose_names]
-                self.dosages = torch.tensor(
-                    dosages,
-                    dtype=torch.float32,
-                )
+            assert (
+                self.max_num_perturbations == 1
+            ), "Index-based drug encoding only works with single perturbations"
+            
+            # Extract the drug id for each observation 
+            drugs_idx = [self.drug_name_to_idx(drug) for drug in self.drugs_names]
+            self.drugs_idx = torch.tensor(
+                drugs_idx,
+                dtype=torch.long,
+            )
+            # Extract floats for the dosages 
+            dosages = [float(dosage) for dosage in self.dose_names]
+            self.dosages = torch.tensor(
+                dosages,
+                dtype=torch.float32,
+            )
 
         else:
             self.pert_categories = None
@@ -180,7 +149,7 @@ class PertDataset:
                     zip(list(names), encoder_cov.transform(names.reshape(-1, 1)))
                 )
 
-                # Encode per obserdvation covariates
+                # Encode per observation covariates
                 names = self.covariate_names[cov]
                 self.covariates.append(
                     torch.Tensor(encoder_cov.transform(names.reshape(-1, 1))).float()
@@ -210,7 +179,7 @@ class PertDataset:
         else:
             self.num_covariates = [0]
 
-        # Number of genes 
+        # Number of genes and drugs 
         self.num_genes = self.genes.shape[1]
         self.num_drugs = (
             len(self.drugs_names_unique_sorted)
@@ -248,6 +217,9 @@ class PertDataset:
         self.degs = torch.stack(degs_tensor)
 
     def subset(self, split, condition="all"):
+        """
+        Subset the Dataset class given a pre-defined split 
+        """
         idx = list(set(self.indices[split]) & set(self.indices[condition]))
         return SubPertDataset(self, idx)
 
@@ -259,21 +231,12 @@ class PertDataset:
         return self._drugs_name_to_idx[drug_name]
 
     def __getitem__(self, i):
-        if self.use_drugs_idx:
-            return (
-                {"X": self.genes[i],
-                    "X_degs": indx(self.degs, i), 
-                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
-                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
-                )
-            
-        else:
-            return (
-                {"X": self.genes[i],
-                    "X_degs": indx(self.degs, i), 
-                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
-                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
-                )
+        X = self.genes[i]
+        X_degs = indx(self.degs, i)
+        y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        y.update({"y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})
+        return ({"X": X, "X_degs": X_degs, "y": y})
 
     def __len__(self):
         return len(self.genes)
@@ -319,26 +282,18 @@ class SubPertDataset:
         self.degs = dataset.degs
 
     def __getitem__(self, i):
+        X = self.genes[i]
+        X_degs = indx(self.degs, i)
         if self.use_drugs_idx:
-            return (
-                {"X": self.genes[i],
-                    "X_degs": indx(self.degs, i), 
-                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
-                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
-                )
-            
-        else:
-            return (
-                {"X": self.genes[i],
-                    "X_degs": indx(self.degs, i), 
-                    "y":{"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}.update({
-                        "y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})}
-                )
+            y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        y.update({"y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})
+        return ({"X": X, "X_degs": X_degs, "y": y})
 
     def __len__(self):
         return len(self.genes)
 
-
+# Load the data splits
 def load_dataset_splits(
     dataset_path: str,
     perturbation_key: Union[str, None],
