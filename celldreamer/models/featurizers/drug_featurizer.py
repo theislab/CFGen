@@ -22,9 +22,9 @@ class DrugsFeaturizer(torch.nn.Module):
         self.features = self._load_features()
         
         # Initialize doser 
-        self.dosers = MLP(hidden_channels = [self.drug_embeddings.embedding_dim + 1]
-                          + [self.hparams["dosers_width"]] * self.hparams["dosers_depth"]
-                          + [1],
+        self.dosers = MLP(in_channels = self.features.embedding_dim + 1,
+                          hidden_channels = [args["doser_width"]] * args["doser_depth"]
+                                            + [1],
                           norm_layer=None,
                           activation_layer=torch.nn.ReLU, 
                           inplace=True, 

@@ -1,6 +1,7 @@
 from os.path import join
 from typing import Dict, List
 from pathlib import Path
+from celldreamer.paths import TRAINING_FOLDER
 
 from celldreamer.data.utils import Args
 
@@ -10,7 +11,9 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 
-from cellnet.datamodules import MerlinDataModule
+# Restore once the dataset is ready
+# from cellnet.datamodules import MerlinDataModule
+
 from celldreamer.models.base.autoencoder import MLP_AutoEncoder
 from celldreamer.data.pert_loader import PertDataset
 from celldreamer.models.featurizers.drug_featurizer import DrugsFeaturizer
@@ -23,11 +26,25 @@ from celldreamer.models.diffusion.conditional_ddpm import ConditionalGaussianDDP
 class CellDreamerEstimator:
     def __init__(self, args):
         self.args = args
+        
+        # Create the training directory 
+        if self.args.train:
+            self.training_dir = TRAINING_FOLDER / self.args.experiment_name
+            self.training_dir.mkdir(parents=True, exist_ok=True)
+            print("Create the training folders...")
+            if self.args.use_latent_repr:
+                self.args["trainer_autoencoder_kwargs"]["default_root_dir"] = self.training_dir / "autoencoder"
+            self.args["trainer_generative_kwargs"]["default_root_dir"] = self.training_dir / "generative"
+
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print("Initialize data module...")
         self.init_datamodule()  # Initialize the data module 
         self.get_fixed_rna_model_params()  # Initialize the data derived model params 
+        print("Initialize feature embeddings...")
         self.init_feature_embeddings()  # Initialize the feature embeddings 
+        print("Initialize model...")
         self.init_model()  # Initialize
+            
     
     def init_datamodule(self):
         """
@@ -101,7 +118,7 @@ class CellDreamerEstimator:
             self.feature_embeddings["drug"] = DrugsFeaturizer(self.args,
                                                    self.dataset.canon_smiles_unique_sorted,
                                                    self.device)
-            num_classes["drug"] = self.feature_embeddings["drug"].shape[1]
+            num_classes["drug"] = self.feature_embeddings["drug"].features.embedding_dim
             
             for cov, cov_names in self.dataset.covariate_names_unique.items():
                 self.feature_embeddings[cov] = CategoricalFeaturizer(len(cov_names), 
@@ -141,9 +158,10 @@ class CellDreamerEstimator:
                 denoising_model = MLPTimeStep(**self.args.denoising_module_kwargs)
                 self.generative_model = ConditionalGaussianDDPM(
                     denoising_model=denoising_model,
-                    autoencoder=self.autoencoder,
+                    autoencoder_model=self.autoencoder,
+                    feature_embeddings=self.feature_embeddings,
                     task=self.args.task, 
-                    **self.args.model_kwargs  # model_kwargs should contain the rest of the arguments
+                    **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
                 )
             else:
                 raise NotImplementedError
