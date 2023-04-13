@@ -22,7 +22,7 @@ class DrugsFeaturizer(torch.nn.Module):
         self.features = self._load_features()
         
         # Initialize doser 
-        self.dosers = MLP(in_channels = self.features.embedding_dim + 1,
+        self.doser = MLP(in_channels = self.features.embedding_dim + 1,
                           hidden_channels = [args["doser_width"]] * args["doser_depth"]
                                             + [1],
                           norm_layer=None,
@@ -31,14 +31,14 @@ class DrugsFeaturizer(torch.nn.Module):
                           bias=True, 
                           dropout=0.0)
     
-    def forward(self, batch, dose):
+    def forward(self, batch):
         """Given the SMILE IDs of a batch, collect the pre-trained features
         Args:
             batch_idx (Union[float, int, list, torch.Tensor]): The indices to extract from the matrix of pre-trained embeddings 
         Returns:
             torch.Tensor: features of the extracted batch ids 
         """
-        batch_idx, dose = batch
+        batch_idx, dose = batch[0], batch[1]
         if type(batch_idx) != torch.Tensor:
             batch_idx = torch.tensor(batch_idx).long()
             

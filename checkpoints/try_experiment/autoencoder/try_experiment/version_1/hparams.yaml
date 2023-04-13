@@ -1,0 +1,21 @@
+activation: !!python/name:torch.nn.modules.activation.ReLU ''
+batch_norm: true
+batch_size: 128
+dropout: 0.0
+hidden_dim_decoder:
+- 64
+- 128
+- 64
+hidden_dim_encoder:
+- 256
+- 128
+- 64
+in_dim: 2000
+layer_norm: false
+learning_rate: 0.001
+lr_scheduler: null
+lr_scheduler_kwargs: null
+optimizer: !!python/name:torch.optim.adam.Adam ''
+output_activation: !!python/name:torch.nn.modules.linear.Identity ''
+reconst_loss: mse
+weight_decay: 0.1

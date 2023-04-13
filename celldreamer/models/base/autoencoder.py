@@ -19,19 +19,17 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
     def __init__(
             self,
             in_dim: int,
-            batch_size: int,
             gc_frequency: int = 5, 
             reconst_loss: str = 'continuous_bernoulli',
             learning_rate: float = 0.005,
             weight_decay: float = 0.1,
-            optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.AdamW,
+            optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
             lr_scheduler: Callable = None,
             lr_scheduler_kwargs: Dict = None      
     ):
         super(BaseAutoEncoder, self).__init__()
 
         self.in_dim = in_dim
-        self.batch_size = batch_size
         self.gc_freq = gc_frequency
         self.reconst_loss = reconst_loss
         self.lr = learning_rate
@@ -109,7 +107,9 @@ class BaseAutoEncoder(pl.LightningModule, abc.ABC):
         gc.collect()
 
     def configure_optimizers(self):
-        optimizer_config = {'optimizer': self.optim(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)}
+        optimizer_config = {'optimizer': self.optim(self.parameters(), 
+                                                    lr=self.lr, 
+                                                    weight_decay=self.weight_decay)}
         if self.lr_scheduler is not None:
             lr_scheduler_kwargs = {} if self.lr_scheduler_kwargs is None else self.lr_scheduler_kwargs
             interval = lr_scheduler_kwargs.pop('interval', 'epoch')
@@ -132,7 +132,6 @@ class MLP_AutoEncoder(BaseAutoEncoder):
             # fixed params
             in_dim: int,
             # model specific params
-            batch_size: int, 
             hidden_dim_encoder: List[int],
             hidden_dim_decoder: List[int],
             batch_norm: bool = True,
@@ -150,7 +149,6 @@ class MLP_AutoEncoder(BaseAutoEncoder):
             
         super(MLP_AutoEncoder, self).__init__(
             in_dim=in_dim,
-            batch_size=batch_size,
             reconst_loss=reconst_loss,
             learning_rate=learning_rate,
             weight_decay=weight_decay,
