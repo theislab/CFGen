@@ -113,7 +113,10 @@ class CellDreamerEstimator:
         """Set the model parameters extracted from the data loader object
         """
         if self.args.task == "perturbation_modelling":
-            self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
+            if self.args.use_latent_repr: 
+                self.args.denoising_module_kwargs["in_dim"] = self.args.autoencoder_kwargs["hidden_dim_encoder"][-1]
+            else:
+                self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
             self.args.generative_model_kwargs["n_covariates"] = len(self.dataset.covariate_names)
         else:
             self.args.denoising_module_kwargs["in_dim"] = len(pd.read_parquet(join(self.args.data_path, 'var.parquet')))
@@ -136,6 +139,7 @@ class CellDreamerEstimator:
             self.feature_embeddings["y_drug"] = DrugsFeaturizer(self.args,
                                                    self.dataset.canon_smiles_unique_sorted,
                                                    self.device)
+            
             num_classes["y_drug"] = self.feature_embeddings["y_drug"].features.embedding_dim
             for cov, cov_names in self.dataset.covariate_names_unique.items():
                 self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
@@ -192,6 +196,7 @@ class CellDreamerEstimator:
             self.trainer_autoencoder = pl.Trainer(**self.args.trainer_autoencoder_kwargs, 
                                                   logger=CSVLogger(self.args["trainer_autoencoder_kwargs"]["default_root_dir"],
                                                     name=self.args.experiment_name))
+            
         self.trainer_generative = pl.Trainer(**self.args.trainer_generative_kwargs, 
                                                   logger=CSVLogger(self.args["trainer_generative_kwargs"]["default_root_dir"],
                                                     name=self.args.experiment_name))
