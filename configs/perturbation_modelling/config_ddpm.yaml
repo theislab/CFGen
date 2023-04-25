@@ -1,0 +1,103 @@
+args:
+  # General training config 
+  train: True  # Whether to train the model  
+  train_autoencoder: False # Train autoencoder or only the diffusion model
+  use_latent_repr: False # Latent diffusion or direct data feature diffusion 
+  experiment_name: try_experiment # Name of the ecperiment (e.g ddpm sweeps)
+  task: perturbation_modelling # task (cell_generation or perturbation_modelling)
+  dataset: "sciplex"
+  batch_size: 128  
+  one_hot_encode_features: True  
+  resume: False
+  doser_width: 128
+  doser_depth: 3
+  pretrained_autoencoder: False
+  checkpoint_autoencoder: Null  
+                  
+  # Perturbation setting specific
+  freeze_embeddings: True  # Whether the embeddings should get trained 
+  feature_type: grover  # Name of the drug featurizer 
+  use_drugs: True  # Use drug or not 
+  perturbation_key: condition  
+  dose_key: dose
+  covariate_keys: cell_type
+  smile_keys: SMILES
+  degs_key: lincs_DEGs
+  pert_category: cov_drug_dose_name
+  split_key: split_ho_pathway
+  use_drugs: True  # Whether to use the drugs or only the covariates 
+  embedding_dimensions: 100  # Dimensionality of t
+  one_hot_encode_features: False
+  doser_width: 128
+  doser_depth: 3
+  pretrained_generative: False
+  chekpoint_path: True
+                     
+  # General model 
+  generative_model: diffusion  
+  denoising_model: mlp
+                    
+  # Autoencoder 
+  autoencoder_kwargs: 
+    learning_rate: 0.001
+    hidden_dim_encoder: [256, 128, 64]
+    hidden_dim_decoder: [64, 128, 64]
+    batch_norm: True
+    layer_norm: False
+    activation: torch.nn.ReLU  #FIX
+    output_activation: torch.nn.Identity #FIX
+    reconst_loss: mse
+    dropout: 0.0
+    weight_decay: 0.0001
+    optimizer: torch.optim.Adam  #FIX
+    lr_scheduler: None
+    lr_scheduler_kwargs: None
+
+                    
+    #Denoising model specific 
+    denoising_module_kwargs: 
+      dims: [128, 64]
+      time_embed_size: 100 
+      class_emb_size: 100
+      dropout: 0.0
+                    
+    # Diffusion model specific
+    generative_model_kwargs: 
+      T: 4000
+      w: 0.3
+      v: 0.2
+      p_uncond: 0.2
+      logging_freq: 1000
+      classifier_free: False
+      learning_rate: 0.001
+      weight_decay: 0.0001
+                    
+    # Autoencoder trainer hparams
+    trainer_autoencoder_kwargs:
+      max_epochs: 1000
+      gradient_clip_val: 1.
+      gradient_clip_algorithm: norm
+      accelerator: gpu
+      devices: 1
+      num_sanity_val_steps: 0
+      check_val_every_n_epoch: 1
+      log_every_n_steps: 100
+      detect_anomaly: False
+      enable_progress_bar: True
+      enable_model_summary: False
+      enable_checkpointing: True
+                       
+    # Generative model trainer hyperparams 
+    trainer_generative_kwargs:
+      max_epochs: 1000
+      gradient_clip_val: 1
+      gradient_clip_algorithm: norm
+      accelerator: gpu
+      devices: 1
+      num_sanity_val_step: 0
+      check_val_every_n_epoch: 1
+      log_every_n_steps: 100
+      detect_anomaly: False
+      enable_progress_bar: True
+      enable_model_summary': False
+      enable_checkpointing': True                

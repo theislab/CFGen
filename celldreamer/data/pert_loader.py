@@ -29,7 +29,7 @@ class PertDataset:
         degs_key="rank_genes_groups_cov",
         pert_category="cov_drug_dose_name",
         split_key='split',
-        use_drugs_idx=False,
+        use_drugs=False,
     ):
         """
         :param covariate_keys: Names of obs columns which stores covariate names (eg cell type).
@@ -60,7 +60,7 @@ class PertDataset:
             covariate_keys = [covariate_keys]
         self.covariate_keys = covariate_keys
         self.smiles_key = smiles_key
-        self.use_drugs_idx = use_drugs_idx
+        self.use_drugs = use_drugs
         
         # Prepare drug query with dose 
         if perturbation_key is not None:
@@ -131,29 +131,24 @@ class PertDataset:
             
             self.covariate_names = {}  
             self.covariate_names_unique = {}
-            self.atomic_сovars_dict = {}
             self.covariates = []
             
             # Derive one-hot encodings and names for covariates and their sub-categories
             for cov in self.covariate_keys:
                 self.covariate_names[cov] = np.array(data.obs[cov].values)
                 self.covariate_names_unique[cov] = np.unique(self.covariate_names[cov])
-
-                # Fit one-hot encoder with the name of the covariates 
-                names = self.covariate_names_unique[cov]
+                names = self.covariate_names[cov]
+                
                 encoder_cov = OneHotEncoder(sparse=False)
                 encoder_cov.fit(names.reshape(-1, 1))
 
-                # Dictionary relating unique category names to their one-hot encodings 
-                self.atomic_сovars_dict[cov] = dict(
-                    zip(list(names), encoder_cov.transform(names.reshape(-1, 1)))
-                )
-
                 # Encode per observation covariates
                 names = self.covariate_names[cov]
+
                 self.covariates.append(
-                    torch.Tensor(encoder_cov.transform(names.reshape(-1, 1))).float()
+                    torch.Tensor(encoder_cov.transform(names.reshape(-1, 1))).float().argmax(1)
                 )
+            
         else:
             self.covariate_names = None
             self.covariate_names_unique = None
@@ -172,7 +167,7 @@ class PertDataset:
             self.ctrl_name = None
 
         # Number of covariates 
-        if self.covariates is not None:
+        if self.covariate_names_unique is not None:
             self.num_covariates = [
                 len(names) for names in self.covariate_names_unique.values()
             ]
@@ -233,8 +228,10 @@ class PertDataset:
     def __getitem__(self, i):
         X = self.genes[i]
         X_degs = indx(self.degs, i)
-        y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
-        y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        if self.use_drugs:
+            y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        else:
+            y = {}
         y.update({"y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})
         return ({"X": X, "X_degs": X_degs, "y": y})
 
@@ -252,21 +249,15 @@ class SubPertDataset:
         self.dose_key = dataset.dose_key
         self.covariate_keys = dataset.covariate_keys
         self.smiles_key = dataset.smiles_key
-
-        self.covars_dict = dataset.atomic_сovars_dict
+        self.use_drugs = dataset.use_drugs
 
         self.genes = dataset.genes[indices]
-        self.use_drugs_idx = dataset.use_drugs_idx
-        if self.use_drugs_idx:
-            self.drugs_idx = indx(dataset.drugs_idx, indices)
-            self.dosages = indx(dataset.dosages, indices)
-        else:
-            self.perts_dict = dataset.atomic_drugs_dict
-            self.drugs = indx(dataset.drugs, indices)
-        self.covariates = [indx(cov, indices) for cov in dataset.covariates]
-
+        self.drugs_idx = indx(dataset.drugs_idx, indices)
+        self.dosages = indx(dataset.dosages, indices)
         self.drugs_names = indx(dataset.drugs_names, indices)
         self.pert_categories = indx(dataset.pert_categories, indices)
+        
+        self.covariates = [indx(cov, indices) for cov in dataset.covariates]
         self.covariate_names = {}
         for cov in self.covariate_keys:
             self.covariate_names[cov] = indx(dataset.covariate_names[cov], indices)
@@ -284,9 +275,10 @@ class SubPertDataset:
     def __getitem__(self, i):
         X = self.genes[i]
         X_degs = indx(self.degs, i)
-        if self.use_drugs_idx:
+        if self.use_drugs:
             y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
-        y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
+        else:
+            y = {}
         y.update({"y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})
         return ({"X": X, "X_degs": X_degs, "y": y})
 
@@ -304,7 +296,7 @@ def load_dataset_splits(
     pert_category: str = "cov_drug_dose_name",
     split_key: str = "split",
     return_dataset: bool = False,
-    use_drugs_idx=False,
+    use_drugs=False,
 ):
     """Calls the dataset class and subsets it into splits 
     """
@@ -317,7 +309,7 @@ def load_dataset_splits(
         degs_key,
         pert_category,
         split_key,
-        use_drugs_idx,
+        use_drugs,
     )
 
     splits = {

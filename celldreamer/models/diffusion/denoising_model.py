@@ -91,7 +91,7 @@ class MLPTimeEmbedCond(nn.Module):
                         nn.GELU(),
                         nn.Linear(out_channels, out_channels))
 
-    def forward(self, x, y, time_embed):
+    def forward(self, x, time_embed, y):
         c = self.linear_map_class(y)
         x = torch.cat([x, c], dim=1)
         h = self.net(x)
@@ -157,7 +157,7 @@ class MLPTimeStep(torch.nn.Sequential):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.FloatTensor, y: torch.Tensor, t: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.FloatTensor, t: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the model
         Currently without self attention
@@ -168,23 +168,21 @@ class MLPTimeStep(torch.nn.Sequential):
         """
         # Embed the time 
         time_embedding = self.time_embed(timestep_embedding(t, self.time_embed_size))
-        
-        h = x
 
         # Encoder
         for encoder_layer in self.encoder:
-            h = encoder_layer(h, y, time_embedding)
-            h = self.dropout(h)
-
+            x = encoder_layer(x, time_embedding, y)
+            x = self.dropout(x)
+            
         # Middle block
-        h = self.middle_block(h, y, time_embedding)
+        x = self.middle_block(x, time_embedding, y)
 
         # Decoder
         for decoder_block in self.decoder:
-            h = decoder_block(h, y, time_embedding)
+            x = decoder_block(x, time_embedding, y)
 
         # Output
-        return h
+        return x
 
 if __name__=="__main__":
     X = torch.randn(16, 19000)
@@ -202,6 +200,3 @@ if __name__=="__main__":
             )
     
     pred = m(X, y, t)
-    print(pred)
-    print(pred.shape)
-    

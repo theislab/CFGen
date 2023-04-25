@@ -86,7 +86,7 @@ class CellDreamerEstimator:
                             degs_key=self.args.degs_key,
                             pert_category=self.args.pert_category,
                             split_key=self.args.split_key,
-                            use_drugs_idx=True)
+                            use_drugs=self.args.use_drugs)
             
             # The keys of the data module can be called via datamodule.key (aligned with the ones of scRNAseq)
             self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(
@@ -114,6 +114,7 @@ class CellDreamerEstimator:
         """
         if self.args.task == "perturbation_modelling":
             if self.args.use_latent_repr: 
+                self.args.autoencoder_kwargs["in_dim"] = self.dataset.genes.shape[1]
                 self.args.denoising_module_kwargs["in_dim"] = self.args.autoencoder_kwargs["hidden_dim_encoder"][-1]
             else:
                 self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
@@ -121,10 +122,6 @@ class CellDreamerEstimator:
         else:
             self.args.denoising_module_kwargs["in_dim"] = len(pd.read_parquet(join(self.args.data_path, 'var.parquet')))
             self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)        
-        
-        if self.args.use_latent_repr:
-            self.args.autoencoder_kwargs["in_dim"] = self.args.denoising_module_kwargs["in_dim"]
-            
             
     def init_feature_embeddings(self):
         """
@@ -136,11 +133,12 @@ class CellDreamerEstimator:
         num_classes = {}
         
         if self.args.task == "perturbation_modelling":
-            self.feature_embeddings["y_drug"] = DrugsFeaturizer(self.args,
-                                                   self.dataset.canon_smiles_unique_sorted,
-                                                   self.device)
-            
-            num_classes["y_drug"] = self.feature_embeddings["y_drug"].features.embedding_dim
+            if self.args.use_drugs:
+                self.feature_embeddings["y_drug"] = DrugsFeaturizer(self.args,
+                                                    self.dataset.canon_smiles_unique_sorted,
+                                                    self.device)
+                
+                num_classes["y_drug"] = self.feature_embeddings["y_drug"].features.embedding_dim
             for cov, cov_names in self.dataset.covariate_names_unique.items():
                 self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
                                                                         self.args.one_hot_encode_features, 

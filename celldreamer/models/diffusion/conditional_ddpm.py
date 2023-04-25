@@ -29,7 +29,9 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  task: str, 
                  metric_collector, 
                  optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
-                 variance_scheduler= CosineScheduler()  # default: cosine
+                 variance_scheduler= CosineScheduler(),  # default: cosine
+                 learning_rate: float = 0.001, 
+                 weight_decay: float = 0.0001
                  ):
 
         super().__init__()
@@ -52,6 +54,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.task = task
         self.feature_embeddings = feature_embeddings
         self.classifier_free = classifier_free
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         
         # Scheduler and the associated variances
         self.var_scheduler = variance_scheduler
@@ -69,10 +73,10 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     def forward(self, x: torch.Tensor, t: torch.Tensor, c: torch.Tensor) -> torch.Tensor: 
         return self.denoising_model(x, t, c)
 
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         return self._step(batch, 'train')
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         return self._step(batch, 'valid')
 
     def _step(self, batch, dataset: Literal['train', 'valid']) -> torch.Tensor:
@@ -87,11 +91,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             X = self.autoencoder_model.encoder(X)
         
         # Encode covariates 
-        y = []
-        for feature_cat in batch["y"]:
-            y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])
-            y.append(y_cat)
-        y = torch.cat(y, dim=1).to(self.device) # Concatenate covariate encodings 
+        y=self._featurize_batch_y( batch)
         
         # Dummy flags that with probability p_uncond, we train without class conditioning
         if self.classifier_free:
@@ -114,18 +114,18 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     
     def generate(self, 
                  batch_size: Optional[int] = None, 
+                 y: Optional[torch.Tensor] = None, 
                  z_t: Optional[torch.Tensor] = None,
-                 c: Optional[torch.Tensor] = None, 
                  T: Optional[int] = None,
                  get_intermediate_steps: bool = False) -> Union[torch.Tensor, List[torch.Tensor]]:
         # Generation time 
         T = T or self.T
         batch_size = batch_size or 1
-        is_c_none = c is None
+        is_c_none = y is None
         
         # Optional conditioning
         if is_c_none:
-            c = torch.zeros(batch_size, 
+            y = torch.zeros(batch_size, 
                             np.sum(list(self.num_classes.values())),
                             device=self.device)
         if get_intermediate_steps:
@@ -136,21 +136,23 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             z_t = torch.randn(batch_size, self.in_dim, device=self.device)
 
         for t in range(T - 1, 0, -1):
+            print(t)
             if get_intermediate_steps:
                 steps.append(z_t)
             t = torch.LongTensor([t] * batch_size).to(self.device).view(-1, 1)
             t_expanded = t.view(-1, 1)
             if is_c_none:
                 # compute unconditioned noise
-                eps = self(z_t, t / T, c)  # predict via nn the noise
+                eps = self(z_t, t / T, y)  # predict via nn the noise
             else:
                 if self.classifier_free:
                     # compute class conditioned noise
-                    eps1 = (1 + self.w) * self(z_t, t / T, c)
-                    eps2 = self.w * self(z_t, t / T, c * 0)
+                    eps1 = (1 + self.w) * self(z_t, t / T, y)
+                    eps2 = self.w * self(z_t, t / T, y * 0)
                     eps = eps1 - eps2
                 else: 
-                    eps = self(z_t, t / T, c)
+                    eps = self(z_t, t / T, y)
+                   
                     
             alpha_t = self.alphas[t_expanded]
             z = torch.randn_like(z_t)
@@ -158,14 +160,16 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             # denoise step from x_t to x_{t-1} following the DDPM paper
             z_t = (z_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_hat_t)) * eps) / (torch.sqrt(alpha_t)) + \
                   self.betas[t_expanded] * z
-                  
+            
         if get_intermediate_steps:
             steps.append(z_t)
             
         if self.autoencoder_model != None:
-            X_hat = self.autoencoder_model.decoder(z_t)
+            x_hat = self.autoencoder_model.decoder(z_t)
+        else:
+            x_hat = steps[-1]
             
-        return X_hat, steps
+        return x_hat, steps
     
     def reconstruct(self, batch, T):
         # Encode X to latent space 
@@ -174,11 +178,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             X = self.autoencoder_model.encoder(X)
         
         # Encode and concatenate variables
-        y = []     
-        for feature_cat in batch["y"]:
-            y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])
-            y.append(y_cat)
-        y = torch.cat(y, dim=1).to(self.device)
+        y=self._featurize_batch_y( batch)
         
         t = T * torch.ones(X.shape[0], 1, device=X.device) 
         t_expanded = t.reshape(-1, 1)
@@ -197,12 +197,13 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     def configure_optimizers(self):
         if self.task == "perturbation_modelling":
             optimizer_config = {'optimizer': self.optim(list(self.parameters())+
-                                                        list(self.feature_embeddings["y_drug"]).parameters(),
-                                                        lr=self.lr, 
+                                                        list(self.feature_embeddings["y_drug"].parameters()) 
+                                                        if "y_drug" in self.feature_embeddings else [],
+                                                        lr=self.learning_rate, 
                                                         weight_decay=self.weight_decay)}
         else:
             optimizer_config = {'optimizer': self.optim(self.parameters(),
-                                                        lr=self.lr, 
+                                                        lr=self.learning_rate, 
                                                         weight_decay=self.weight_decay)}
         return optimizer_config
 
@@ -218,7 +219,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             self.log(f"loss/{dataset}_loss", loss, on_step=True)
             
         if dataset == "valid":
-            real, generated, reconstructed = self.get_generated_and_reconstructed(self, dataset)
+            real, generated, reconstructed = self.get_generated_and_reconstructed(dataset)
             self.metric_collector[dataset].compute_generation_metrics(real, 
                                                                       generated, 
                                                                       reconstructed)
@@ -237,11 +238,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             if self.task == "perturbation_modelling":
                 
                 # Get feature combination embedding to condition generation 
-                y = []
-                for feature_cat in batch["y"]:
-                    y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])
-                    y.append(y_cat)
-                y = torch.cat(y, dim=1).to(self.device)
+                y=self._featurize_batch_y(batch)
                 
                 # Perform generation and reconstruction 
                 X_generated = self.generate(batch["X"].shape[0],
@@ -274,4 +271,12 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         else:
             raise NotImplementedError
         return key 
+    
+    def _featurize_batch_y(self, batch):
+        y = []     
+        for feature_cat in batch["y"]:
+            y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])
+            y.append(y_cat)
+        y = torch.cat(y, dim=1).to(self.device)
+        return y
     

@@ -29,7 +29,7 @@ class DrugsFeaturizer(torch.nn.Module):
                           activation_layer=torch.nn.ReLU, 
                           inplace=True, 
                           bias=True, 
-                          dropout=0.0)
+                          dropout=0.0).to(self.device)
     
     def forward(self, batch):
         """Given the SMILE IDs of a batch, collect the pre-trained features
@@ -38,7 +38,7 @@ class DrugsFeaturizer(torch.nn.Module):
         Returns:
             torch.Tensor: features of the extracted batch ids 
         """
-        batch_idx, dose = batch[0], batch[1]
+        batch_idx, dose = batch[0].to(self.device), batch[1].to(self.device)
         if type(batch_idx) != torch.Tensor:
             batch_idx = torch.tensor(batch_idx).long()
             
@@ -47,8 +47,8 @@ class DrugsFeaturizer(torch.nn.Module):
             
         batch_idx = batch_idx.to(self.device)
         drug_features = self.features(batch_idx)
-        scaled_dosages = self.doser(torch.cat([drug_features, dose], dim=1))
-        return drug_features @ scaled_dosages 
+        scaled_dosages = self.doser(torch.cat([drug_features, dose.unsqueeze(-1)], dim=1)).squeeze()
+        return torch.einsum("b,be->be", [scaled_dosages, drug_features]) 
 
     def _load_features(self):
         """Load features from a pre-defined model.
