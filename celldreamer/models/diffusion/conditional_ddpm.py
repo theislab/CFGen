@@ -136,10 +136,9 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             z_t = torch.randn(batch_size, self.in_dim, device=self.device)
 
         for t in range(T - 1, 0, -1):
-            print(t)
             if get_intermediate_steps:
                 steps.append(z_t)
-            t = torch.LongTensor([t] * batch_size).to(self.device).view(-1, 1)
+            t = torch.LongTensor([t] * batch_size).to(self.device)
             t_expanded = t.view(-1, 1)
             if is_c_none:
                 # compute unconditioned noise
@@ -152,7 +151,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                     eps = eps1 - eps2
                 else: 
                     eps = self(z_t, t / T, y)
-                   
                     
             alpha_t = self.alphas[t_expanded]
             z = torch.randn_like(z_t)
@@ -167,9 +165,12 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         if self.autoencoder_model != None:
             x_hat = self.autoencoder_model.decoder(z_t)
         else:
-            x_hat = steps[-1]
+            x_hat = z_t
             
-        return x_hat, steps
+        if get_intermediate_steps:
+            return x_hat, steps
+        else:
+            return x_hat
     
     def reconstruct(self, batch, T):
         # Encode X to latent space 
@@ -180,16 +181,16 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         # Encode and concatenate variables
         y=self._featurize_batch_y( batch)
         
-        t = T * torch.ones(X.shape[0], 1, device=X.device) 
-        t_expanded = t.reshape(-1, 1)
+        t = (T * torch.ones(X.shape[0], device=X.device)).long()
+        t_expanded = t.view(-1, 1)
         eps = torch.randn_like(X)  # [bs, c, w, h]
         alpha_hat_t = self.alphas_hat[t_expanded] # get \hat{\alpha}_t
         x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step
         
         # Generate observation from x_t 
         x_hat = self.generate(x_t.shape[0], 
-                              x_t, 
                               y, 
+                              x_t, 
                               T, 
                               get_intermediate_steps=False)[0]
         return x_hat, x_t
@@ -242,29 +243,29 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                 
                 # Perform generation and reconstruction 
                 X_generated = self.generate(batch["X"].shape[0],
-                                                  y)[0]
-                X_reconstructed = self.reconstruct(batch["X"].to(self.device),
-                                                    y)[0]
+                                                  y)[0].detach().cpu()
+                X_reconstructed = self.reconstruct(batch,
+                                                    self.T-1)[0].detach().cpu()
                 
-                # Extract key by name 
+                # Extract key by name
                 key = self._extract_batch_key_name(batch)
                 for idx, k in enumerate(key): 
-                    if k in self.real:
-                        self.real[k] = torch.cat([self.real[k], batch["X"][idx].unsqueeze(0)], dim=0)
-                        self.generated[k] = torch.cat([self.generated[k], X_generated[idx].unsqueeze(0)], dim=0)
-                        self.reconstructed[k] = torch.cat([self.reconstructed[k], X_reconstructed[idx].unsqueeze(0)], dim=0)
+                    if k in real:
+                        real[k] = torch.cat([real[k], batch["X"][idx].unsqueeze(0)], dim=0)
+                        generated[k] = torch.cat([generated[k], X_generated[idx].unsqueeze(0)], dim=0)
+                        reconstructed[k] = torch.cat([reconstructed[k], X_reconstructed[idx].unsqueeze(0)], dim=0)
                     else:
-                        self.real[k] = batch["X"][idx].unsqueeze(0)
-                        self.generated[k] = X_reconstructed[idx].unsqueeze(0)
-                        self.reconstructed[k] = X_generated[idx].unsqueeze(0)
+                        real[k] = batch["X"][idx].unsqueeze(0)
+                        generated[k] = X_reconstructed[idx].unsqueeze(0).detach().cpu()
+                        reconstructed[k] = X_generated[idx].unsqueeze(0).detach().cpu()
             else:
                 raise NotImplementedError 
-            return real, generated, reconstructed
+        return real, generated, reconstructed
         
     def _extract_batch_key_name(self, batch):
         if self.task == "perturbation_modelling":
             y_drug = batch["y"].pop("y_drug")
-            y_cov = [batch["y"][key].argmax(1).tolist() for key in batch["y"]]
+            y_cov = [batch["y"][key].tolist() for key in batch["y"]]
             key = list(zip(y_drug[0].tolist(),
                             y_drug[1].tolist(), 
                             *y_cov))

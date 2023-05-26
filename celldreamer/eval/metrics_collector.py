@@ -17,7 +17,7 @@ class MetricsCollector:
         """
         Compute generation metrics 
         """
-        for key in self.real:
+        for key in real:
             tmp_metrics = {}
             tmp_metrics.update(reconstruction_loss(real[key], reconstructed[key]))
             tmp_metrics.update(knn_graph_metric(real[key], generated[key]))
