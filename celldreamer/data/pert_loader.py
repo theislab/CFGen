@@ -1,9 +1,7 @@
 import logging
-import warnings
 from typing import List, Optional, Union
 
 import numpy as np
-import pandas as pd
 import scanpy as sc
 import torch
 from anndata import AnnData
@@ -32,23 +30,22 @@ class PertDataset:
         use_drugs=False,
     ):
         """
-        :param covariate_keys: Names of obs columns which stores covariate names (eg cell type).
-        :param perturbation_key: Name of obs column which stores perturbation name (eg drug name).
-            Combinations of perturbations are separated with `+`.
-        :param dose_key: Name of obs column which stores perturbation dose.
-            Combinations of perturbations are separated with `+`.
-        :param pert_category: Name of obs column which stores covariate + perturbation + dose as one string.
-            Example: cell type + drug name + drug dose. This is used during evaluation.
-        :param use_drugs_idx: Whether or not to encode drugs via their index, instead of via a OneHot encoding
+        Perturbation dataset 
+        
+        Args:
+            data (str): name of the dataset 
+            perturbation_key (str, optional): Column of adata.obs with the perturbation names. Defaults to None.
+            dose_key (str, optional): Column of adata.obs with the dose values. Defaults to None.
+            covariate_keys (str, optional): Column of adata.obs with the covariate values. Defaults to None.
+            smiles_key (str, optional): Column of adata.obs with the SMILES strings. Defaults to None.
+            degs_key (str, optional): Entry of adata.obsm with differentially expressed genes. Defaults to "rank_genes_groups_cov".
+            pert_category (str, optional): . Defaults to "cov_drug_dose_name".
+            split_key (str, optional): Type of dataset splitting to experiment with. Defaults to 'split'.
+            use_drugs (bool, optional): Whether to use drug. Defaults to False.
         """
-                
         # Read AnnData 
         logging.info(f"Starting to read in data: {data}\n...")
-        if isinstance(data, AnnData):
-            data = data
-        else:
-            data = sc.read(data)
-        
+        data = sc.read(data)
         logging.info(f"Finished data loading.")
         
         # Set Anndata field attributes 
@@ -61,99 +58,73 @@ class PertDataset:
         self.covariate_keys = covariate_keys
         self.smiles_key = smiles_key
         self.use_drugs = use_drugs
+    
+            
+        # Extract relevant information from anndata
+        self.pert_categories = np.array(data.obs[pert_category].values)  # (n_obs, 1) - perturbation categories 
+        self.de_genes = data.uns[degs_key]  # Differential expressed genes per condition (drug+dose)
+        self.drugs_names = np.array(data.obs[perturbation_key].values)  # (n_obs, 1) - name of drug used for each of the cells 
+        self.dose_names = np.array(data.obs[dose_key].values)  # (n_obs, 1) - dose used to pertrub each cell 
+
+        # Get unique drugs
+        drugs_names_unique = set()  
+        for d in self.drugs_names:
+            [drugs_names_unique.add(i) for i in d.split("+")]
+        self.drugs_names_unique_sorted = np.array(sorted(drugs_names_unique))
+
+        # Assign ID to drug names 
+        self._drugs_name_to_idx = {
+            smiles: idx for idx, smiles in enumerate(self.drugs_names_unique_sorted)
+        }
+        self.drug_dict = {val:key for key,val in self._drugs_name_to_idx.items()}
+
+        # Collect smiles per drug 
+        self.canon_smiles_unique_sorted = drug_names_to_once_canon_smiles(
+            list(self.drugs_names_unique_sorted), data, perturbation_key, smiles_key
+        )
         
-        # Prepare drug query with dose 
-        if perturbation_key is not None:
-            if dose_key is None:
-                raise ValueError(
-                    f"A 'dose_key' is required when provided a 'perturbation_key'({perturbation_key})."
-                )
-            
-            # Extract relevant information from anndata
-            self.pert_categories = np.array(data.obs[pert_category].values)  # (n_obs, 1) - perturbation categories 
-            self.de_genes = data.uns[degs_key]  # Differential expressed genes per condition (drug+dose)
-            self.drugs_names = np.array(data.obs[perturbation_key].values)  # (n_obs, 1) - name of drug used for each of the cells 
-            self.dose_names = np.array(data.obs[dose_key].values)  # (n_obs, 1) - dose used to pertrub each cell 
+        # Some cells may face a couple of perturbations 
+        self.max_num_perturbations = max(
+            len(name.split("+")) for name in self.drugs_names
+        )
 
-            # Get unique drugs
-            drugs_names_unique = set()  
-            for d in self.drugs_names:
-                [drugs_names_unique.add(i) for i in d.split("+")]
-            self.drugs_names_unique_sorted = np.array(sorted(drugs_names_unique))
-
-            # Assign ID to drug names 
-            self._drugs_name_to_idx = {
-                smiles: idx for idx, smiles in enumerate(self.drugs_names_unique_sorted)
-            }
-            self.drug_dict = {val:key for key,val in self._drugs_name_to_idx.items()}
-
-            # Collect smiles per drug 
-            self.canon_smiles_unique_sorted = drug_names_to_once_canon_smiles(
-                list(self.drugs_names_unique_sorted), data, perturbation_key, smiles_key
-            )
-            
-            # Some cells may face a couple of perturbations 
-            self.max_num_perturbations = max(
-                len(name.split("+")) for name in self.drugs_names
-            )
-
-            assert (
-                self.max_num_perturbations == 1
-            ), "Index-based drug encoding only works with single perturbations"
-            
-            # Extract the drug id for each observation 
-            drugs_idx = [self.drug_name_to_idx(drug) for drug in self.drugs_names]
-            self.drugs_idx = torch.tensor(
-                drugs_idx,
-                dtype=torch.long,
-            )
-            # Extract floats for the dosages 
-            dosages = [float(dosage) for dosage in self.dose_names]
-            self.dosages = torch.tensor(
-                dosages,
-                dtype=torch.float32,
-            )
-
-        else:
-            self.pert_categories = None
-            self.de_genes = None
-            self.drugs_names = None
-            self.dose_names = None
-            self.drugs_names_unique_sorted = None
-            self.atomic_drugs_dict = None
-            self.drug_dict = None
-            self.drugs = None
+        assert (
+            self.max_num_perturbations == 1
+        ), "Index-based drug encoding only works with single perturbations"
+        
+        # Extract the drug id for each observation 
+        drugs_idx = [self.drug_name_to_idx(drug) for drug in self.drugs_names]
+        self.drugs_idx = torch.tensor(
+            drugs_idx,
+            dtype=torch.long,
+        )
+        # Extract floats for the dosages 
+        dosages = [float(dosage) for dosage in self.dose_names]
+        self.dosages = torch.tensor(
+            dosages,
+            dtype=torch.float32,
+        )
 
         # Prepare covariate query 
-        if isinstance(covariate_keys, list) and covariate_keys:
-            if not len(covariate_keys) == len(set(covariate_keys)):
-                raise ValueError(f"Duplicate keys were given in: {covariate_keys}")
+        if not len(covariate_keys) == len(set(covariate_keys)):
+            raise ValueError(f"Duplicate keys were given in: {covariate_keys}")
+        
+        self.covariate_names = {}  
+        self.covariate_names_unique = {}
+        self.covariates = []
+        
+        # Derive one-hot encodings and names for covariates and their sub-categories
+        for cov in self.covariate_keys:
+            self.covariate_names[cov] = np.array(data.obs[cov].values)
+            self.covariate_names_unique[cov] = np.unique(self.covariate_names[cov])
+            names = self.covariate_names[cov]
             
-            self.covariate_names = {}  
-            self.covariate_names_unique = {}
-            self.covariates = []
-            
-            # Derive one-hot encodings and names for covariates and their sub-categories
-            for cov in self.covariate_keys:
-                self.covariate_names[cov] = np.array(data.obs[cov].values)
-                self.covariate_names_unique[cov] = np.unique(self.covariate_names[cov])
-                names = self.covariate_names[cov]
-                
-                encoder_cov = OneHotEncoder(sparse=False)
-                encoder_cov.fit(names.reshape(-1, 1))
+            encoder_cov = OneHotEncoder(sparse=False)
+            encoder_cov.fit(names.reshape(-1, 1)) 
 
-                # Encode per observation covariates
-                names = self.covariate_names[cov]
-
-                self.covariates.append(
-                    torch.Tensor(encoder_cov.transform(names.reshape(-1, 1))).float().argmax(1)
-                )
-            
-        else:
-            self.covariate_names = None
-            self.covariate_names_unique = None
-            self.atomic_сovars_dict = None
-            self.covariates = None
+            self.covariates.append(
+                torch.Tensor(encoder_cov.transform(names.reshape(-1, 1))).float().argmax(1)
+            )
 
         # Indicate if cell is control 
         self.ctrl = data.obs["control"].values
@@ -176,11 +147,7 @@ class PertDataset:
 
         # Number of genes and drugs 
         self.num_genes = self.genes.shape[1]
-        self.num_drugs = (
-            len(self.drugs_names_unique_sorted)
-            if self.drugs_names_unique_sorted is not None
-            else 0
-        )
+        self.num_drugs = (len(self.drugs_names_unique_sorted))
 
         self.indices = {
             "all": list(range(len(self.genes))),
