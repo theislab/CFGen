@@ -13,7 +13,6 @@ from pytorch_lightning.loggers import CSVLogger
 import torch.nn.functional as F
 
 # Restore once the dataset is ready
-# from cellnet.datamodules import MerlinDataModule
 
 from celldreamer.models.base.autoencoder import MLP_AutoEncoder
 from celldreamer.data.pert_loader import PertDataset
@@ -28,11 +27,11 @@ class CellDreamerEstimator:
     def __init__(self, args):
         self.args = args
         
-        # Create the training directory 
+        # Create the training directory - TODO: compatibility with WandB
         if self.args.train:
             self.training_dir = TRAINING_FOLDER / self.args.experiment_name
-            self.training_dir.mkdir(parents=True, exist_ok=True)
             print("Create the training folders...")
+            self.training_dir.mkdir(parents=True, exist_ok=True)
             if self.args.use_latent_repr:
                 self.args["trainer_autoencoder_kwargs"]["default_root_dir"] = self.training_dir / "autoencoder"
             self.args["trainer_generative_kwargs"]["default_root_dir"] = self.training_dir / "generative"
@@ -61,7 +60,6 @@ class CellDreamerEstimator:
         print("Initialize model...")
         self.init_model()  # Initialize
     
-    
     def init_datamodule(self):
         """
         Initialization of the data module
@@ -70,12 +68,7 @@ class CellDreamerEstimator:
         
         # Initialize dataloaders for the different tasks 
         if self.args.task == "cell_generation":
-            self.dataset = None 
-            self.datamodule = MerlinDataModule(
-                self.args.data_path,
-                columns=self.args.categories,
-                batch_size=self.args.batch_size,
-                drop_last=self.args.drop_last)
+            raise NotImplementedError
         else:
             self.dataset = PertDataset(
                             data=self.args.data_path,
@@ -120,16 +113,27 @@ class CellDreamerEstimator:
                 self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
             self.args.generative_model_kwargs["n_covariates"] = len(self.dataset.covariate_names)
         else:
-            self.args.denoising_module_kwargs["in_dim"] = len(pd.read_parquet(join(self.args.data_path, 'var.parquet')))
-            self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)        
+            raise NotImplementedError   
+    
+    def init_trainer(self):
+        # TODO: change the logger 
+        if self.args.train_autoencoder:
+            self.trainer_autoencoder = pl.Trainer(**self.args.trainer_autoencoder_kwargs, 
+                                                  logger=CSVLogger(self.args["trainer_autoencoder_kwargs"]["default_root_dir"],
+                                                    name=self.args.experiment_name))
             
+        self.trainer_generative = pl.Trainer(**self.args.trainer_generative_kwargs, 
+                                                  logger=CSVLogger(self.args["trainer_generative_kwargs"]["default_root_dir"],
+                                                    name=self.args.experiment_name))
+        
     def init_feature_embeddings(self):
         """
         Initialize feature embeddings either for drugs or covariates 
         """
         assert self.args.task in ["cell_generation", "perturbation_modelling"], f"The task {self.args.task} is not implemented"
         
-        self.feature_embeddings = {}  # Contains the embedding class of multiple feature types
+        # Contains the embedding class of multiple feature types
+        self.feature_embeddings = {}  
         num_classes = {}
         
         if self.args.task == "perturbation_modelling":
@@ -150,18 +154,9 @@ class CellDreamerEstimator:
                     num_classes["y_"+cov] = self.args.embedding_dimensions
                     
         else:
-            metadata_path = Path(self.args.metadata_path) / "categorical_lookup"
-            for cat in self.args.categories:
-                n_cat = len(pd.read_parquet(metadata_path / f"{cat}.parquet"))
-                self.feature_embeddings["y_"+cat] = CategoricalFeaturizer(n_cat, 
-                                                                     self.args.one_hot_encode_features, 
-                                                                     self.device, 
-                                                                     embedding_dimensions=self.args.embedding_dimensions)
-                if self.args.one_hot_encode_features:
-                    num_classes["y_"+cov] = n_cat
-                else:
-                    num_classes["y_"+cov] = self.args.embedding_dimensions
-                            
+            raise NotImplementedError 
+        
+        # Save number of classes                   
         self.args.denoising_module_kwargs["num_classes"] = num_classes
 
 
@@ -188,16 +183,6 @@ class CellDreamerEstimator:
                 raise NotImplementedError
         else:
             raise NotImplementedError
-    
-    def init_trainer(self):
-        if self.args.train_autoencoder:
-            self.trainer_autoencoder = pl.Trainer(**self.args.trainer_autoencoder_kwargs, 
-                                                  logger=CSVLogger(self.args["trainer_autoencoder_kwargs"]["default_root_dir"],
-                                                    name=self.args.experiment_name))
-            
-        self.trainer_generative = pl.Trainer(**self.args.trainer_generative_kwargs, 
-                                                  logger=CSVLogger(self.args["trainer_generative_kwargs"]["default_root_dir"],
-                                                    name=self.args.experiment_name))
 
     def train(self):
         if self.args.use_latent_repr and self.args.train_autoencoder:
@@ -207,7 +192,7 @@ class CellDreamerEstimator:
                 train_dataloaders=self.datamodule.train_dataloader,
                 val_dataloaders=self.datamodule.valid_dataloader,
                 ckpt_path=None if not self.args.pretrained_autoencoder else self.args.checkpoint_autoencoder
-            )
+                )
         
         self.trainer_generative.fit(
                 self.generative_model,

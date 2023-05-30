@@ -1,12 +1,9 @@
 pynvml
 setuptools
-merlin-dataloader
-merlin-core
 numpy
 pandas
 torch
 pytorch-lightning
-pytorch_tabnet
 torchmetrics
 tensorboard
 tqdm

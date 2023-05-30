@@ -2,9 +2,11 @@ import numpy as np
 from typing import Literal
 import pytorch_lightning as pl
 import torch
-from pathlib import Path
+from anndata import AnnData
 from torch import nn
 from typing import Callable, Union, Optional, List
+import pandas as pd 
+from tqdm import tqdm
 
 from celldreamer.models.diffusion.variance_scheduler.cosine import CosineScheduler
 from celldreamer.models.diffusion.distributions import x0_to_xt
@@ -79,6 +81,9 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         return self._step(batch, 'valid')
 
+    def on_validation_epoch_end(self):
+        return self.eval_distr_matching(dataset="valid")
+    
     def _step(self, batch, dataset: Literal['train', 'valid']) -> torch.Tensor:
         """
         train/validation step of DDPM. The logic is mostly taken from the original DDPM paper,
@@ -91,7 +96,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             X = self.autoencoder_model.encoder(X)
         
         # Encode covariates 
-        y=self._featurize_batch_y( batch)
+        y=self._featurize_batch_y(batch)
         
         # Dummy flags that with probability p_uncond, we train without class conditioning
         if self.classifier_free:
@@ -107,17 +112,28 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
         loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
         
-        self._log(dataset, loss)
+        # log every batch on validation set, otherwise log every self.logging_freq batches on training set
+        if dataset == "valid" or (self.iteration % self.logging_freq) == 0:
+            self.log(f"loss/{dataset}_loss", loss, on_step=True)
 
         self.iteration += 1
         return loss
     
+    def eval_distr_matching(self, dataset):
+        real_adata, generated_adata, reconstructed_adata = self.get_generated_and_reconstructed(dataset)
+        self.metric_collector[dataset].compute_generation_metrics(real_adata, 
+                                                                    generated_adata, 
+                                                                    reconstructed_adata)
+
     def generate(self, 
                  batch_size: Optional[int] = None, 
                  y: Optional[torch.Tensor] = None, 
                  z_t: Optional[torch.Tensor] = None,
                  T: Optional[int] = None,
                  get_intermediate_steps: bool = False) -> Union[torch.Tensor, List[torch.Tensor]]:
+        """
+        Generate sample of cells
+        """
         # Generation time 
         T = T or self.T
         batch_size = batch_size or 1
@@ -179,20 +195,21 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             X = self.autoencoder_model.encoder(X)
         
         # Encode and concatenate variables
-        y=self._featurize_batch_y( batch)
+        y = self._featurize_batch_y( batch)
         
+        # Generate at the end of the trajectory
         t = (T * torch.ones(X.shape[0], device=X.device)).long()
         t_expanded = t.view(-1, 1)
         eps = torch.randn_like(X)  # [bs, c, w, h]
         alpha_hat_t = self.alphas_hat[t_expanded] # get \hat{\alpha}_t
-        x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step
+        x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step        
         
         # Generate observation from x_t 
         x_hat = self.generate(x_t.shape[0], 
                               y, 
                               x_t, 
                               T, 
-                              get_intermediate_steps=False)[0]
+                              get_intermediate_steps=False)
         return x_hat, x_t
 
     def configure_optimizers(self):
@@ -213,54 +230,55 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.betas_hat = self.betas_hat.to(self.device)
         self.alphas = self.alphas.to(self.device)
         self.alphas_hat = self.alphas_hat.to(self.device)
-        
-    def _log(self, dataset, loss):        
-        # log every batch on validation set, otherwise log every self.logging_freq batches on training set
-        if dataset == "valid" or (self.iteration % self.logging_freq) == 0:
-            self.log(f"loss/{dataset}_loss", loss, on_step=True)
             
-        if dataset == "valid":
-            real, generated, reconstructed = self.get_generated_and_reconstructed(dataset)
-            self.metric_collector[dataset].compute_generation_metrics(real, 
-                                                                      generated, 
-                                                                      reconstructed)
-            self.log_dict(self.metric_collector.metric_dict)
-            self.metric_collector[dataset].reset_metrics()
-    
+        
     def get_generated_and_reconstructed(self, dataset):
         """
         Compute metrics obtained from generating from random noise 
         """
-        real = {}
-        generated = {}
-        reconstructed = {}
-        
+        real_array = []
+        generated_array = []
+        reconstructed_array = []
+              
+        metadata = {i.strip("y_"):[] for i in self.feature_embeddings}
+        if self.task == "perturbation_modelling":
+            metadata["dose"] = []
+              
         for batch in self.metric_collector[dataset].dataloader:
             if self.task == "perturbation_modelling":
-                
-                # Get feature combination embedding to condition generation 
-                y=self._featurize_batch_y(batch)
+                # Get feature combination embedding to condition generation
+                y = self._featurize_batch_y(batch)
                 
                 # Perform generation and reconstruction 
                 X_generated = self.generate(batch["X"].shape[0],
-                                                  y)[0].detach().cpu()
+                                                  y).detach().cpu().numpy()
                 X_reconstructed = self.reconstruct(batch,
-                                                    self.T-1)[0].detach().cpu()
+                                                    self.T-1)[0].detach().cpu().numpy()
                 
-                # Extract key by name
-                key = self._extract_batch_key_name(batch)
-                for idx, k in enumerate(key): 
-                    if k in real:
-                        real[k] = torch.cat([real[k], batch["X"][idx].unsqueeze(0)], dim=0)
-                        generated[k] = torch.cat([generated[k], X_generated[idx].unsqueeze(0)], dim=0)
-                        reconstructed[k] = torch.cat([reconstructed[k], X_reconstructed[idx].unsqueeze(0)], dim=0)
+                real_array.append(batch["X"])
+                generated_array.append(X_generated)
+                reconstructed_array.append(X_reconstructed)
+                
+                for cat in batch["y"]:
+                    if cat == "y_drug":
+                        metadata["drug"] += batch["y"][cat][0].cpu().tolist()
+                        metadata["dose"] += batch["y"][cat][1].cpu().tolist()
                     else:
-                        real[k] = batch["X"][idx].unsqueeze(0)
-                        generated[k] = X_reconstructed[idx].unsqueeze(0).detach().cpu()
-                        reconstructed[k] = X_generated[idx].unsqueeze(0).detach().cpu()
+                        metadata[cat.strip("_y")] += batch["y"][cat].cpu().tolist()      
+                        
             else:
-                raise NotImplementedError 
-        return real, generated, reconstructed
+                raise NotImplementedError
+        
+        # Save the data 
+        metadata = pd.DataFrame(metadata)
+        real_adata = AnnData(X=np.concatenate(real_array, axis=0),
+                             obs=metadata)
+        generated_adata = AnnData(X=np.concatenate(generated_array, axis=0), 
+                                  obs=metadata.copy())
+        reconstructed_adata = AnnData(X=np.concatenate(reconstructed_array, axis=0), 
+                                      obs=metadata.copy())
+        return real_adata, generated_adata, reconstructed_adata
+        
         
     def _extract_batch_key_name(self, batch):
         if self.task == "perturbation_modelling":
@@ -274,6 +292,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         return key 
     
     def _featurize_batch_y(self, batch):
+        """Featurize all the covariates 
+        """
         y = []     
         for feature_cat in batch["y"]:
             y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])

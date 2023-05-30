@@ -1,0 +1,17 @@
+Starting job 8304662
+SLURM assigned me the node(s): gpu13
+[W 16:20:40.711 NotebookApp] WARNING: The notebook server is listening on all IP addresses and not using encryption. This is not recommended.
+[I 16:20:40.721 NotebookApp] Serving notebooks from local directory: /nfs/homedirs/pala/celldreamer/celldreamer/eval
+[I 16:20:40.721 NotebookApp] Jupyter Notebook 6.5.4 is running at:
+[I 16:20:40.721 NotebookApp] http://gpu13:8888/?token=32ab159f35a2d5a3bfb82bac58d62e359bcb5fa217b0ca23
+[I 16:20:40.721 NotebookApp]  or http://127.0.0.1:8888/?token=32ab159f35a2d5a3bfb82bac58d62e359bcb5fa217b0ca23
+[I 16:20:40.721 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 16:20:40.739 NotebookApp] 
+    
+    To access the notebook, open this file in a browser:
+        file:///nfs/homedirs/pala/.local/share/jupyter/runtime/nbserver-1235662-open.html
+    Or copy and paste one of these URLs:
+        http://gpu13:8888/?token=32ab159f35a2d5a3bfb82bac58d62e359bcb5fa217b0ca23
+     or http://127.0.0.1:8888/?token=32ab159f35a2d5a3bfb82bac58d62e359bcb5fa217b0ca23
+[I 16:23:21.979 NotebookApp] 302 GET /?token=32ab159f35a2d5a3bfb82bac58d62e359bcb5fa217b0ca23 (172.24.220.10) 0.780000ms
+slurmstepd: error: *** JOB 8304662 ON gpu13 CANCELLED AT 2023-05-30T16:23:42 ***

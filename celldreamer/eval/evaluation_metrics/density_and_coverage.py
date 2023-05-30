@@ -56,10 +56,6 @@ def compute_prdc(real_features, fake_features, nearest_k):
     Returns:
         dict of precision, recall, density, and coverage.
     """
-
-    print('Num real: {} Num fake: {}'
-          .format(real_features.shape[0], fake_features.shape[0]))
-
     real_nearest_neighbour_distances = compute_nearest_neighbour_distances(
         real_features, nearest_k)
     fake_nearest_neighbour_distances = compute_nearest_neighbour_distances(

@@ -21,7 +21,6 @@ def mu_x_t(x_t: torch.Tensor, t: torch.Tensor, model_noise: torch.Tensor, alphas
     """
     x = 1 / torch.sqrt(alphas[t].reshape(-1, 1, 1, 1)) * (x_t - (
             betas[t].reshape(-1, 1, 1, 1) / torch.sqrt(1 - alphas_hat[t].reshape(-1, 1, 1, 1)) * model_noise))
-    # tg.guard(x, "B, C, W, H")
     return x
 
 
