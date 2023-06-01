@@ -19,16 +19,16 @@ class MetricsCollector:
         Compute generation metrics 
         """
         cov_combinations = list(set(zip(*real_adata.obs.values.T)))
-
         colnames = real_adata.obs.columns
+        
         for cov_combination in cov_combinations:
             selected_rows = real_adata.obs[colnames[0]] == cov_combination[0]
-            for idx in range(len(cov_combination)-1):
-                selected_rows = np.logical_and(selected_rows, real_adata.obs[colnames[idx]]== cov_combination[idx])
+            for idx in range(1, len(cov_combination)):
+                selected_rows = np.logical_and(selected_rows, real_adata.obs[colnames[idx]]==cov_combination[idx])
             
             tmp_metrics = {}
             tmp_metrics.update(reconstruction_loss(real_adata[selected_rows].X, reconstructed_adata[selected_rows].X))
-            # tmp_metrics.update(knn_graph_metric(real_adata[selected_rows].X, generated_adata[selected_rows].X, k=5))
+            tmp_metrics.update(knn_graph_metric(real_adata[selected_rows].X, generated_adata[selected_rows].X, k=5))
             tmp_metrics.update(compute_prdc(real_adata[selected_rows].X, generated_adata[selected_rows].X, nearest_k=5))
             self.update_metric_dict(tmp_metrics)
         

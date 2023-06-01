@@ -13,7 +13,6 @@ def knn_graph_metric(X, X_simulated, k):
     # Extract X and categorical data from real and simulated datasets
     X_concat = np.concatenate((X, X_simulated))
     n_sim = X_simulated.shape[0]
-    # TODO: add comparison in category from Till's code 
 
     # Build kNN graph for simulated data
     neigh = NearestNeighbors(n_neighbors=k+1, metric='euclidean')
@@ -26,7 +25,7 @@ def knn_graph_metric(X, X_simulated, k):
     prop_real = real_counts / k
     prop_sim = 1 - prop_real
     prop_expected = np.full(n_sim, 0.5)
-    sim_entropy = -np.sum((prop_sim * np.log2(prop_sim)) + (prop_real * np.log2(prop_real)))
+    sim_entropy = -np.sum((prop_sim * np.log2(prop_sim+1e-6)) + (prop_real * np.log2(prop_real+1e-6)))
 
     # Return evaluation metrics
     return {

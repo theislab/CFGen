@@ -7,10 +7,12 @@ from celldreamer.data.utils import Args
 
 import numpy as np
 import pandas as pd
-import pytorch_lightning as pl
 import torch
-from pytorch_lightning.loggers import CSVLogger
 import torch.nn.functional as F
+
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
 
 # Restore once the dataset is ready
 
@@ -27,23 +29,21 @@ class CellDreamerEstimator:
     def __init__(self, args):
         self.args = args
         
-        # Create the training directory - TODO: compatibility with WandB
+        # Initialize training directory         
         if self.args.train:
             self.training_dir = TRAINING_FOLDER / self.args.experiment_name
             print("Create the training folders...")
             self.training_dir.mkdir(parents=True, exist_ok=True)
-            if self.args.use_latent_repr:
-                self.args["trainer_autoencoder_kwargs"]["default_root_dir"] = self.training_dir / "autoencoder"
-            self.args["trainer_generative_kwargs"]["default_root_dir"] = self.training_dir / "generative"
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print("Initialize data module...")
-        self.init_datamodule()  # Initialize the data module 
+        self.init_datamodule()  # Initialize the data module  
         self.get_fixed_rna_model_params()  # Initialize the data derived model params 
         self.init_trainer()
         print("Initialize feature embeddings...")
         self.init_feature_embeddings()  # Initialize the feature embeddings 
         
+        # Metric collection object 
         train_metric_collector = MetricsCollector(
                                     self.datamodule.train_dataloader, 
                                     self.args.task, 
@@ -116,15 +116,31 @@ class CellDreamerEstimator:
             raise NotImplementedError   
     
     def init_trainer(self):
-        # TODO: change the logger 
+        """
+        Initialize 
+        """
+        # Callbacks for saving checkpoints 
+        checkpoint_callback = ModelCheckpoint(dirpath=self.training_dir / "checkpoints", 
+                                                        **self.args.checkpoint_kwargs)
+        
+        # Early stopping checkpoints 
+        early_stopping_callbacks = EarlyStopping(**self.args.early_stopping_kwargs)
+        
+        # Logger settings 
+        logger = WandbLogger(save_dir=self.training_dir / "logs", 
+                                    **self.args.logger_kwargs) 
+        
         if self.args.train_autoencoder:
-            self.trainer_autoencoder = pl.Trainer(**self.args.trainer_autoencoder_kwargs, 
-                                                  logger=CSVLogger(self.args["trainer_autoencoder_kwargs"]["default_root_dir"],
-                                                    name=self.args.experiment_name))
+            self.trainer_autoencoder = Trainer(callbacks=[checkpoint_callback, early_stopping_callbacks], 
+                                                    default_root_dir=self.training_dir, 
+                                                    logger=logger, 
+                                                    **self.args.trainer_kwargs)
+        self.trainer_generative = Trainer(callbacks=[checkpoint_callback, early_stopping_callbacks], 
+                                            default_root_dir=self.training_dir, 
+                                            logger=logger, 
+                                            **self.args.trainer_kwargs)
             
-        self.trainer_generative = pl.Trainer(**self.args.trainer_generative_kwargs, 
-                                                  logger=CSVLogger(self.args["trainer_generative_kwargs"]["default_root_dir"],
-                                                    name=self.args.experiment_name))
+
         
     def init_feature_embeddings(self):
         """
@@ -201,9 +217,9 @@ class CellDreamerEstimator:
                 ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative
                 )
         
-    def validate(self, ckpt_path: str = None):
-        self._check_is_initialized()
-        return self.trainer_generative.validate(self.generative_model, 
-                                                dataloaders=self.datamodule.valid_dataloader, 
-                                                ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative)
+    # def validate(self, ckpt_path: str = None):
+    #     self._check_is_initialized()
+    #     return self.trainer_generative.validate(self.generative_model, 
+    #                                             dataloaders=self.datamodule.valid_dataloader, 
+    #                                             ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative)
     

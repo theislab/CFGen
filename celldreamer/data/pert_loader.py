@@ -1,4 +1,5 @@
 import logging
+import os 
 from typing import List, Optional, Union
 
 import numpy as np
@@ -34,21 +35,22 @@ class PertDataset:
         
         Args:
             data (str): name of the dataset 
-            perturbation_key (str, optional): Column of adata.obs with the perturbation names. Defaults to None.
-            dose_key (str, optional): Column of adata.obs with the dose values. Defaults to None.
-            covariate_keys (str, optional): Column of adata.obs with the covariate values. Defaults to None.
-            smiles_key (str, optional): Column of adata.obs with the SMILES strings. Defaults to None.
-            degs_key (str, optional): Entry of adata.obsm with differentially expressed genes. Defaults to "rank_genes_groups_cov".
-            pert_category (str, optional): . Defaults to "cov_drug_dose_name".
-            split_key (str, optional): Type of dataset splitting to experiment with. Defaults to 'split'.
-            use_drugs (bool, optional): Whether to use drug. Defaults to False.
+            perturbation_key (str, optional): column of adata.obs with the perturbation names. Defaults to None.
+            dose_key (str, optional): column of adata.obs with the dose values. Defaults to None.
+            covariate_keys (str, optional): column of adata.obs with the covariate values. Defaults to None.
+            smiles_key (str, optional): column of adata.obs with the SMILES strings. Defaults to None.
+            degs_key (str, optional): entry of adata.obsm with differentially expressed genes. Defaults to "rank_genes_groups_cov".
+            pert_category (str, optional): . defaults to "cov_drug_dose_name".
+            split_key (str, optional): type of dataset splitting to experiment with. Defaults to 'split'.
+            use_drugs (bool, optional): whether to use drug. Defaults to False.
         """
         # Read AnnData 
+        assert os.path.exists(data)
         logging.info(f"Starting to read in data: {data}\n...")
         data = sc.read(data)
         logging.info(f"Finished data loading.")
         
-        # Set Anndata field attributes 
+        # Set AnnData fields as attributes 
         self.genes = torch.Tensor(data.X.A)
         self.var_names = data.var_names
         self.perturbation_key = perturbation_key
@@ -69,7 +71,7 @@ class PertDataset:
         # Get unique drugs
         drugs_names_unique = set()  
         for d in self.drugs_names:
-            [drugs_names_unique.add(i) for i in d.split("+")]
+            [drugs_names_unique.add(i) for i in d.split("+")] 
         self.drugs_names_unique_sorted = np.array(sorted(drugs_names_unique))
 
         # Assign ID to drug names 
@@ -83,7 +85,7 @@ class PertDataset:
             list(self.drugs_names_unique_sorted), data, perturbation_key, smiles_key
         )
         
-        # Some cells may face a couple of perturbations 
+        # Derive the maximum number of perturbations per cells in the dataset 
         self.max_num_perturbations = max(
             len(name.split("+")) for name in self.drugs_names
         )

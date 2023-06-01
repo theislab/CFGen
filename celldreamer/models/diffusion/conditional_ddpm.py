@@ -124,6 +124,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.metric_collector[dataset].compute_generation_metrics(real_adata, 
                                                                     generated_adata, 
                                                                     reconstructed_adata)
+        self.log_dict(self.metric_collector[dataset])
 
     def generate(self, 
                  batch_size: Optional[int] = None, 
