@@ -1,7 +1,6 @@
 from os.path import join
 from typing import Dict, List
 from pathlib import Path
-from celldreamer.paths import TRAINING_FOLDER
 from celldreamer.eval.metrics_collector import MetricsCollector
 from celldreamer.data.utils import Args
 
@@ -16,6 +15,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 # Restore once the dataset is ready
 
+from celldreamer.paths import TRAINING_FOLDER
 from celldreamer.models.base.autoencoder import MLP_AutoEncoder
 from celldreamer.data.pert_loader import PertDataset
 from celldreamer.models.featurizers.drug_featurizer import DrugsFeaturizer
@@ -28,6 +28,8 @@ from celldreamer.models.diffusion.conditional_ddpm import ConditionalGaussianDDP
 class CellDreamerEstimator:
     def __init__(self, args):
         self.args = args
+        self.data_path = Path(self.args.dataset_path)
+        print(self.data_path)
         
         # Initialize training directory         
         if self.args.train:
@@ -70,8 +72,9 @@ class CellDreamerEstimator:
         if self.args.task == "cell_generation":
             raise NotImplementedError
         else:
+            print(self.data_path)
             self.dataset = PertDataset(
-                            data=self.args.data_path,
+                            data=self.data_path,
                             perturbation_key=self.args.perturbation_key,
                             dose_key=self.args.dose_key,
                             covariate_keys=self.args.covariate_keys,
@@ -135,6 +138,7 @@ class CellDreamerEstimator:
                                                     default_root_dir=self.training_dir, 
                                                     logger=logger, 
                                                     **self.args.trainer_kwargs)
+            
         self.trainer_generative = Trainer(callbacks=[checkpoint_callback, early_stopping_callbacks], 
                                             default_root_dir=self.training_dir, 
                                             logger=logger, 
@@ -163,11 +167,11 @@ class CellDreamerEstimator:
                 self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
                                                                         self.args.one_hot_encode_features, 
                                                                         self.device, 
-                                                                        embedding_dimensions=self.args.embedding_dimensions)
+                                                                        embedding_dimensions=self.args.cov_embedding_dimensions)
                 if self.args.one_hot_encode_features:
                     num_classes["y_"+cov] = len(cov_names)
                 else:
-                    num_classes["y_"+cov] = self.args.embedding_dimensions
+                    num_classes["y_"+cov] = self.args.cov_embedding_dimensions
                     
         else:
             raise NotImplementedError 
@@ -192,6 +196,7 @@ class CellDreamerEstimator:
                     autoencoder_model=self.autoencoder,
                     feature_embeddings=self.feature_embeddings,
                     task=self.args.task,
+                    use_drugs=self.args.use_drugs,
                     metric_collector=self.metric_collector,  
                     **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
                 )
@@ -216,10 +221,4 @@ class CellDreamerEstimator:
                 val_dataloaders=self.datamodule.valid_dataloader,
                 ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative
                 )
-        
-    # def validate(self, ckpt_path: str = None):
-    #     self._check_is_initialized()
-    #     return self.trainer_generative.validate(self.generative_model, 
-    #                                             dataloaders=self.datamodule.valid_dataloader, 
-    #                                             ckpt_path=None if not self.args.pretrained_generative else self.args.checkpoint_generative)
     

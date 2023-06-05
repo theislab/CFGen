@@ -23,7 +23,7 @@ class CategoricalFeaturizer(torch.nn.Module):
         """
         obs = obs.to(self.device)
         if self.one_hot_encode_features: 
-            return F.one_hot(obs, num_classes=self.n_cat)
+            return F.one_hot(obs, num_classes=self.n_cat).float()
         else:
             return self.embeddings(obs)
         

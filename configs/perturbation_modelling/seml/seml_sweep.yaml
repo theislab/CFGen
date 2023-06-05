@@ -1,0 +1,143 @@
+# seml header 
+seml:
+  name: diffusion_sweep_version1
+  project_root_dir: ../../../
+  executable: celldreamer/seml_sweeps.py
+  output_dir: logs
+  conda_environment: celldreamer
+  
+slurm:
+  max_simultaneous_jobs: 5
+  experiments_per_job: 1
+  sbatch_options:
+    gres: gpu:1       # num GPUs
+    mem: 32G          # memory
+    cpus-per-task: 2  # num cores
+    time: 2-00:00     # max time, D-HH:MM
+
+fixed:
+    config.args.train: True  # Whether to train the model 
+    config.args.experiment_name: try_experiment  
+    config.args.task: perturbation_modelling # task (cell_generation or perturbation_modelling)
+    config.args.dataset_path: datasets/sciplex/sciplex_complete_middle_subset.h5ad
+    config.args.resume: False
+    config.args.train_autoencoder: False # Train autoencoder or only the diffusion model
+    config.args.use_latent_repr: False # Latent diffusion or direct data feature diffusion 
+    config.args.pretrained_autoencoder: False
+    config.args.checkpoint_autoencoder: Null  
+    config.args.pretrained_generative: False
+    config.args.chekpoint_path: Null  
+
+    # Perturbation setting specific
+    config.args.perturbation_key: condition 
+    config.args.dose_key: dose
+    config.args.covariate_keys: cell_type
+    config.args.smile_keys: SMILES
+    config.args.degs_key: lincs_DEGs
+    config.args.pert_category: cov_drug_dose_name
+    config.args.split_key: split_ho_pathway
+    config.args.feature_type: ECFP
+    config.args.freeze_embeddings: True  # Whether the embeddings should get trained 
+    config.args.use_drugs: False  # Use drug or not 
+    config.args.doser_width: Null
+    config.args.doser_depth: Null
+    config.args.cov_embedding_dimensions: Null
+    config.args.one_hot_encode_features: True
+
+    # General model 
+    config.args.generative_model: diffusion  
+    config.args.denoising_model: mlp
+
+    # Autoencoder 
+    config.args.autoencoder_kwargs: Null
+
+    # Checkpoint kwargs 
+    config.args.checkpoint_kwargs.filename: epoch_{epoch:01d}
+    config.args.checkpoint_kwargs.monitor: loss/valid_loss
+    config.args.checkpoint_kwargs.mode: min
+    config.args.checkpoint_kwargs.every_n_epochs: 0
+    config.args.checkpoint_kwargs.save_last: False
+    config.args.checkpoint_kwargs.auto_insert_metric_name: False
+
+    # Early stopping kwargs 
+    config.args.early_stopping_kwargs.monitor: loss/valid_loss
+    config.args.early_stopping_kwargs.patience: 20
+    config.args.early_stopping_kwargs.mode: min
+    config.args.early_stopping_kwargs.min_delta: 0.
+    config.args.early_stopping_kwargs.verbose: False
+    config.args.early_stopping_kwargs.strict: True
+    config.args.early_stopping_kwargs.check_finite: True
+    config.args.early_stopping_kwargs.stopping_threshold: Null
+    config.args.early_stopping_kwargs.divergence_threshold: Null
+    config.args.early_stopping_kwargs.check_on_train_epoch_end: Null
+
+    # Logger kwargs
+    config.args.logger_kwargs.offline: False
+    config.args.logger_kwargs.id: Null 
+    config.args.logger_kwargs.anonymous: Null 
+    config.args.logger_kwargs.project: celldreamer_sciplex_default_config
+    config.args.logger_kwargs.log_model: True 
+    config.args.logger_kwargs.prefix: "" 
+    config.args.logger_kwargs.tags: []
+    config.args.logger_kwargs.job_type: "" 
+
+    #Denoising model specific 
+    config.args.denoising_module_kwargs.encode_class: False 
+    config.args.denoising_module_kwargs.class_emb_size: Null
+
+    #Generative model specific 
+    config.args.generative_model_kwargs.w: Null
+    config.args.generative_model_kwargs.p_uncond: Null
+    config.args.generative_model_kwargs.classifier_free: False
+    config.args.generative_model_kwargs.learning_rate: 0.0001
+    config.args.generative_model_kwargs.weight_decay: 0.0001
+
+    # Autoencoder trainer hparams
+    config.args.trainer_kwargs.max_epochs: 100
+    config.args.trainer_kwargs.gradient_clip_val: 1.
+    config.args.trainer_kwargs.gradient_clip_algorithm: norm
+    config.args.trainer_kwargs.accelerator: gpu
+    config.args.trainer_kwargs.devices: 1
+    config.args.trainer_kwargs.check_val_every_n_epoch: 1
+    config.args.trainer_kwargs.log_every_n_steps: 1
+    config.args.trainer_kwargs.detect_anomaly: False
+    config.args.trainer_kwargs.deterministic: False
+
+random:
+  samples: 2
+  seed: 42  
+
+  config.args.batch_size:   
+    type: choice
+    options:
+      - 128
+      - 256
+      - 512
+
+  config.args.denoising_module_kwargs.dims: 
+    type: choice
+    options:
+      - [64]
+      - [128]
+      - [128, 64]
+
+  config.args.denoising_module_kwargs.time_embed_size: 
+    type: choice
+    options:
+      - 128
+      - 64
+      - 32
+
+  config.args.denoising_module_kwargs.dropout: 
+    type: choice
+    options:
+      - 0.0
+      - 0.1
+      - 0.3
+
+  config.args.generative_model_kwargs.T: 
+    type: choice
+    options:
+      - 10
+      - 100
+      - 1000

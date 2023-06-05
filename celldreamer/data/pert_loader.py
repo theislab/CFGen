@@ -45,6 +45,7 @@ class PertDataset:
             use_drugs (bool, optional): whether to use drug. Defaults to False.
         """
         # Read AnnData 
+        print(data)
         assert os.path.exists(data)
         logging.info(f"Starting to read in data: {data}\n...")
         data = sc.read(data)
@@ -61,7 +62,6 @@ class PertDataset:
         self.smiles_key = smiles_key
         self.use_drugs = use_drugs
     
-            
         # Extract relevant information from anndata
         self.pert_categories = np.array(data.obs[pert_category].values)  # (n_obs, 1) - perturbation categories 
         self.de_genes = data.uns[degs_key]  # Differential expressed genes per condition (drug+dose)

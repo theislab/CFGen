@@ -7,7 +7,6 @@ from sklearn.metrics import adjusted_rand_score
 import pandas as pd
 
 
-
 # KNN similarity metric
 def knn_graph_metric(X, X_simulated, k):
     # Extract X and categorical data from real and simulated datasets

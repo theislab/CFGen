@@ -3,8 +3,8 @@ args:
   train: True  # Whether to train the model 
   experiment_name: try_experiment  
   task: perturbation_modelling # task (cell_generation or perturbation_modelling)
-  data_path: "/home/icb/alessandro.palma/environment/celldreamer/datasets/sciplex_complete_middle_subset.h5ad"
-  batch_size: 512  
+  dataset_path: sciplex/sciplex_complete_middle_subset.h5ad
+  batch_size: 256  
   resume: False
   train_autoencoder: False # Train autoencoder or only the diffusion model
   use_latent_repr: False # Latent diffusion or direct data feature diffusion 
@@ -22,13 +22,13 @@ args:
   pert_category: cov_drug_dose_name
   split_key: split_ho_pathway
   use_drugs: True
-  feature_type: grover
+  feature_type: ECFP
   freeze_embeddings: True  # Whether the embeddings should get trained 
-  use_drugs: True  # Use drug or not 
+  use_drugs: False  # Use drug or not 
   doser_width: 128
   doser_depth: 3  
-  embedding_dimensions: 100  # Dimensionality of t
-  one_hot_encode_features: False
+  cov_embedding_dimensions: 100  # Dimensionality of t
+  one_hot_encode_features: True
              
   # General model 
   generative_model: diffusion  
@@ -42,7 +42,7 @@ args:
     filename: epoch_{epoch:01d}
     monitor: loss/valid_loss
     mode: min
-    save_last": True
+    save_last: True
     auto_insert_metric_name: False
 
   # Early stopping kwargs 
@@ -54,7 +54,7 @@ args:
     verbose: False
     strict: True
     check_finite: True
-    stopping_threshold: None
+    stopping_threshold: Null
     divergence_threshold: Null
     check_on_train_epoch_end: Null
 
@@ -62,52 +62,39 @@ args:
   logger_kwargs: 
     offline: False
     id: Null 
-    anonymous": Null 
+    anonymous: Null 
     project: celldreamer
     log_model: False 
     prefix: "" 
     tags: []
-    job_typex: ""   
+    job_type: ""   
 
   #Denoising model specific 
   denoising_module_kwargs: 
-    dims: [128, 64]
-    time_embed_size: 100 
-    class_emb_size: 100
+    dims: [64]
+    encode_class: False
+    time_embed_size: 128 
+    class_emb_size: 10
     dropout: 0.0
                   
   # Diffusion model specific
   generative_model_kwargs: 
-    T: 4000
+    T: 1000
     w: 0.3
-    v: 0.2
     p_uncond: 0.2
-    logging_freq: 1000
     classifier_free: False
-    learning_rate: 0.001
+    learning_rate: 0.0001
     weight_decay: 0.0001
                   
   # Autoencoder trainer hparams
-  trainer_autoencoder_kwargs:
-    max_epochs: 1000
+  trainer_kwargs:
+    max_epochs: 100
     gradient_clip_val: 1.
     gradient_clip_algorithm: norm
     accelerator: gpu
     devices: 1
     check_val_every_n_epoch: 1
-    log_every_n_steps: 100
+    log_every_n_steps: 1
     detect_anomaly: False
     deterministic: False
-                      
-  # Generative model trainer hyperparams 
-  trainer_generative_kwargs:
-    max_epochs: 1000
-    gradient_clip_val: 1
-    gradient_clip_algorithm: norm
-    accelerator: gpu
-    devices: 1
-    num_sanity_val_step: 0
-    check_val_every_n_epoch: 1
-    log_every_n_steps: 100
-    detect_anomaly: False 
-    deterministic: False            
+                    

@@ -55,29 +55,33 @@ class MLPTimeEmbedCond(nn.Module):
                  time_embed_size: int,
                  p_dropout: float, 
                  num_classes: int, 
-                 class_emb_size: int
+                 class_emb_size: int, 
+                 encode_class: float = False
                  ):
         super().__init__()
         """
         Like ResBlockTimeEmbed, but without convolutional layers.
         Instead use linear layers.
         """ 
-        self.linear_map_class = nn.Sequential(
-            nn.Linear(np.sum(list(num_classes.values())), class_emb_size),
-            nn.ReLU(),
-            nn.Linear(class_emb_size, class_emb_size)
-        )
-                
-        self.net = nn.Sequential(
-                        nn.Linear(in_channels + class_emb_size, out_channels),
-                        nn.GELU(),
-                        nn.Linear(out_channels, out_channels))
-        
+        if encode_class:
+            self.linear_map_class = nn.Sequential(
+                nn.Linear(np.sum(list(num_classes.values())), class_emb_size),
+                nn.ReLU(),
+                nn.Linear(class_emb_size, class_emb_size)
+            )
+        else:
+            self.linear_map_class = nn.Identity()
+            class_emb_size = np.sum(list(num_classes.values()))
+
         self.l_embedding = nn.Sequential(
             nn.GELU(),
             nn.Linear(time_embed_size, out_channels)
         )
-        
+            
+        self.net = nn.Sequential(
+                        nn.Linear(in_channels + class_emb_size, out_channels),
+                        nn.GELU(),
+                        nn.Linear(out_channels, out_channels))
         self.relu = nn.ReLU()
         
         self.out_layer = nn.Sequential(
@@ -108,7 +112,8 @@ class MLPTimeStep(torch.nn.Sequential):
             time_embed_size: int,
             num_classes: int, 
             class_emb_size: int,
-            dropout: float = 0.0
+            dropout: float = 0.0,
+            encode_class: float = False
     ):
         super().__init__()
         self.in_dim = in_dim
@@ -126,7 +131,8 @@ class MLPTimeStep(torch.nn.Sequential):
                              time_embed_size=time_embed_size,
                              p_dropout=dropout, 
                              num_classes=num_classes, 
-                             class_emb_size=class_emb_size) 
+                             class_emb_size=class_emb_size, 
+                             encode_class=encode_class) 
                 for i in range(len(dims)-1)
                 ])
  

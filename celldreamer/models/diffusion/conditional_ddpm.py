@@ -23,12 +23,11 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  feature_embeddings: dict, 
                  T: int,  # default: 4_000
                  w: float,  # default: 0.3
-                 v: float, 
                  n_covariates: int, 
                  p_uncond: float,
-                 logging_freq: int,   
                  classifier_free: bool, 
                  task: str, 
+                 use_drugs: bool,
                  metric_collector, 
                  optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
                  variance_scheduler= CosineScheduler(),  # default: cosine
@@ -50,7 +49,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         # Diffusion hyperparameters 
         self.T = T
         self.w = w        
-        self.v = v
         self.p_uncond = p_uncond
         self.in_dim = self.denoising_model.in_dim 
         self.task = task
@@ -58,6 +56,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.classifier_free = classifier_free
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.use_drugs = use_drugs
         
         # Scheduler and the associated variances
         self.var_scheduler = variance_scheduler
@@ -68,7 +67,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         
         # Optimization 
         self.mse = nn.MSELoss()
-        self.logging_freq = logging_freq
         self.iteration = 0
         self.optim = optimizer
 
@@ -81,8 +79,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         return self._step(batch, 'valid')
 
-    def on_validation_epoch_end(self):
-        return self.eval_distr_matching(dataset="valid")
+    # def on_validation_epoch_end(self):
+    #     return self.eval_distr_matching(dataset="valid")
     
     def _step(self, batch, dataset: Literal['train', 'valid']) -> torch.Tensor:
         """
@@ -100,7 +98,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         
         # Dummy flags that with probability p_uncond, we train without class conditioning
         if self.classifier_free:
-            is_class_cond = torch.rand(size=(X.shape[0],1), device=X.device) >= self.p_uncond
+            is_class_cond = torch.rand(size=(X.shape[0], 1), device=X.device) >= self.p_uncond
             y = y * is_class_cond.float() 
             
         # Sample t uniformly from [0, T-1]
@@ -112,9 +110,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
         loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
         
-        # log every batch on validation set, otherwise log every self.logging_freq batches on training set
-        if dataset == "valid" or (self.iteration % self.logging_freq) == 0:
-            self.log(f"loss/{dataset}_loss", loss, on_step=True)
+        self.log(f"loss/{dataset}_loss", loss, on_step=True)
 
         self.iteration += 1
         return loss
@@ -157,17 +153,14 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                 steps.append(z_t)
             t = torch.LongTensor([t] * batch_size).to(self.device)
             t_expanded = t.view(-1, 1)
-            if is_c_none:
+            if is_c_none or not self.classifier_free:
                 # compute unconditioned noise
                 eps = self(z_t, t / T, y)  # predict via nn the noise
             else:
-                if self.classifier_free:
-                    # compute class conditioned noise
-                    eps1 = (1 + self.w) * self(z_t, t / T, y)
-                    eps2 = self.w * self(z_t, t / T, y * 0)
-                    eps = eps1 - eps2
-                else: 
-                    eps = self(z_t, t / T, y)
+                # compute class conditioned noise
+                eps1 = (1 + self.w) * self(z_t, t / T, y)
+                eps2 = self.w * self(z_t, t / T, y * 0)
+                eps = eps1 - eps2
                     
             alpha_t = self.alphas[t_expanded]
             z = torch.randn_like(z_t)
@@ -196,7 +189,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             X = self.autoencoder_model.encoder(X)
         
         # Encode and concatenate variables
-        y = self._featurize_batch_y( batch)
+        y = self._featurize_batch_y(batch)
         
         # Generate at the end of the trajectory
         t = (T * torch.ones(X.shape[0], device=X.device)).long()
@@ -214,7 +207,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         return x_hat, x_t
 
     def configure_optimizers(self):
-        if self.task == "perturbation_modelling":
+        if self.task == "perturbation_modelling" and self.use_drugs:
             optimizer_config = {'optimizer': self.optim(list(self.parameters())+
                                                         list(self.feature_embeddings["y_drug"].parameters()) 
                                                         if "y_drug" in self.feature_embeddings else [],
@@ -232,7 +225,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.alphas = self.alphas.to(self.device)
         self.alphas_hat = self.alphas_hat.to(self.device)
             
-        
     def get_generated_and_reconstructed(self, dataset):
         """
         Compute metrics obtained from generating from random noise 
@@ -242,7 +234,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         reconstructed_array = []
               
         metadata = {i.strip("y_"):[] for i in self.feature_embeddings}
-        if self.task == "perturbation_modelling":
+        if self.task == "perturbation_modelling" and self.use_drugs:
             metadata["dose"] = []
               
         for batch in self.metric_collector[dataset].dataloader:
@@ -254,9 +246,9 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                 X_generated = self.generate(batch["X"].shape[0],
                                                   y).detach().cpu().numpy()
                 X_reconstructed = self.reconstruct(batch,
-                                                    self.T-1)[0].detach().cpu().numpy()
+                                                    self.T)[0].detach().cpu().numpy()
                 
-                real_array.append(batch["X"])
+                real_array.append(batch["X"].detach().cpu().numpy())
                 generated_array.append(X_generated)
                 reconstructed_array.append(X_reconstructed)
                 
@@ -265,7 +257,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                         metadata["drug"] += batch["y"][cat][0].cpu().tolist()
                         metadata["dose"] += batch["y"][cat][1].cpu().tolist()
                     else:
-                        metadata[cat.strip("_y")] += batch["y"][cat].cpu().tolist()      
+                        metadata[cat.strip("y_")] += batch["y"][cat].cpu().tolist()      
                         
             else:
                 raise NotImplementedError
@@ -293,7 +285,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         return key 
     
     def _featurize_batch_y(self, batch):
-        """Featurize all the covariates 
+        """
+        Featurize all the covariates 
         """
         y = []     
         for feature_cat in batch["y"]:
