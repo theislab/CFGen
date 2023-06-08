@@ -1,5 +1,4 @@
-from os.path import join
-from typing import Dict, List
+import os
 from pathlib import Path
 from celldreamer.eval.metrics_collector import MetricsCollector
 from celldreamer.data.utils import Args
@@ -15,7 +14,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 # Restore once the dataset is ready
 
-from celldreamer.paths import TRAINING_FOLDER
+from celldreamer.paths import ROOT, TRAINING_FOLDER
 from celldreamer.models.base.autoencoder import MLP_AutoEncoder
 from celldreamer.data.pert_loader import PertDataset
 from celldreamer.models.featurizers.drug_featurizer import DrugsFeaturizer
@@ -27,9 +26,12 @@ from celldreamer.models.diffusion.conditional_ddpm import ConditionalGaussianDDP
 
 class CellDreamerEstimator:
     def __init__(self, args):
+        # Move to celldreamer directory
+        # os.chdir(ROOT)
         self.args = args
+        
+        # Read dataset
         self.data_path = Path(self.args.dataset_path)
-        print(self.data_path)
         
         # Initialize training directory         
         if self.args.train:
@@ -72,9 +74,8 @@ class CellDreamerEstimator:
         if self.args.task == "cell_generation":
             raise NotImplementedError
         else:
-            print(self.data_path)
             self.dataset = PertDataset(
-                            data=self.data_path,
+                            data_path=self.data_path,
                             perturbation_key=self.args.perturbation_key,
                             dose_key=self.args.dose_key,
                             covariate_keys=self.args.covariate_keys,
@@ -113,8 +114,7 @@ class CellDreamerEstimator:
                 self.args.autoencoder_kwargs["in_dim"] = self.dataset.genes.shape[1]
                 self.args.denoising_module_kwargs["in_dim"] = self.args.autoencoder_kwargs["hidden_dim_encoder"][-1]
             else:
-                self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]
-            self.args.generative_model_kwargs["n_covariates"] = len(self.dataset.covariate_names)
+                self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]  # perform diffusion in gene dimension 
         else:
             raise NotImplementedError   
     
@@ -130,7 +130,7 @@ class CellDreamerEstimator:
         early_stopping_callbacks = EarlyStopping(**self.args.early_stopping_kwargs)
         
         # Logger settings 
-        logger = WandbLogger(save_dir=self.training_dir / "logs", 
+        logger = WandbLogger(save_dir=self.training_dir, 
                                     **self.args.logger_kwargs) 
         
         if self.args.train_autoencoder:
@@ -159,15 +159,16 @@ class CellDreamerEstimator:
         if self.args.task == "perturbation_modelling":
             if self.args.use_drugs:
                 self.feature_embeddings["y_drug"] = DrugsFeaturizer(self.args,
-                                                    self.dataset.canon_smiles_unique_sorted,
-                                                    self.device)
-                
+                                                                        self.dataset.canon_smiles_unique_sorted,
+                                                                        self.device)
+                                    
                 num_classes["y_drug"] = self.feature_embeddings["y_drug"].features.embedding_dim
+                
             for cov, cov_names in self.dataset.covariate_names_unique.items():
                 self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
-                                                                        self.args.one_hot_encode_features, 
-                                                                        self.device, 
-                                                                        embedding_dimensions=self.args.cov_embedding_dimensions)
+                                                                            self.args.one_hot_encode_features, 
+                                                                            self.device, 
+                                                                            embedding_dimensions=self.args.cov_embedding_dimensions)
                 if self.args.one_hot_encode_features:
                     num_classes["y_"+cov] = len(cov_names)
                 else:

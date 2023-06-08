@@ -3,7 +3,7 @@ args:
   train: True  # Whether to train the model 
   experiment_name: try_experiment  
   task: perturbation_modelling # task (cell_generation or perturbation_modelling)
-  dataset_path: sciplex/sciplex_complete_middle_subset.h5ad
+  dataset_path: datasets/sciplex/sciplex_complete_middle_subset.h5ad
   batch_size: 256  
   resume: False
   train_autoencoder: False # Train autoencoder or only the diffusion model
@@ -25,9 +25,9 @@ args:
   feature_type: ECFP
   freeze_embeddings: True  # Whether the embeddings should get trained 
   use_drugs: False  # Use drug or not 
-  doser_width: 128
-  doser_depth: 3  
-  cov_embedding_dimensions: 100  # Dimensionality of t
+  doser_width: Null
+  doser_depth: Null  
+  cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
              
   # General model 
@@ -41,7 +41,8 @@ args:
   checkpoint_kwargs: 
     filename: epoch_{epoch:01d}
     monitor: loss/valid_loss
-    mode: min
+    mode: min               
+    every_n_epochs: 1
     save_last: True
     auto_insert_metric_name: False
 
@@ -64,10 +65,7 @@ args:
     id: Null 
     anonymous: Null 
     project: celldreamer
-    log_model: False 
-    prefix: "" 
-    tags: []
-    job_type: ""   
+    log_model: True 
 
   #Denoising model specific 
   denoising_module_kwargs: 
@@ -88,7 +86,7 @@ args:
                   
   # Autoencoder trainer hparams
   trainer_kwargs:
-    max_epochs: 100
+    max_epochs: 1
     gradient_clip_val: 1.
     gradient_clip_algorithm: norm
     accelerator: gpu

@@ -6,7 +6,6 @@ from anndata import AnnData
 from torch import nn
 from typing import Callable, Union, Optional, List
 import pandas as pd 
-from tqdm import tqdm
 
 from celldreamer.models.diffusion.variance_scheduler.cosine import CosineScheduler
 from celldreamer.models.diffusion.distributions import x0_to_xt
@@ -18,19 +17,18 @@ class ConditionalGaussianDDPM(pl.LightningModule):
     """
 
     def __init__(self,
-                 denoising_model: nn.Module,  # MLP
+                 denoising_model: nn.Module,
                  autoencoder_model: nn.Module, 
                  feature_embeddings: dict, 
-                 T: int,  # default: 4_000
+                 T: int,  # default: 1_000
                  w: float,  # default: 0.3
-                 n_covariates: int, 
-                 p_uncond: float,
                  classifier_free: bool, 
+                 p_uncond: float,
                  task: str, 
                  use_drugs: bool,
                  metric_collector, 
                  optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
-                 variance_scheduler= CosineScheduler(),  # default: cosine
+                 variance_scheduler= CosineScheduler,  # default: cosine
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001
                  ):
@@ -44,7 +42,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         
         # Number of classes per covariate 
         self.num_classes = self.denoising_model.num_classes
-        self.n_covariates = n_covariates
         
         # Diffusion hyperparameters 
         self.T = T
@@ -59,7 +56,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.use_drugs = use_drugs
         
         # Scheduler and the associated variances
-        self.var_scheduler = variance_scheduler
+        self.var_scheduler = variance_scheduler(T = self.T)
         self.alphas_hat = self.var_scheduler.get_alpha_hat().to(self.device)
         self.alphas = self.var_scheduler.get_alphas().to(self.device)
         self.betas = self.var_scheduler.get_betas().to(self.device)
@@ -271,18 +268,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         reconstructed_adata = AnnData(X=np.concatenate(reconstructed_array, axis=0), 
                                       obs=metadata.copy())
         return real_adata, generated_adata, reconstructed_adata
-        
-        
-    def _extract_batch_key_name(self, batch):
-        if self.task == "perturbation_modelling":
-            y_drug = batch["y"].pop("y_drug")
-            y_cov = [batch["y"][key].tolist() for key in batch["y"]]
-            key = list(zip(y_drug[0].tolist(),
-                            y_drug[1].tolist(), 
-                            *y_cov))
-        else:
-            raise NotImplementedError
-        return key 
     
     def _featurize_batch_y(self, batch):
         """

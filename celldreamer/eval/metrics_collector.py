@@ -18,6 +18,7 @@ class MetricsCollector:
         """
         Compute generation metrics 
         """
+        # Get all combinations of possible covariates 
         cov_combinations = list(set(zip(*real_adata.obs.values.T)))
         colnames = real_adata.obs.columns
         

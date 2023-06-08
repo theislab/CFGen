@@ -20,7 +20,7 @@ class PertDataset:
 
     def __init__(
         self,
-        data: str,
+        data_path: str,
         perturbation_key=None,
         dose_key=None,
         covariate_keys=None,
@@ -45,10 +45,10 @@ class PertDataset:
             use_drugs (bool, optional): whether to use drug. Defaults to False.
         """
         # Read AnnData 
-        print(data)
-        assert os.path.exists(data)
-        logging.info(f"Starting to read in data: {data}\n...")
-        data = sc.read(data)
+        assert os.path.exists(data_path)
+        logging.info(f"Starting to read in data: {data_path}\n...")
+        print(data_path)
+        data = sc.read(data_path)
         logging.info(f"Finished data loading.")
         
         # Set AnnData fields as attributes 

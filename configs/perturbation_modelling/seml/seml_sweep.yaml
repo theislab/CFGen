@@ -55,8 +55,7 @@ fixed:
     config.args.checkpoint_kwargs.filename: epoch_{epoch:01d}
     config.args.checkpoint_kwargs.monitor: loss/valid_loss
     config.args.checkpoint_kwargs.mode: min
-    config.args.checkpoint_kwargs.every_n_epochs: 0
-    config.args.checkpoint_kwargs.save_last: False
+    config.args.checkpoint_kwargs.save_last: True
     config.args.checkpoint_kwargs.auto_insert_metric_name: False
 
     # Early stopping kwargs 
@@ -77,9 +76,6 @@ fixed:
     config.args.logger_kwargs.anonymous: Null 
     config.args.logger_kwargs.project: celldreamer_sciplex_default_config
     config.args.logger_kwargs.log_model: True 
-    config.args.logger_kwargs.prefix: "" 
-    config.args.logger_kwargs.tags: []
-    config.args.logger_kwargs.job_type: "" 
 
     #Denoising model specific 
     config.args.denoising_module_kwargs.encode_class: False 
@@ -93,7 +89,7 @@ fixed:
     config.args.generative_model_kwargs.weight_decay: 0.0001
 
     # Autoencoder trainer hparams
-    config.args.trainer_kwargs.max_epochs: 100
+    config.args.trainer_kwargs.max_epochs: 1
     config.args.trainer_kwargs.gradient_clip_val: 1.
     config.args.trainer_kwargs.gradient_clip_algorithm: norm
     config.args.trainer_kwargs.accelerator: gpu
@@ -104,7 +100,7 @@ fixed:
     config.args.trainer_kwargs.deterministic: False
 
 random:
-  samples: 2
+  samples: 10
   seed: 42  
 
   config.args.batch_size:   

@@ -4,6 +4,7 @@ from celldreamer.data.utils import Args
 from celldreamer.estimator.celldreamer_estimator import CellDreamerEstimator
 from sacred import SETTINGS
 SETTINGS.CONFIG.READ_ONLY_CONFIG = False
+SETTINGS['CAPTURE_MODE'] = 'sys'
 
 ex = Experiment()
 seml.setup_logger(ex)
