@@ -31,7 +31,7 @@ args:
   cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
   subsample_frac: 0.5
-  standardize: True
+  standardize: False
              
   # General model 
   generative_model: diffusion  

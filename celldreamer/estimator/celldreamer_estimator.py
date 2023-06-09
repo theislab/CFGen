@@ -83,7 +83,8 @@ class CellDreamerEstimator:
                             pert_category=self.args.pert_category,
                             split_key=self.args.split_key,
                             use_drugs=self.args.use_drugs, 
-                            subsample_frac=self.args.subsample_frac)
+                            subsample_frac=self.args.subsample_frac, 
+                            standardize=self.args.standardize)
             
             # The keys of the data module can be called via datamodule.key (aligned with the ones of scRNAseq)
             self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(

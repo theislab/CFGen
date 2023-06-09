@@ -157,12 +157,13 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             if is_c_none or not self.classifier_free:
                 # compute unconditioned noise
                 eps = self(z_t, t / T, y)  # predict via nn the noise
+                print(eps)
             else:
                 # compute class conditioned noise
                 eps1 = (1 + self.w) * self(z_t, t / T, y)
                 eps2 = self.w * self(z_t, t / T, y * 0)
                 eps = eps1 - eps2
-                    
+            
             alpha_t = self.alphas[t_expanded]
             z = torch.randn_like(z_t)
             alpha_hat_t = self.alphas_hat[t_expanded]
