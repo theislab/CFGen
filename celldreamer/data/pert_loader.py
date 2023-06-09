@@ -29,7 +29,8 @@ class PertDataset:
         pert_category="cov_drug_dose_name",
         split_key='split',
         use_drugs=False, 
-        subsample_frac=1
+        subsample_frac=1, 
+        standardize=True
         ):
         """
         Perturbation dataset 
@@ -49,6 +50,9 @@ class PertDataset:
         assert os.path.exists(data_path)
         logging.info(f"Starting to read in data: {data_path}\n...")
         data = sc.read(data_path)
+        if standardize:
+            data.X -= data.X.mean(1)
+            data.X /= data.X.std(1)+1e-5     
         if subsample_frac < 1:
             sc.pp.subsample(data, fraction=subsample_frac)
         logging.info(f"Finished data loading.")

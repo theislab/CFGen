@@ -27,7 +27,6 @@ from celldreamer.models.diffusion.conditional_ddpm import ConditionalGaussianDDP
 class CellDreamerEstimator:
     def __init__(self, args):
         # Move to celldreamer directory
-        # os.chdir(ROOT)
         self.args = args
         
         # Read dataset
@@ -83,7 +82,8 @@ class CellDreamerEstimator:
                             degs_key=self.args.degs_key,
                             pert_category=self.args.pert_category,
                             split_key=self.args.split_key,
-                            use_drugs=self.args.use_drugs)
+                            use_drugs=self.args.use_drugs, 
+                            subsample_frac=self.args.subsample_frac)
             
             # The keys of the data module can be called via datamodule.key (aligned with the ones of scRNAseq)
             self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(

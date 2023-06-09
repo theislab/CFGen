@@ -104,12 +104,12 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         t = torch.randint(0, self.T - 1, (X.shape[0],), device=X.device) 
         t_expanded = t.reshape(-1, 1)
         eps = torch.randn_like(X)  
-        alpha_hat_t = self.alphas_hat[t_expanded] 
+        alpha_hat_t = self.alphas_hat[t_expanded]
         x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step
         pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
         loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
-        print("True", eps)
-        print("predicted", pred_eps)
+        # print("True", eps)
+        # print("predicted", pred_eps)
         
         self.log(f"loss/{dataset}_loss", loss, on_step=True)
 
@@ -191,7 +191,6 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         
         # Encode and concatenate variables
         y = self._featurize_batch_y(batch)
-        
         # Generate at the end of the trajectory
         t = (T * torch.ones(X.shape[0], device=X.device)).long()
         t_expanded = t.view(-1, 1)
@@ -208,13 +207,13 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         return x_hat, x_t
 
     def configure_optimizers(self):
-        parms_to_train = list(self.parameters())
+        parms_to_train = list(self.denoising_model.parameters())
         if self.task == "perturbation_modelling" and self.use_drugs:
             parms_to_train.extend(list(self.feature_embeddings["y_drug"].parameters()))
         if not self.one_hot_encode_features:
             for cov in self.feature_embeddings:
                 if cov != "y_drug":
-                    parms_to_train.extend(list(self.feature_embeddings["y_drug"].embeddings.parameters()))
+                    parms_to_train.extend(list(self.feature_embeddings[cov].embeddings.parameters()))
             
         optimizer_config = {'optimizer': self.optim(parms_to_train,
                                                     lr=self.learning_rate, 

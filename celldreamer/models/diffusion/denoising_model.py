@@ -1,10 +1,10 @@
 import math
 import numpy as np
-from typing import List, Tuple, Optional, Callable
+from typing import List, Tuple
 
 import torch
 from torch import nn
-from torch.nn import functional as F
+import torch.nn.init as init
 
 
 # import tensorguard as tg
@@ -107,6 +107,7 @@ class MLPTimeEmbedCond(nn.Module):
         if self.conditional:
             c = self.linear_map_class(y)
             x = torch.cat([x, c], dim=1)
+        
         h = self.net(x)
         time_embed = self.l_embedding(time_embed)
         h = self.relu(h + time_embed)
@@ -175,6 +176,9 @@ class MLPTimeStep(torch.nn.Sequential):
                 ])
 
         self.dropout = nn.Dropout(dropout)
+        
+        # Initialize the parameters using He initialization
+        self.apply(self._init_weights)
 
     def forward(self, x: torch.FloatTensor, t: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -203,19 +207,8 @@ class MLPTimeStep(torch.nn.Sequential):
         # Output
         return x
 
-if __name__=="__main__":
-    X = torch.randn(16, 19000)
-    t = torch.rand(16)
-    y = torch.rand(16, 3)
-    
-    
-    m = MLPTimeStep(
-            in_dim=19000,
-            dims=[128, 64],
-            time_embed_size=100,
-            num_classes=3, 
-            class_emb_size=100,
-            dropout=0
-            )
-    
-    pred = m(X, y, t)
+    def _init_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Conv2d)):
+            init.kaiming_uniform_(module.weight, mode='fan_in', nonlinearity='relu')
+            if module.bias is not None:
+                init.constant_(module.bias, 0.0)

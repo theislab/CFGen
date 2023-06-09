@@ -1,0 +1,58 @@
+Starting job 11831836
+SLURM assigned me the node(s): gpusrv22
+[W 11:59:06.149 NotebookApp] WARNING: The notebook server is listening on all IP addresses and not using encryption. This is not recommended.
+[I 11:59:06.152 NotebookApp] The port 8888 is already in use, trying another port.
+[I 11:59:06.152 NotebookApp] The port 8889 is already in use, trying another port.
+[I 11:59:06.158 NotebookApp] Serving notebooks from local directory: /home/icb/alessandro.palma/environment/celldreamer
+[I 11:59:06.158 NotebookApp] Jupyter Notebook 6.5.4 is running at:
+[I 11:59:06.158 NotebookApp] http://gpusrv22.scidom.de:8890/?token=d20de945fc5c303f2f9c2c5689e2373db6a1a6b4c9adac85
+[I 11:59:06.158 NotebookApp]  or http://127.0.0.1:8890/?token=d20de945fc5c303f2f9c2c5689e2373db6a1a6b4c9adac85
+[I 11:59:06.158 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[C 11:59:06.167 NotebookApp] 
+    
+    To access the notebook, open this file in a browser:
+        file:///home/icb/alessandro.palma/.local/share/jupyter/runtime/nbserver-3380420-open.html
+    Or copy and paste one of these URLs:
+        http://gpusrv22.scidom.de:8890/?token=d20de945fc5c303f2f9c2c5689e2373db6a1a6b4c9adac85
+     or http://127.0.0.1:8890/?token=d20de945fc5c303f2f9c2c5689e2373db6a1a6b4c9adac85
+[I 12:05:24.653 NotebookApp] 302 GET /?token=d20de945fc5c303f2f9c2c5689e2373db6a1a6b4c9adac85 (10.233.0.200) 55.820000ms
+[W 12:05:35.164 NotebookApp] Notebook notebooks/tutorials/tutorial_estimator.ipynb is not trusted
+[W 12:05:35.186 NotebookApp] 404 GET /nbextensions/splitcell/splitcell.js?v=20230602115904 (10.233.0.200) 19.490000ms referer=http://127.0.0.1:8890/notebooks/notebooks/tutorials/tutorial_estimator.ipynb
+[I 12:05:35.518 NotebookApp] Kernel started: a37cf04d-be1b-4681-bb95-681bee03bf27, name: python3
+[W 12:05:35.520 NotebookApp] 404 GET /nbextensions/widgets/notebook/js/extension.js?v=20230602115904 (10.233.0.200) 1.570000ms referer=http://127.0.0.1:8890/notebooks/notebooks/tutorials/tutorial_estimator.ipynb
+[I 12:07:36.777 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 12:13:54.204 NotebookApp] Starting buffering for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[I 12:13:56.949 NotebookApp] Kernel restarted: a37cf04d-be1b-4681-bb95-681bee03bf27
+[I 12:13:56.970 NotebookApp] Restoring connection for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[I 12:14:00.480 NotebookApp] Replaying 3 buffered messages
+[I 12:15:36.809 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[W 12:34:57.002 NotebookApp] WebSocket ping timeout after 119998 ms.
+[I 12:35:02.019 NotebookApp] Starting buffering for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[I 13:21:46.834 NotebookApp] Restoring connection for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[I 13:22:43.135 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:33:21.858 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:35:21.849 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:37:21.860 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:40:41.069 NotebookApp] Starting buffering for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[I 13:40:44.225 NotebookApp] Kernel restarted: a37cf04d-be1b-4681-bb95-681bee03bf27
+[I 13:40:44.246 NotebookApp] Restoring connection for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[W 13:40:48.759 NotebookApp] Nudge: attempt 10 on kernel a37cf04d-be1b-4681-bb95-681bee03bf27
+[I 13:40:52.770 NotebookApp] Replaying 3 buffered messages
+[I 13:41:21.869 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:43:48.162 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:45:48.158 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+wandb: WARNING Path /home/icb/alessandro.palma/environment/celldreamer/checkpoints/try_experiment/logs/wandb/ wasn't writable, using system temp directory
+wandb: Network error (ConnectTimeout), entering retry loop.
+[I 13:47:48.184 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:49:17.283 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:49:17.457 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 13:49:17.623 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 15:06:17.420 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 15:06:17.702 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[I 15:06:17.742 NotebookApp] Saving file at /notebooks/tutorials/tutorial_estimator.ipynb
+[W 15:32:14.277 NotebookApp] WebSocket ping timeout after 119998 ms.
+[I 15:32:19.285 NotebookApp] Starting buffering for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[I 15:36:22.615 NotebookApp] Restoring connection for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+[W 17:19:52.646 NotebookApp] WebSocket ping timeout after 119996 ms.
+[I 17:19:57.656 NotebookApp] Starting buffering for a37cf04d-be1b-4681-bb95-681bee03bf27:cdfc0d0a3e0f4ef4b9a4d1b7eb85916c
+slurmstepd: error: *** JOB 11831836 ON gpusrv22 CANCELLED AT 2023-06-02T19:59:11 DUE TO TIME LIMIT ***

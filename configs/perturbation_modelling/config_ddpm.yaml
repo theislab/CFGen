@@ -13,6 +13,7 @@ args:
   pretrained_generative: False
   chekpoint_path: Null  
   
+  # CHANGE 
   # Perturbation setting specific
   perturbation_key: condition 
   dose_key: dose
@@ -26,9 +27,11 @@ args:
   use_drugs: False  # Use drug or not 
   doser_width: Null
   doser_depth: Null  
+
   cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
-  subsample_frac: 1
+  subsample_frac: 0.5
+  standardize: True
              
   # General model 
   generative_model: diffusion  
@@ -67,28 +70,30 @@ args:
     project: celldreamer
     log_model: False 
 
-  #Denoising model specific 
+  # CHANGE   
+  # Denoising model specific 
   denoising_module_kwargs: 
-    dims: [64]
+    dims: [128]
     encode_class: False
-    time_embed_size: 128 
+    time_embed_size: 256 
     class_emb_size: Null
-    dropout: 00
+    dropout: 0.0
     use_skip_connection: False
     conditional: False
-                  
+
+  # CHANGE      
   # Diffusion model specific
   generative_model_kwargs: 
     T: 500
     w: 0.3
     p_uncond: 0.2
-    classifier_free: True
+    classifier_free: False
     learning_rate: 0.001
     weight_decay: 0.0001
                   
   # Autoencoder trainer hparams
   trainer_kwargs:
-    max_epochs: 1
+    max_epochs: 20
     accelerator: gpu
     devices: 1
     check_val_every_n_epoch: 1
