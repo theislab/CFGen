@@ -26,11 +26,12 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  p_uncond: float,
                  task: str, 
                  use_drugs: bool,
+                 one_hot_encode_features: bool,
                  metric_collector, 
                  optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
                  variance_scheduler= CosineScheduler,  # default: cosine
                  learning_rate: float = 0.001, 
-                 weight_decay: float = 0.0001
+                 weight_decay: float = 0.0001, 
                  ):
 
         super().__init__()
@@ -54,6 +55,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.use_drugs = use_drugs
+        self.one_hot_encode_features = one_hot_encode_features
         
         # Scheduler and the associated variances
         self.var_scheduler = variance_scheduler(T = self.T)
@@ -106,6 +108,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step
         pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
         loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
+        print("True", eps)
+        print("predicted", pred_eps)
         
         self.log(f"loss/{dataset}_loss", loss, on_step=True)
 
@@ -204,16 +208,17 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         return x_hat, x_t
 
     def configure_optimizers(self):
+        parms_to_train = list(self.parameters())
         if self.task == "perturbation_modelling" and self.use_drugs:
-            optimizer_config = {'optimizer': self.optim(list(self.parameters())+
-                                                        list(self.feature_embeddings["y_drug"].parameters()) 
-                                                        if "y_drug" in self.feature_embeddings else [],
-                                                        lr=self.learning_rate, 
-                                                        weight_decay=self.weight_decay)}
-        else:
-            optimizer_config = {'optimizer': self.optim(self.parameters(),
-                                                        lr=self.learning_rate, 
-                                                        weight_decay=self.weight_decay)}
+            parms_to_train.extend(list(self.feature_embeddings["y_drug"].parameters()))
+        if not self.one_hot_encode_features:
+            for cov in self.feature_embeddings:
+                if cov != "y_drug":
+                    parms_to_train.extend(list(self.feature_embeddings["y_drug"].embeddings.parameters()))
+            
+        optimizer_config = {'optimizer': self.optim(parms_to_train,
+                                                    lr=self.learning_rate, 
+                                                    weight_decay=self.weight_decay)}
         return optimizer_config
 
     def on_fit_start(self) -> None:

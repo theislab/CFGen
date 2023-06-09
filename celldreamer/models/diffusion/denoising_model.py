@@ -56,22 +56,28 @@ class MLPTimeEmbedCond(nn.Module):
                  p_dropout: float, 
                  num_classes: int, 
                  class_emb_size: int, 
-                 encode_class: float = False
+                 encode_class: float = False, 
+                 use_skip_connection:bool=True, 
+                 conditional:bool=True,
                  ):
         super().__init__()
         """
         Like ResBlockTimeEmbed, but without convolutional layers.
         Instead use linear layers.
         """ 
-        if encode_class:
-            self.linear_map_class = nn.Sequential(
-                nn.Linear(np.sum(list(num_classes.values())), class_emb_size),
-                nn.ReLU(),
-                nn.Linear(class_emb_size, class_emb_size)
-            )
+        self.conditional = conditional
+        if self.conditional:
+            if encode_class:
+                self.linear_map_class = nn.Sequential(
+                    nn.Linear(np.sum(list(num_classes.values())), class_emb_size),
+                    nn.ReLU(),
+                    nn.Linear(class_emb_size, class_emb_size)
+                )
+            else:
+                self.linear_map_class = nn.Identity()
+                class_emb_size = np.sum(list(num_classes.values()))
         else:
-            self.linear_map_class = nn.Identity()
-            class_emb_size = np.sum(list(num_classes.values()))
+            class_emb_size = 0
 
         self.l_embedding = nn.Sequential(
             nn.GELU(),
@@ -79,9 +85,9 @@ class MLPTimeEmbedCond(nn.Module):
         )
             
         self.net = nn.Sequential(
-                        nn.Linear(in_channels + class_emb_size, out_channels),
-                        nn.GELU(),
-                        nn.Linear(out_channels, out_channels))
+                    nn.Linear(in_channels + class_emb_size, out_channels),
+                    nn.GELU(),
+                    nn.Linear(out_channels, out_channels))
         self.relu = nn.ReLU()
         
         self.out_layer = nn.Sequential(
@@ -90,18 +96,24 @@ class MLPTimeEmbedCond(nn.Module):
             nn.Linear(out_channels, out_channels),
         )
         
-        self.skip_connection = nn.Sequential(
-                        nn.Linear(in_channels + class_emb_size, out_channels),
-                        nn.GELU(),
-                        nn.Linear(out_channels, out_channels))
+        self.use_skip_connection = use_skip_connection
+        if use_skip_connection:
+            self.skip_connection = nn.Sequential(
+                            nn.Linear(in_channels + class_emb_size, out_channels),
+                            nn.GELU(),
+                            nn.Linear(out_channels, out_channels))
 
     def forward(self, x, time_embed, y):
-        c = self.linear_map_class(y)
-        x = torch.cat([x, c], dim=1)
+        if self.conditional:
+            c = self.linear_map_class(y)
+            x = torch.cat([x, c], dim=1)
         h = self.net(x)
         time_embed = self.l_embedding(time_embed)
         h = self.relu(h + time_embed)
-        return self.out_layer(h) + self.skip_connection(x)
+        if self.use_skip_connection:
+            return self.out_layer(h) + self.skip_connection(x)
+        else:
+            return self.out_layer(h)
 
 
 class MLPTimeStep(torch.nn.Sequential):
@@ -113,7 +125,9 @@ class MLPTimeStep(torch.nn.Sequential):
             num_classes: int, 
             class_emb_size: int,
             dropout: float = 0.0,
-            encode_class: float = False
+            encode_class: float = False, 
+            use_skip_connection: bool = True,
+            conditional:bool = True,
     ):
         super().__init__()
         self.in_dim = in_dim
@@ -132,7 +146,9 @@ class MLPTimeStep(torch.nn.Sequential):
                              p_dropout=dropout, 
                              num_classes=num_classes, 
                              class_emb_size=class_emb_size, 
-                             encode_class=encode_class) 
+                             encode_class=encode_class, 
+                             use_skip_connection=use_skip_connection, 
+                             conditional=conditional) 
                 for i in range(len(dims)-1)
                 ])
  
@@ -143,7 +159,8 @@ class MLPTimeStep(torch.nn.Sequential):
             p_dropout=dropout,
             num_classes=num_classes, 
             class_emb_size=class_emb_size,
-        )
+            use_skip_connection=use_skip_connection, 
+            conditional=conditional)
 
         self.decoder = nn.ModuleList([
                 MLPTimeEmbedCond(in_channels=rev_dims[i], 
@@ -151,15 +168,11 @@ class MLPTimeStep(torch.nn.Sequential):
                              time_embed_size=time_embed_size,
                              p_dropout=dropout, 
                              num_classes=num_classes, 
-                             class_emb_size=class_emb_size)
+                             class_emb_size=class_emb_size, 
+                             use_skip_connection=use_skip_connection, 
+                             conditional=conditional)
                 for i in range(len(rev_dims)-1)
                 ])
-
-        self.time_embed = nn.Sequential(
-            nn.Linear(self.time_embed_size, self.time_embed_size),
-            nn.SiLU(),
-            nn.Linear(self.time_embed_size, self.time_embed_size),
-        )
 
         self.dropout = nn.Dropout(dropout)
 
@@ -173,7 +186,7 @@ class MLPTimeStep(torch.nn.Sequential):
         :return:
         """
         # Embed the time 
-        time_embedding = self.time_embed(timestep_embedding(t, self.time_embed_size))
+        time_embedding = timestep_embedding(t, self.time_embed_size)
 
         # Encoder
         for encoder_layer in self.encoder:

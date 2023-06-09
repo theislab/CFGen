@@ -198,6 +198,7 @@ class CellDreamerEstimator:
                     feature_embeddings=self.feature_embeddings,
                     task=self.args.task,
                     use_drugs=self.args.use_drugs,
+                    one_hot_encode_features=self.args.one_hot_encode_features,
                     metric_collector=self.metric_collector,  
                     **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
                 )

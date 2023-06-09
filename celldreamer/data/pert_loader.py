@@ -28,8 +28,9 @@ class PertDataset:
         degs_key="rank_genes_groups_cov",
         pert_category="cov_drug_dose_name",
         split_key='split',
-        use_drugs=False,
-    ):
+        use_drugs=False, 
+        subsample_frac=1
+        ):
         """
         Perturbation dataset 
         
@@ -47,8 +48,9 @@ class PertDataset:
         # Read AnnData 
         assert os.path.exists(data_path)
         logging.info(f"Starting to read in data: {data_path}\n...")
-        print(data_path)
         data = sc.read(data_path)
+        if subsample_frac < 1:
+            sc.pp.subsample(data, fraction=subsample_frac)
         logging.info(f"Finished data loading.")
         
         # Set AnnData fields as attributes 

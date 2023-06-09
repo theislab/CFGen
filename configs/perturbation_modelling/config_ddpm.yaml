@@ -21,7 +21,6 @@ args:
   degs_key: lincs_DEGs
   pert_category: cov_drug_dose_name
   split_key: split_ho_pathway
-  use_drugs: True
   feature_type: ECFP
   freeze_embeddings: True  # Whether the embeddings should get trained 
   use_drugs: False  # Use drug or not 
@@ -29,6 +28,7 @@ args:
   doser_depth: Null  
   cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
+  subsample_frac: 1
              
   # General model 
   generative_model: diffusion  
@@ -61,34 +61,34 @@ args:
 
   # Logger kwargs
   logger_kwargs: 
-    offline: False
+    offline: True
     id: Null 
     anonymous: Null 
     project: celldreamer
-    log_model: True 
+    log_model: False 
 
   #Denoising model specific 
   denoising_module_kwargs: 
     dims: [64]
     encode_class: False
     time_embed_size: 128 
-    class_emb_size: 10
-    dropout: 0.0
+    class_emb_size: Null
+    dropout: 00
+    use_skip_connection: False
+    conditional: False
                   
   # Diffusion model specific
   generative_model_kwargs: 
-    T: 1000
+    T: 500
     w: 0.3
     p_uncond: 0.2
-    classifier_free: False
-    learning_rate: 0.0001
+    classifier_free: True
+    learning_rate: 0.001
     weight_decay: 0.0001
                   
   # Autoencoder trainer hparams
   trainer_kwargs:
     max_epochs: 1
-    gradient_clip_val: 1.
-    gradient_clip_algorithm: norm
     accelerator: gpu
     devices: 1
     check_val_every_n_epoch: 1

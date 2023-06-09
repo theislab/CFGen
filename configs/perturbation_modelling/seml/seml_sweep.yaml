@@ -43,6 +43,7 @@ fixed:
     config.args.doser_depth: Null
     config.args.cov_embedding_dimensions: Null
     config.args.one_hot_encode_features: True
+    config.args.subsample_frac: 0.5
 
     # General model 
     config.args.generative_model: diffusion  
@@ -89,7 +90,7 @@ fixed:
     config.args.generative_model_kwargs.weight_decay: 0.0001
 
     # Autoencoder trainer hparams
-    config.args.trainer_kwargs.max_epochs: 1
+    config.args.trainer_kwargs.max_epochs: 30
     config.args.trainer_kwargs.gradient_clip_val: 1.
     config.args.trainer_kwargs.gradient_clip_algorithm: norm
     config.args.trainer_kwargs.accelerator: gpu
