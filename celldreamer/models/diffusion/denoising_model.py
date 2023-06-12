@@ -50,28 +50,29 @@ def init_zero(module: nn.Module) -> nn.Module:
 
 class MLPTimeEmbedCond(nn.Module):
     def __init__(self,
-                 in_channels: int,
-                 out_channels: int,
+                 in_dim: int,
+                 hidden_dims: int,
                  time_embed_size: int,
-                 p_dropout: float, 
                  num_classes: int, 
                  class_emb_size: int, 
                  encode_class: float = False, 
-                 use_skip_connection:bool=True, 
                  conditional:bool=True,
+                 dropout: bool=False,
+                 p_dropout: float=0.0,
+                 batch_norm: bool = False
                  ):
+        
         super().__init__()
         """
         Like ResBlockTimeEmbed, but without convolutional layers.
         Instead use linear layers.
         """ 
+        # Condition embedding
         self.conditional = conditional
         if self.conditional:
             if encode_class:
                 self.linear_map_class = nn.Sequential(
-                    nn.Linear(np.sum(list(num_classes.values())), class_emb_size),
-                    nn.ReLU(),
-                    nn.Linear(class_emb_size, class_emb_size)
+                    nn.Linear(np.sum(list(num_classes.values())), class_emb_size)
                 )
             else:
                 self.linear_map_class = nn.Identity()
@@ -79,104 +80,63 @@ class MLPTimeEmbedCond(nn.Module):
         else:
             class_emb_size = 0
 
-        self.l_embedding = nn.Sequential(
-            nn.GELU(),
-            nn.Linear(time_embed_size, out_channels)
-        )
-            
-        self.net = nn.Sequential(
-                    nn.Linear(in_channels + class_emb_size, out_channels),
-                    nn.GELU(),
-                    nn.Linear(out_channels, out_channels))
-        self.relu = nn.ReLU()
+        # The net
+        channels = [in_dim+class_emb_size+time_embed_size, *hidden_dims, in_dim]
+        layers = []
         
-        self.out_layer = nn.Sequential(
-            nn.GELU(),
-            nn.Dropout(p_dropout),
-            nn.Linear(out_channels, out_channels),
-        )
-        
-        self.use_skip_connection = use_skip_connection
-        if use_skip_connection:
-            self.skip_connection = nn.Sequential(
-                            nn.Linear(in_channels + class_emb_size, out_channels),
-                            nn.GELU(),
-                            nn.Linear(out_channels, out_channels))
+        for i in range(len(channels)-2):
+            layers.append(nn.Linear(channels[i], channels[i + 1]))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(channels[i + 1]))
+            layers.append(nn.ReLU())
+            if dropout:
+                layers.append(nn.Dropout(p=p_dropout))
+        layers.append(nn.Linear(channels[-2], channels[-1]))
+        self.net = nn.Sequential(*layers)
 
     def forward(self, x, time_embed, y):
         if self.conditional:
             c = self.linear_map_class(y)
             x = torch.cat([x, c], dim=1)
         
-        h = self.net(x)
-        time_embed = self.l_embedding(time_embed)
-        h = self.relu(h + time_embed)
-        if self.use_skip_connection:
-            return self.out_layer(h) + self.skip_connection(x)
-        else:
-            return self.out_layer(h)
+        x = torch.cat([x, time_embed], dim=1)
+        x = self.net(x)
+        return x
 
 
 class MLPTimeStep(torch.nn.Sequential):
     def __init__(
             self,
             in_dim: int, 
-            dims: List[int],
+            hidden_dims: List[int],
             time_embed_size: int,
             num_classes: int, 
             class_emb_size: int,
-            dropout: float = 0.0,
             encode_class: float = False, 
-            use_skip_connection: bool = True,
             conditional:bool = True,
+            dropout: bool = True,
+            p_dropout: float = 0.0,
+            batch_norm: bool = False
     ):
         super().__init__()
         self.in_dim = in_dim
         self.time_embed_size = time_embed_size
         self.num_classes = num_classes
         self.class_emb_size = class_emb_size
-        
-        # Add the initial dimension to the channel list
-        dims = [in_dim] + dims
-        rev_dims = dims[::-1]
 
-        self.encoder = nn.ModuleList([
-                MLPTimeEmbedCond(in_channels=dims[i], 
-                             out_channels=dims[i + 1],
-                             time_embed_size=time_embed_size,
-                             p_dropout=dropout, 
-                             num_classes=num_classes, 
-                             class_emb_size=class_emb_size, 
-                             encode_class=encode_class, 
-                             use_skip_connection=use_skip_connection, 
-                             conditional=conditional) 
-                for i in range(len(dims)-1)
-                ])
- 
-        self.middle_block = MLPTimeEmbedCond(
-            in_channels=dims[-1],
-            out_channels=dims[-1],
-            time_embed_size=time_embed_size,
-            p_dropout=dropout,
-            num_classes=num_classes, 
-            class_emb_size=class_emb_size,
-            use_skip_connection=use_skip_connection, 
-            conditional=conditional)
+        # Neural network object
+        self.model = MLPTimeEmbedCond(in_dim=in_dim, 
+                            hidden_dims=hidden_dims,
+                            time_embed_size=time_embed_size,
+                            num_classes=num_classes, 
+                            class_emb_size=class_emb_size, 
+                            encode_class=encode_class, 
+                            conditional=conditional, 
+                            dropout=dropout,
+                            p_dropout=p_dropout,
+                            batch_norm=batch_norm
+                            ) 
 
-        self.decoder = nn.ModuleList([
-                MLPTimeEmbedCond(in_channels=rev_dims[i], 
-                             out_channels=rev_dims[i + 1],
-                             time_embed_size=time_embed_size,
-                             p_dropout=dropout, 
-                             num_classes=num_classes, 
-                             class_emb_size=class_emb_size, 
-                             use_skip_connection=use_skip_connection, 
-                             conditional=conditional)
-                for i in range(len(rev_dims)-1)
-                ])
-
-        self.dropout = nn.Dropout(dropout)
-        
         # Initialize the parameters using He initialization
         self.apply(self._init_weights)
 
@@ -193,16 +153,7 @@ class MLPTimeStep(torch.nn.Sequential):
         time_embedding = timestep_embedding(t, self.time_embed_size)
 
         # Encoder
-        for encoder_layer in self.encoder:
-            x = encoder_layer(x, time_embedding, y)
-            x = self.dropout(x)
-            
-        # Middle block
-        x = self.middle_block(x, time_embedding, y)
-
-        # Decoder
-        for decoder_block in self.decoder:
-            x = decoder_block(x, time_embedding, y)
+        x = self.model(x, time_embedding, y)
 
         # Output
         return x

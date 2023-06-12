@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
-
+from torch.utils.data import random_split
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
@@ -17,6 +17,7 @@ from pytorch_lightning.loggers import WandbLogger
 from celldreamer.paths import ROOT, TRAINING_FOLDER
 from celldreamer.models.base.autoencoder import MLP_AutoEncoder
 from celldreamer.data.pert_loader import PertDataset
+from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.drug_featurizer import DrugsFeaturizer
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
 
@@ -71,7 +72,31 @@ class CellDreamerEstimator:
         
         # Initialize dataloaders for the different tasks 
         if self.args.task == "cell_generation":
-            raise NotImplementedError
+            self.dataset = RNAseqLoader(data_path=self.data_path,
+                                covariate_keys=self.args.covariate_keys,
+                                subsample_frac=self.args.subsample_frac)
+            
+            train_data, test_data, valid_data = random_split(self.dataset, lengths=self.args.split_rates)
+            self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(
+                                                        train_data,
+                                                        batch_size=self.args.batch_size,
+                                                        shuffle=True,
+                                                        num_workers=8
+                                                    ),
+                                    "valid_dataloader": torch.utils.data.DataLoader(
+                                                        valid_data,
+                                                        batch_size=self.args.batch_size,
+                                                        shuffle=False,
+                                                        num_workers=8
+                                                    ),
+                                    "test_dataloader": torch.utils.data.DataLoader(
+                                                        test_data,
+                                                        batch_size=self.args.batch_size,
+                                                        shuffle=False,
+                                                        num_workers=8
+                                    )})            
+            
+            
         else:
             self.dataset = PertDataset(
                             data_path=self.data_path,
@@ -110,14 +135,12 @@ class CellDreamerEstimator:
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
         """
-        if self.args.task == "perturbation_modelling":
-            if self.args.use_latent_repr: 
-                self.args.autoencoder_kwargs["in_dim"] = self.dataset.genes.shape[1]
-                self.args.denoising_module_kwargs["in_dim"] = self.args.autoencoder_kwargs["hidden_dim_encoder"][-1]
-            else:
-                self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]  # perform diffusion in gene dimension 
+        if self.args.use_latent_repr: 
+            self.args.autoencoder_kwargs["in_dim"] = self.dataset.genes.shape[1]
+            self.args.denoising_module_kwargs["in_dim"] = self.args.autoencoder_kwargs["hidden_dim_encoder"][-1]
         else:
-            raise NotImplementedError   
+            self.args.denoising_module_kwargs["in_dim"] = self.dataset.genes.shape[1]  # perform diffusion in gene dimension 
+
     
     def init_trainer(self):
         """
@@ -165,19 +188,16 @@ class CellDreamerEstimator:
                                     
                 num_classes["y_drug"] = self.feature_embeddings["y_drug"].features.embedding_dim
                 
-            for cov, cov_names in self.dataset.covariate_names_unique.items():
-                self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
-                                                                            self.args.one_hot_encode_features, 
-                                                                            self.device, 
-                                                                            embedding_dimensions=self.args.cov_embedding_dimensions)
-                if self.args.one_hot_encode_features:
-                    num_classes["y_"+cov] = len(cov_names)
-                else:
-                    num_classes["y_"+cov] = self.args.cov_embedding_dimensions
-                    
-        else:
-            raise NotImplementedError 
-        
+        for cov, cov_names in self.dataset.covariate_names_unique.items():
+            self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
+                                                                        self.args.one_hot_encode_features, 
+                                                                        self.device, 
+                                                                        embedding_dimensions=self.args.cov_embedding_dimensions)
+            if self.args.one_hot_encode_features:
+                num_classes["y_"+cov] = len(cov_names)
+            else:
+                num_classes["y_"+cov] = self.args.cov_embedding_dimensions
+                            
         # Save number of classes                   
         self.args.denoising_module_kwargs["num_classes"] = num_classes
 

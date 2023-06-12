@@ -5,7 +5,6 @@ from typing import List, Optional, Union
 import numpy as np
 import scanpy as sc
 import torch
-from anndata import AnnData
 
 from sklearn.preprocessing import OneHotEncoder
 from celldreamer.data.utils import indx, drug_names_to_once_canon_smiles
@@ -168,7 +167,7 @@ class PertDataset:
 
         # For each observation, get a bool vector to select in the gene dimension 
         degs_tensor = []
-        for i in range(len(self)):
+        for i in range(len(self.drugs_names)):
             drug = indx(self.drugs_names, i)
             cov = indx(self.covariate_names["cell_type"], i)
 
@@ -200,18 +199,7 @@ class PertDataset:
         """
         return self._drugs_name_to_idx[drug_name]
 
-    def __getitem__(self, i):
-        X = self.genes[i]
-        X_degs = indx(self.degs, i)
-        if self.use_drugs:
-            y = {"y_drug": [indx(self.drugs_idx, i), indx(self.dosages, i)]}
-        else:
-            y = {}
-        y.update({"y_"+self.covariate_keys[cov_idx]: indx(cov, i) for cov_idx, cov in enumerate(self.covariates)})
-        return ({"X": X, "X_degs": X_degs, "y": y})
 
-    def __len__(self):
-        return len(self.genes)
 
 
 class SubPertDataset:

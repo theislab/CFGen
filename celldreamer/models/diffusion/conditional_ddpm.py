@@ -109,7 +109,8 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
         loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
         # print("True", eps)
-        # print("predicted", pred_eps)
+        print("predicted", pred_eps)
+        # print(loss)
         
         self.log(f"loss/{dataset}_loss", loss, on_step=True)
 
@@ -156,7 +157,7 @@ class ConditionalGaussianDDPM(pl.LightningModule):
             t_expanded = t.view(-1, 1)
             if is_c_none or not self.classifier_free:
                 # compute unconditioned noise
-                eps = self(z_t, t / T, y)  # predict via nn the noise
+                eps = self(z_t, t / self.T, y)  # predict via nn the noise
                 print(eps)
             else:
                 # compute class conditioned noise

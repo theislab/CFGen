@@ -1,10 +1,10 @@
 args:
   # General training config 
   train: True  # Whether to train the model 
-  experiment_name: try_experiment  
-  task: perturbation_modelling # task (cell_generation or perturbation_modelling)
-  dataset_path: datasets/sciplex/sciplex_complete_middle_subset.h5ad
-  batch_size: 256  
+  experiment_name: try_experiment_pbmc 
+  task: cell_generation # task (cell_generation or perturbation_modelling)
+  dataset_path: datasets/scrnaseq_dataset/pbmc3k_processed.h5ad
+  batch_size: 512  
   resume: False
   train_autoencoder: False # Train autoencoder or only the diffusion model
   use_latent_repr: False # Latent diffusion or direct data feature diffusion 
@@ -12,25 +12,16 @@ args:
   checkpoint_autoencoder: Null  
   pretrained_generative: False
   chekpoint_path: Null  
+  use_drugs: False
   
   # CHANGE 
   # Perturbation setting specific
-  perturbation_key: condition 
-  dose_key: dose
-  covariate_keys: cell_type
-  smile_keys: SMILES
-  degs_key: lincs_DEGs
-  pert_category: cov_drug_dose_name
-  split_key: split_ho_pathway
-  feature_type: ECFP
-  freeze_embeddings: True  # Whether the embeddings should get trained 
-  use_drugs: False  # Use drug or not 
-  doser_width: Null
-  doser_depth: Null  
+  covariate_keys: [louvain]
+  split_rates: [0.9, 0.05, 0.05]
 
   cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
-  subsample_frac: 0.5
+  subsample_frac: 1
   standardize: True
              
   # General model 
@@ -52,7 +43,7 @@ args:
   # Early stopping kwargs 
   early_stopping_kwargs: 
     monitor: loss/valid_loss
-    patience: 20
+    patience: 50
     mode: min
     min_delta: 0.
     verbose: False
@@ -81,11 +72,12 @@ args:
     dropout: False
     p_dropout: 0.0
     batch_norm: True
+    
 
   # CHANGE      
   # Diffusion model specific
   generative_model_kwargs: 
-    T: 500
+    T: 1000
     w: 0.3
     p_uncond: 0.2
     classifier_free: False
@@ -94,7 +86,7 @@ args:
                   
   # Autoencoder trainer hparams
   trainer_kwargs:
-    max_epochs: 20
+    max_epochs: 200
     accelerator: gpu
     devices: 1
     check_val_every_n_epoch: 1
