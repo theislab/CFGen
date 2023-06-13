@@ -4,7 +4,7 @@ args:
   experiment_name: try_experiment_pbmc 
   task: cell_generation # task (cell_generation or perturbation_modelling)
   dataset_path: datasets/scrnaseq_dataset/pbmc3k_processed.h5ad
-  batch_size: 512  
+  batch_size: 256  
   resume: False
   train_autoencoder: False # Train autoencoder or only the diffusion model
   use_latent_repr: False # Latent diffusion or direct data feature diffusion 
@@ -22,7 +22,7 @@ args:
   cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
   subsample_frac: 1
-  standardize: True
+  standardize: False
              
   # General model 
   generative_model: diffusion  
@@ -64,8 +64,8 @@ args:
   # CHANGE   
   # Denoising model specific 
   denoising_module_kwargs: 
-    hidden_dims: [256, 256, 256]
-    time_embed_size: 128 
+    hidden_dims: [256, 256]
+    time_embed_size: 256 
     class_emb_size: Null
     encode_class: False
     conditional: False
@@ -73,21 +73,20 @@ args:
     p_dropout: 0.0
     batch_norm: True
     
-
   # CHANGE      
   # Diffusion model specific
   generative_model_kwargs: 
     T: 1000
-    w: 0.3
-    p_uncond: 0.2
+    w: 0
+    p_uncond: 0
     classifier_free: False
     learning_rate: 0.001
     weight_decay: 0.0001
                   
   # Autoencoder trainer hparams
   trainer_kwargs:
-    max_epochs: 200
-    accelerator: gpu
+    max_epochs: 500
+    accelerator: gpu 
     devices: 1
     check_val_every_n_epoch: 1
     log_every_n_steps: 1
