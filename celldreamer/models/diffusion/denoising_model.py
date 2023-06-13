@@ -6,10 +6,6 @@ import torch
 from torch import nn
 import torch.nn.init as init
 
-
-# import tensorguard as tg
-
-
 def positional_embedding_vector(t: int, dim: int) -> torch.FloatTensor:
     """
     Args:
@@ -48,10 +44,65 @@ def init_zero(module: nn.Module) -> nn.Module:
     return module
 
 
+# class MLPTimeEmbedCond(nn.Module):
+#     def __init__(self,
+#                  in_dim: int,
+#                  hidden_dims: int,
+#                  time_embed_size: int,
+#                  num_classes: int, 
+#                  class_emb_size: int, 
+#                  encode_class: float = False, 
+#                  conditional:bool=True,
+#                  dropout: bool=False,
+#                  p_dropout: float=0.0,
+#                  batch_norm: bool = False
+#                  ):
+        
+#         super().__init__()
+#         """
+#         Like ResBlockTimeEmbed, but without convolutional layers.
+#         Instead use linear layers.
+#         """ 
+#         # Condition embedding
+#         self.conditional = conditional
+#         if self.conditional:
+#             if encode_class:
+#                 self.linear_map_class = nn.Sequential(
+#                     nn.Linear(np.sum(list(num_classes.values())), class_emb_size)
+#                 )
+#             else:
+#                 self.linear_map_class = nn.Identity()
+#                 class_emb_size = np.sum(list(num_classes.values()))
+#         else:
+#             class_emb_size = 0
+
+#         # The net
+#         channels = [in_dim+class_emb_size+time_embed_size, *hidden_dims, in_dim]
+#         layers = []
+        
+#         for i in range(len(channels)-2):
+#             layers.append(nn.Linear(channels[i], channels[i + 1]))
+#             if batch_norm:
+#                 layers.append(nn.BatchNorm1d(channels[i + 1]))
+#             layers.append(nn.SELU())
+#             if dropout:
+#                 layers.append(nn.Dropout(p=p_dropout))
+#         layers.append(nn.Linear(channels[-2], channels[-1]))
+#         self.net = nn.Sequential(*layers)
+
+#     def forward(self, x, time_embed, y):
+#         if self.conditional:
+#             c = self.linear_map_class(y)
+#             x = torch.cat([x, c], dim=1)
+        
+#         x = torch.cat([x, time_embed], dim=1)
+#         x = self.net(x)
+#         return x
+
 class MLPTimeEmbedCond(nn.Module):
     def __init__(self,
                  in_dim: int,
-                 hidden_dims: int,
+                 out_dim: int,
                  time_embed_size: int,
                  num_classes: int, 
                  class_emb_size: int, 
@@ -79,30 +130,33 @@ class MLPTimeEmbedCond(nn.Module):
                 class_emb_size = np.sum(list(num_classes.values()))
         else:
             class_emb_size = 0
+            
+        # Time embedding 
+        self.time_embed_net = nn.Sequential(
+            nn.Linear(time_embed_size, out_dim),
+            nn.SELU(),
+            nn.Linear(out_dim, out_dim))
 
-        # The net
-        channels = [in_dim+class_emb_size+time_embed_size, *hidden_dims, in_dim]
+        # The feature net
         layers = []
-        
-        for i in range(len(channels)-2):
-            layers.append(nn.Linear(channels[i], channels[i + 1]))
-            if batch_norm:
-                layers.append(nn.BatchNorm1d(channels[i + 1]))
-            layers.append(nn.ReLU())
-            if dropout:
-                layers.append(nn.Dropout(p=p_dropout))
-        layers.append(nn.Linear(channels[-2], channels[-1]))
+        layers.append(nn.Linear(in_dim, out_dim))
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(out_dim))
+        layers.append(nn.SELU())
+        if dropout:
+            layers.append(nn.Dropout(p=p_dropout))
+    
         self.net = nn.Sequential(*layers)
+        self.out_layer = nn.Linear(out_dim, out_dim)
 
     def forward(self, x, time_embed, y):
+        time_embed = self.time_embed_net(time_embed)
         if self.conditional:
             c = self.linear_map_class(y)
             x = torch.cat([x, c], dim=1)
         
-        x = torch.cat([x, time_embed], dim=1)
-        x = self.net(x)
-        return x
-
+        x = self.net(x) + time_embed
+        return self.out_layer(x)
 
 class MLPTimeStep(torch.nn.Sequential):
     def __init__(
@@ -123,19 +177,32 @@ class MLPTimeStep(torch.nn.Sequential):
         self.time_embed_size = time_embed_size
         self.num_classes = num_classes
         self.class_emb_size = class_emb_size
-
+        
+        # Set up class conditioning
+        if conditional:
+            self.linear_map_class = nn.Identity()
+            class_emb_size = np.sum(list(num_classes.values()))
+        else:
+            class_emb_size = 0
+        
         # Neural network object
-        self.model = MLPTimeEmbedCond(in_dim=in_dim, 
-                            hidden_dims=hidden_dims,
-                            time_embed_size=time_embed_size,
-                            num_classes=num_classes, 
-                            class_emb_size=class_emb_size, 
-                            encode_class=encode_class, 
-                            conditional=conditional, 
-                            dropout=dropout,
-                            p_dropout=p_dropout,
-                            batch_norm=batch_norm
-                            ) 
+        channels = [in_dim, *hidden_dims, in_dim]
+        print(channels)
+        channels = [dim+class_emb_size for dim in channels[:-1]]+[channels[-1]]
+        
+        layers = []
+        for i in range(len(channels)-1):
+            layers.append(MLPTimeEmbedCond(in_dim=channels[i], 
+                                out_dim=channels[i+1],
+                                time_embed_size=time_embed_size,
+                                num_classes=num_classes, 
+                                class_emb_size=class_emb_size, 
+                                encode_class=encode_class, 
+                                conditional=conditional, 
+                                dropout=dropout,
+                                p_dropout=p_dropout,
+                                batch_norm=batch_norm))
+        self.net = nn.Sequential(*layers)
 
         # Initialize the parameters using He initialization
         self.apply(self._init_weights)
@@ -151,15 +218,15 @@ class MLPTimeStep(torch.nn.Sequential):
         """
         # Embed the time 
         time_embedding = timestep_embedding(t, self.time_embed_size)
-
         # Encoder
-        x = self.model(x, time_embedding, y)
-
+        for layer in self.net:
+            x = layer(x, time_embedding, y)
         # Output
         return x
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
-            init.kaiming_uniform_(module.weight, mode='fan_in', nonlinearity='relu')
+            init.kaiming_uniform_(module.weight, mode='fan_in')
             if module.bias is not None:
                 init.constant_(module.bias, 0.0)
+                
