@@ -74,7 +74,8 @@ class CellDreamerEstimator:
         if self.args.task == "cell_generation":
             self.dataset = RNAseqLoader(data_path=self.data_path,
                                 covariate_keys=self.args.covariate_keys,
-                                subsample_frac=self.args.subsample_frac)
+                                subsample_frac=self.args.subsample_frac, 
+                                use_pca=self.args.use_pca)
             
             train_data, test_data, valid_data = random_split(self.dataset, lengths=self.args.split_rates)
             self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(
@@ -212,7 +213,7 @@ class CellDreamerEstimator:
         
         if self.args.generative_model == 'diffusion':
             if self.args.denoising_model == 'mlp':
-                denoising_model = MLPTimeStep(**self.args.denoising_module_kwargs)
+                denoising_model = MLPTimeStep(**self.args.denoising_module_kwargs).to(self.device)
                 self.generative_model = ConditionalGaussianDDPM(
                     denoising_model=denoising_model,
                     autoencoder_model=self.autoencoder,

@@ -1,27 +1,25 @@
-import numpy as np
 from typing import Literal
 import pytorch_lightning as pl
 import torch
-from anndata import AnnData
 from torch import nn
-from typing import Callable, Union, Optional, List
-import pandas as pd 
+from typing import Callable, Optional
+from tqdm import tqdm
+from functools import partial
 
 from celldreamer.models.diffusion.variance_scheduler.cosine import CosineScheduler
-from celldreamer.models.diffusion.distributions import x0_to_xt
+from celldreamer.models.diffusion.diffusion_utils import extract, identity
 
 
 class ConditionalGaussianDDPM(pl.LightningModule):
     """
     Implementation of "Classifier-Free Diffusion Guidance"
     """
-
     def __init__(self,
                  denoising_model: nn.Module,
                  autoencoder_model: nn.Module, 
                  feature_embeddings: dict, 
-                 T: int,  # default: 1_000
-                 w: float,  # default: 0.3
+                 T: int,  
+                 w: float,  
                  classifier_free: bool, 
                  p_uncond: float,
                  task: str, 
@@ -35,8 +33,9 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  ):
 
         super().__init__()
+        # Set device 
         
-        # Denoising model and autpoencoder
+        # Denoising model and autoencoder (if required)
         self.denoising_model = denoising_model
         self.autoencoder_model = autoencoder_model
         self.metric_collector = metric_collector
@@ -46,171 +45,64 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         
         # Diffusion hyperparameters 
         self.T = T
-        self.w = w        
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.p_uncond = p_uncond
         self.in_dim = self.denoising_model.in_dim 
+        self.w = w        
+        
+        # Training hyperparameters
         self.task = task
         self.feature_embeddings = feature_embeddings
         self.classifier_free = classifier_free
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.use_drugs = use_drugs
         self.one_hot_encode_features = one_hot_encode_features
         
-        # Scheduler and the associated variances
-        self.var_scheduler = variance_scheduler(T = self.T)
-        self.alphas_hat = self.var_scheduler.get_alpha_hat().to(self.device)
-        self.alphas = self.var_scheduler.get_alphas().to(self.device)
-        self.betas = self.var_scheduler.get_betas().to(self.device)
-        self.betas_hat = self.var_scheduler.get_betas_hat().to(self.device)
-        
         # Optimization 
         self.mse = nn.MSELoss()
-        self.iteration = 0
         self.optim = optimizer
-
-    def forward(self, x: torch.Tensor, t: torch.Tensor, c: torch.Tensor) -> torch.Tensor: 
-        return self.denoising_model(x, t, c)
+    
+        # Initialize necessary values for variance schedule 
+        self.var_scheduler = variance_scheduler(T = self.T)
+        alphas_hat = self.var_scheduler.get_alpha_hat().to(self.device)
+        alpha_hat_prev = self.var_scheduler.get_alpha_hat_prev().to(self.device)
+        alphas = self.var_scheduler.get_alphas().to(self.device)
+        betas = self.var_scheduler.get_betas().to(self.device)
+        posterior_variance = self.var_scheduler.get_posterior_variance().to(self.device)    
+        
+        # Register all parameters in their buffer
+        register_buffer = lambda name, val: self.register_buffer(name, val.to(torch.float32))
+        # Standard values of the variance schedule 
+        register_buffer('betas', betas)
+        register_buffer('alphas_cumprod', alphas_hat)
+        register_buffer('alphas_cumprod', alpha_hat_prev)
+        # calculations for diffusion q(x_t | x_{t-1}) and others
+        register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_hat))
+        register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_hat))
+        register_buffer('log_one_minus_alphas_cumprod', torch.log(1. - alphas_hat))
+        register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_hat))
+        register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_hat - 1))
+        # calculations for posterior q(x_{t-1} | x_t, x_0)
+        register_buffer('posterior_variance', posterior_variance)
+        # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
+        register_buffer('posterior_log_variance_clipped', torch.log(posterior_variance.clamp(min =1e-20)))
+        register_buffer('posterior_mean_coef1', betas * torch.sqrt(alpha_hat_prev) / (1. - alphas_hat))
+        register_buffer('posterior_mean_coef2', (1. - alpha_hat_prev) * torch.sqrt(alphas) / (1. - alphas_hat))
+    
+    # Basic torch lightning setup
+    def forward(self, x: torch.Tensor, t: torch.Tensor, y: torch.Tensor) -> torch.Tensor: 
+        return self.denoising_model(x, t, y)
 
     def training_step(self, batch, batch_idx):
         return self._step(batch, 'train')
 
     def validation_step(self, batch, batch_idx):
         return self._step(batch, 'valid')
-
-    # def on_validation_epoch_end(self):
-    #     return self.eval_distr_matching(dataset="valid")
-    
-    def _step(self, batch, dataset: Literal['train', 'valid']) -> torch.Tensor:
-        """
-        train/validation step of DDPM. The logic is mostly taken from the original DDPM paper,
-        except for the class conditioning part.
-        """
-        X = batch["X"].to(self.device)
         
-        # If we are training a latent model, we encode X first 
-        if self.autoencoder_model != None:
-            X = self.autoencoder_model.encoder(X)
-        
-        # Encode covariates 
-        y=self._featurize_batch_y(batch)
-        
-        # Dummy flags that with probability p_uncond, we train without class conditioning
-        if self.classifier_free:
-            is_class_cond = torch.rand(size=(X.shape[0], 1), device=X.device) >= self.p_uncond
-            y = y * is_class_cond.float() 
-            
-        # Sample t uniformly from [0, T-1]
-        t = torch.randint(0, self.T - 1, (X.shape[0],), device=X.device) 
-        t_expanded = t.reshape(-1, 1)
-        eps = torch.randn_like(X)  
-        alpha_hat_t = self.alphas_hat[t_expanded]
-        x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step
-        pred_eps = self(x_t, t / self.T, y) # predict the noise to transition from x_t to x_{t-1}
-        loss = self.mse(eps, pred_eps) # compute the MSE between the predicted noise and the real noise
-        # print("True", eps)
-        # print("predicted", pred_eps)
-        # print(loss)
-        # print(t)
-
-        
-        self.log(f"loss/{dataset}_loss", loss, on_step=True)
-
-        self.iteration += 1
-        return loss
-    
-    def eval_distr_matching(self, dataset):
-        real_adata, generated_adata, reconstructed_adata = self.get_generated_and_reconstructed(dataset)
-        self.metric_collector[dataset].compute_generation_metrics(real_adata, 
-                                                                    generated_adata, 
-                                                                    reconstructed_adata)
-        self.log_dict(self.metric_collector[dataset])
-
-    def generate(self, 
-                 batch_size: Optional[int] = None, 
-                 y: Optional[torch.Tensor] = None, 
-                 z_t: Optional[torch.Tensor] = None,
-                 T: Optional[int] = None,
-                 get_intermediate_steps: bool = False) -> Union[torch.Tensor, List[torch.Tensor]]:
-        """
-        Generate sample of cells
-        """
-        # Generation time 
-        T = T or self.T
-        batch_size = batch_size or 1
-        is_c_none = y is None
-        
-        # Optional conditioning
-        if is_c_none:
-            y = torch.zeros(batch_size, 
-                            np.sum(list(self.num_classes.values())),
-                            device=self.device)
-        if get_intermediate_steps:
-            steps = []
-            
-        # Starting random noise 
-        if z_t is None:   
-            z_t = torch.randn(batch_size, self.in_dim, device=self.device)
-
-        for t in range(T - 1, 0, -1):
-            if get_intermediate_steps:
-                steps.append(z_t)
-            t = torch.LongTensor([t] * batch_size).to(self.device)
-            t_expanded = t.view(-1, 1)
-            if is_c_none or not self.classifier_free:
-                # compute unconditioned noise
-                eps = self(z_t, t / self.T, y)  # predict via nn the noise
-                print(eps)
-            else:
-                # compute class conditioned noise
-                eps1 = (1 + self.w) * self(z_t, t / T, y)
-                eps2 = self.w * self(z_t, t / T, y * 0)
-                eps = eps1 - eps2
-            
-            alpha_t = self.alphas[t_expanded]
-            z = torch.randn_like(z_t)
-            alpha_hat_t = self.alphas_hat[t_expanded]
-            # denoise step from x_t to x_{t-1} following the DDPM paper
-            z_t = (z_t - ((1 - alpha_t) / torch.sqrt(1 - alpha_hat_t)) * eps) / (torch.sqrt(alpha_t)) + \
-                  self.betas[t_expanded] * z
-            
-        if get_intermediate_steps:
-            steps.append(z_t)
-            
-        if self.autoencoder_model != None:
-            x_hat = self.autoencoder_model.decoder(z_t)
-        else:
-            x_hat = z_t
-            
-        if get_intermediate_steps:
-            return x_hat, steps
-        else:
-            return x_hat
-    
-    def reconstruct(self, batch, T):
-        # Encode X to latent space 
-        X = batch["X"].to(self.device)
-        if self.autoencoder_model != None:
-            X = self.autoencoder_model.encoder(X)
-        
-        # Encode and concatenate variables
-        y = self._featurize_batch_y(batch)
-        # Generate at the end of the trajectory
-        t = (T * torch.ones(X.shape[0], device=X.device)).long()
-        t_expanded = t.view(-1, 1)
-        eps = torch.randn_like(X)  # [bs, c, w, h]
-        alpha_hat_t = self.alphas_hat[t_expanded] # get \hat{\alpha}_t
-        x_t = x0_to_xt(X, alpha_hat_t, eps)  # go from x_0 to x_t in a single equation thanks to the step        
-        
-        # Generate observation from x_t 
-        x_hat = self.generate(x_t.shape[0], 
-                              y, 
-                              x_t, 
-                              T, 
-                              get_intermediate_steps=False)
-        return x_hat, x_t
-
     def configure_optimizers(self):
+        """
+        Optimizer configuration 
+        """
         parms_to_train = list(self.denoising_model.parameters())
         if self.task == "perturbation_modelling" and self.use_drugs:
             parms_to_train.extend(list(self.feature_embeddings["y_drug"].parameters()))
@@ -223,60 +115,181 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                                                     lr=self.learning_rate, 
                                                     weight_decay=self.weight_decay)}
         return optimizer_config
-
-    def on_fit_start(self) -> None:
-        self.betas = self.betas.to(self.device)
-        self.betas_hat = self.betas_hat.to(self.device)
-        self.alphas = self.alphas.to(self.device)
-        self.alphas_hat = self.alphas_hat.to(self.device)
-            
-    def get_generated_and_reconstructed(self, dataset):
-        """
-        Compute metrics obtained from generating from random noise 
-        """
-        real_array = []
-        generated_array = []
-        reconstructed_array = []
-              
-        metadata = {i.strip("y_"):[] for i in self.feature_embeddings}
-        if self.task == "perturbation_modelling" and self.use_drugs:
-            metadata["dose"] = []
-              
-        for batch in self.metric_collector[dataset].dataloader:
-            if self.task == "perturbation_modelling":
-                # Get feature combination embedding to condition generation
-                y = self._featurize_batch_y(batch)
-                
-                # Perform generation and reconstruction 
-                X_generated = self.generate(batch["X"].shape[0],
-                                                  y).detach().cpu().numpy()
-                X_reconstructed = self.reconstruct(batch,
-                                                    self.T)[0].detach().cpu().numpy()
-                
-                real_array.append(batch["X"].detach().cpu().numpy())
-                generated_array.append(X_generated)
-                reconstructed_array.append(X_reconstructed)
-                
-                for cat in batch["y"]:
-                    if cat == "y_drug":
-                        metadata["drug"] += batch["y"][cat][0].cpu().tolist()
-                        metadata["dose"] += batch["y"][cat][1].cpu().tolist()
-                    else:
-                        metadata[cat.strip("y_")] += batch["y"][cat].cpu().tolist()      
-                        
-            else:
-                raise NotImplementedError
-        
-        # Save the data 
-        metadata = pd.DataFrame(metadata)
-        real_adata = AnnData(X=np.concatenate(real_array, axis=0),
-                             obs=metadata)
-        generated_adata = AnnData(X=np.concatenate(generated_array, axis=0), 
-                                  obs=metadata.copy())
-        reconstructed_adata = AnnData(X=np.concatenate(reconstructed_array, axis=0), 
-                                      obs=metadata.copy())
-        return real_adata, generated_adata, reconstructed_adata
     
+    # Forward
+    def _step(self, batch, dataset: Literal['train', 'valid']) -> torch.Tensor:
+        """
+        train/validation step of DDPM. The logic is mostly taken from the original DDPM paper,
+        except for the class conditioning part.
+        """
+        # Collect observation and optionally encode it 
+        x = batch["X"].to(self.device)
+        if self.autoencoder_model != None:
+            x = self.autoencoder_model.encoder(x)
+        
+        # Define the classifier free strategy 
+        y=self._featurize_batch_y(batch)
+            
+        # Sample t uniformly from [0, T]
+        t = torch.randint(0, self.T, (x.shape[0],), device=x.device).long()
+        loss = self.p_losses(x, t, y)
+        self.log(f"loss/{dataset}_loss", loss, on_step=True)
+        return loss
+
+    def p_losses(self, x_start, t, y, noise = None):
+        """
+        Collect the MSE loss 
+        """
+        if noise == None:
+            noise = torch.randn_like(x_start)  
+        x = self.q_sample(x_start = x_start, t = t, noise = noise)
+        model_out = self.denoising_model(x, t, y) 
+        loss = self.mse(noise, model_out)
+        return loss
+        
+    def q_sample(self, x_start, t, noise = None):
+        """
+        Sample from forward process     
+        """
+        if noise == None:
+            noise = torch.randn_like(x_start)  
+        return (
+            extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
+            extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+        )
+    
+    # Backward
+    def sample(self, 
+                batch_size: Optional[int] = None, 
+                y: Optional[torch.Tensor] = None, 
+                return_all_timesteps: bool = False, 
+                clip_denoised: bool = True):
+        """
+        Sample generated cells
+        """
+        sample_fn = self.p_sample_loop 
+        return sample_fn(batch_size, y, return_all_timesteps, clip_denoised)   
+    
+    @torch.no_grad()
+    def ddim_sample(self, batch_size, y, return_all_timesteps = False, ddim_sampling_eta=0):
+        batch_size, device, total_timesteps, eta = batch_size, self.device, self.T, ddim_sampling_eta
+
+        times = torch.arange(-1, total_timesteps)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
+        times = list(reversed(times.int().tolist()))
+        time_pairs = list(zip(times[:-1], times[1:])) # [(T-1, T-2), (T-2, T-3), ..., (1, 0), (0, -1)]
+
+        x = torch.randn(batch_size, self.in_dim, device = device)
+        xs = [x]
+
+        x_start = None
+
+        for time, time_next in tqdm(time_pairs):
+            time_cond = torch.full((batch_size,), time, device = device, dtype = torch.long)
+            pred_noise, x_start =list(self.model_predictions(x, time_cond, y, clip_x_start = True, rederive_pred_noise = True).values())
+
+            if time_next < 0:
+                x = x_start
+                xs.append(x)
+                continue
+
+            alpha = self.alphas_cumprod[time]
+            alpha_next = self.alphas_cumprod[time_next]
+
+            sigma = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+            c = (1 - alpha_next - sigma ** 2).sqrt()
+
+            noise = torch.randn_like(x)
+
+            x = x_start * alpha_next.sqrt() + \
+                  c * pred_noise + \
+                  sigma * noise
+
+            xs.append(x)
+
+        ret = x if not return_all_timesteps else torch.stack(xs, dim = 1)
+
+        return ret
+
+    
+    def p_sample_loop(self, batch_size, y, return_all_timesteps, clip_denoised=True):
+        """
+        Loop to generate images
+        """
+        # Sample observation  
+        x = torch.randn((batch_size, self.in_dim)).to(self.device)
+        xs = [x]
+
+        for t in reversed(range(0, self.T)):
+            x, _ = self.p_sample(x, t, y, clip_denoised=clip_denoised)
+            xs.append(x.cpu())
+          
+        ret = x if not return_all_timesteps else torch.stack(xs, dim = 0)
+        return ret
+    
+    def p_sample(self, x, t, y, clip_denoised = True):
+        """
+        Sample from posterior
+        """
+        b = x.shape[0]
+        batched_times = torch.full((b,), t, device = x.device, dtype = torch.long)
+        model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, y = y, clip_denoised = clip_denoised)
+        noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
+        pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
+        return pred_img, x_start
+    
+    def p_mean_variance(self, x, t, y, clip_denoised = True):
+        """
+        Posterior mean and variance
+        """
+        preds = self.model_predictions(x, t, y)
+        x_start = preds["x_start"]
+
+        if clip_denoised:
+            x_start.clamp_(-1., 1.)
+
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start = x_start, x_t = x, t = t)
+        return model_mean, posterior_variance, posterior_log_variance, x_start
+
+    def model_predictions(self, x, t, y, clip_x_start = False, rederive_pred_noise = False):
+        """
+        Predict noise and starting point based on reverse diffusion  
+        """
+        # Predicted noise at a step
+        pred_noise = self.denoising_model(x, t, y)
+        maybe_clip = partial(torch.clamp, min = -1., max = 1.) if clip_x_start else identity
+
+        x_start = self.predict_start_from_noise(x, t, pred_noise)
+        x_start = maybe_clip(x_start)
+        
+        if clip_x_start and rederive_pred_noise:
+                pred_noise = self.predict_noise_from_start(x, t, x_start)
+                
+        return {"pred_noise": pred_noise, 
+                "x_start": x_start}
+    
+    def q_posterior(self, x_start, x_t, t):
+        posterior_mean = (
+            extract(self.posterior_mean_coef1, t, x_t.shape) * x_start +
+            extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
+        )
+        posterior_variance = extract(self.posterior_variance, t, x_t.shape)
+        posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
+        return posterior_mean, posterior_variance, posterior_log_variance_clipped
+    
+    # Functions to perform direct jumps
+    def predict_start_from_noise(self, x_t, t, noise):
+        return (
+            extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
+            extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
+        )
+    
+    def predict_noise_from_start(self, x_t, t, x0):
+        return (
+            (extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t - x0) / \
+            extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
+        )
+    
+    # Private methods
     def _featurize_batch_y(self, batch):
         """
         Featurize all the covariates 

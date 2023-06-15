@@ -8,7 +8,8 @@ class RNAseqLoader:
         self,
         data_path: str,
         covariate_keys=None,
-        subsample_frac=1
+        subsample_frac=1,
+        use_pca=True
         ): 
         # Read adata
         data = sc.read(data_path)
@@ -16,7 +17,11 @@ class RNAseqLoader:
         if subsample_frac < 1:
             sc.pp.subsample(data, fraction=subsample_frac)
         # Transform genes to tensors
-        self.genes = torch.Tensor(data.X)
+        if use_pca:
+            self.genes = torch.Tensor(data.obsm["X_pca"])
+            self.genes = (self.genes-self.genes.mean(1).unsqueeze(-1))/self.genes.std(1).unsqueeze(-1)
+        else:
+            self.genes = torch.Tensor(data.X)
         
         # Covariate to index
         self.id2cov = {}

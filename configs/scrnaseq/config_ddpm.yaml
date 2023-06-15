@@ -13,11 +13,12 @@ args:
   pretrained_generative: False
   chekpoint_path: Null  
   use_drugs: False
+  use_pca: True
   
   # CHANGE 
   # Perturbation setting specific
   covariate_keys: [louvain]
-  split_rates: [0.9, 0.05, 0.05]
+  split_rates: [0.95, 0.025, 0.025]
 
   cov_embedding_dimensions: Null  # Dimensionality of t
   one_hot_encode_features: True
@@ -42,7 +43,7 @@ args:
 
   # Early stopping kwargs 
   early_stopping_kwargs: 
-    monitor: loss/valid_loss
+    monitor: loss/train_loss
     patience: 50
     mode: min
     min_delta: 0.
@@ -64,8 +65,8 @@ args:
   # CHANGE   
   # Denoising model specific 
   denoising_module_kwargs: 
-    hidden_dims: [256, 256]
-    time_embed_size: 256 
+    hidden_dims: [32, 32]
+    time_embed_size: 100 
     class_emb_size: Null
     encode_class: False
     conditional: False

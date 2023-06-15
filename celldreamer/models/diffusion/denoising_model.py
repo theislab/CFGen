@@ -17,7 +17,7 @@ def positional_embedding_vector(t: int, dim: int) -> torch.FloatTensor:
     return torch.sin(t / torch.pow(10000, two_i / dim)).unsqueeze(0)
 
 
-def timestep_embedding(timesteps: torch.Tensor, dim: int, max_period=10000):
+def timestep_embedding(t: torch.Tensor, dim: int):
     """
     Create sinusoidal timestep embeddings.
     :param timesteps: a 1-D Tensor of N indices, one per batch element.
@@ -26,78 +26,18 @@ def timestep_embedding(timesteps: torch.Tensor, dim: int, max_period=10000):
     :param max_period: controls the minimum frequency of the embeddings.
     :return: an [N x dim] Tensor of positional embeddings.
     """
-    half = dim // 2
-    freqs = torch.exp(
-        -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
-    ).to(device=timesteps.device)
-    args = timesteps[:, None].float() * freqs[None]
-    embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-    if dim % 2:
-        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
-    return embedding.to(timesteps.device)
-
+    half_dim = dim // 2
+    emb = math.log(10000) / (half_dim - 1)
+    emb = torch.exp(torch.arange(half_dim) * -emb).to(t.device)
+    emb = t[:, None] * emb[None, :]
+    emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+    return emb
 
 @torch.no_grad()
 def init_zero(module: nn.Module) -> nn.Module:
     for p in module.parameters():
         torch.nn.init.zeros_(p)
     return module
-
-
-# class MLPTimeEmbedCond(nn.Module):
-#     def __init__(self,
-#                  in_dim: int,
-#                  hidden_dims: int,
-#                  time_embed_size: int,
-#                  num_classes: int, 
-#                  class_emb_size: int, 
-#                  encode_class: float = False, 
-#                  conditional:bool=True,
-#                  dropout: bool=False,
-#                  p_dropout: float=0.0,
-#                  batch_norm: bool = False
-#                  ):
-        
-#         super().__init__()
-#         """
-#         Like ResBlockTimeEmbed, but without convolutional layers.
-#         Instead use linear layers.
-#         """ 
-#         # Condition embedding
-#         self.conditional = conditional
-#         if self.conditional:
-#             if encode_class:
-#                 self.linear_map_class = nn.Sequential(
-#                     nn.Linear(np.sum(list(num_classes.values())), class_emb_size)
-#                 )
-#             else:
-#                 self.linear_map_class = nn.Identity()
-#                 class_emb_size = np.sum(list(num_classes.values()))
-#         else:
-#             class_emb_size = 0
-
-#         # The net
-#         channels = [in_dim+class_emb_size+time_embed_size, *hidden_dims, in_dim]
-#         layers = []
-        
-#         for i in range(len(channels)-2):
-#             layers.append(nn.Linear(channels[i], channels[i + 1]))
-#             if batch_norm:
-#                 layers.append(nn.BatchNorm1d(channels[i + 1]))
-#             layers.append(nn.SELU())
-#             if dropout:
-#                 layers.append(nn.Dropout(p=p_dropout))
-#         layers.append(nn.Linear(channels[-2], channels[-1]))
-#         self.net = nn.Sequential(*layers)
-
-#     def forward(self, x, time_embed, y):
-#         if self.conditional:
-#             c = self.linear_map_class(y)
-#             x = torch.cat([x, c], dim=1)
-        
-#         x = torch.cat([x, time_embed], dim=1)
-#         x = self.net(x)
-#         return x
 
 class MLPTimeEmbedCond(nn.Module):
     def __init__(self,
@@ -158,7 +98,7 @@ class MLPTimeEmbedCond(nn.Module):
         x = self.net(x) + time_embed
         return self.out_layer(x)
 
-class MLPTimeStep(torch.nn.Sequential):
+class MLPTimeStep(nn.Module):
     def __init__(
             self,
             in_dim: int, 
@@ -187,7 +127,6 @@ class MLPTimeStep(torch.nn.Sequential):
         
         # Neural network object
         channels = [in_dim, *hidden_dims, in_dim]
-        print(channels)
         channels = [dim+class_emb_size for dim in channels[:-1]]+[channels[-1]]
         
         layers = []
