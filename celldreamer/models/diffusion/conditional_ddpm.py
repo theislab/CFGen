@@ -31,7 +31,24 @@ class ConditionalGaussianDDPM(pl.LightningModule):
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
                  ):
-
+        """
+        :param denoising_model: The network which computes the denoise step, i.e., q(x_{t-1} | x_t, c)
+        :param autoencoder_model: The network which computes the encoding step, i.e., q(z | x)
+        :param feature_embeddings: The feature embeddings for each covariate
+        :param T: The amount of noising steps
+        :param w: strength of class guidance, hyperparemeter, paper suggests 0.3
+        :param p_uncond: probability of training a batch without class conditioning
+        :param task: task to train on, "perturbation_modelling", "cell_generation", "toy_generation"
+        :param classifier_free: whether to apply the classifier-free logic or not
+        :param metric_collector: metric collector object
+        :param optimizer: optimizer to use
+        :param variance_scheduler: scheduler for the variance
+        :param learning_rate: learning rate
+        :param weight_decay: weight decay
+        """
+        assert 0.0 <= w, f'0.0 <= {w}'
+        assert 0.0 <= p_uncond <= 1.0, f'0.0 <= {p_uncond} <= 1.0'
+        
         super().__init__()
         # Set device 
         
@@ -48,7 +65,10 @@ class ConditionalGaussianDDPM(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.p_uncond = p_uncond
-        self.in_dim = self.denoising_model.in_dim 
+        if isinstance(denoising_model, UNetTimeStepClassSetConditioned):
+            self.in_dim = (32, 32, 3)  # UNetTimeStepClassSetConditioned is only for images, so we hardcode this
+        elif isinstance(denoising_model, UNetTimeStepClassSetConditioned):
+            self.in_dim = self.denoising_model.in_dim
         self.w = w        
         
         # Training hyperparameters
