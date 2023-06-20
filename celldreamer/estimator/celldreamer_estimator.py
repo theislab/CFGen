@@ -29,6 +29,7 @@ from celldreamer.models.diffusion.conditional_ddpm import ConditionalGaussianDDP
 class CellDreamerEstimator:
     def __init__(self, args):
         # Move to celldreamer directory
+        self.autoencoder = None
         self.args = args
         
         # Read dataset
