@@ -8,6 +8,7 @@ from functools import partial
 
 from celldreamer.models.diffusion.variance_scheduler.cosine import CosineScheduler
 from celldreamer.models.diffusion.diffusion_utils import extract, identity
+from celldreamer.models.diffusion.denoising_model import MLPTimeStep, UNetTimeStepClassSetConditioned
 
 
 class ConditionalGaussianDDPM(pl.LightningModule):

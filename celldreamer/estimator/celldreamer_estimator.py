@@ -32,7 +32,7 @@ class CellDreamerEstimator:
         self.args = args
         
         # Read dataset
-        self.data_path = Path(self.args.dataset_path)
+        self.data_path = Path(self.args.dataset_path) if self.args.dataset_path is not None else None
         
         # Initialize training directory         
         if self.args.train:
@@ -73,7 +73,7 @@ class CellDreamerEstimator:
         
         # Initialize dataloaders for the different tasks 
         if self.args.task == "cell_generation":
-            if self.atlas == "pbmc":
+            if self.args.atlas == "pbmc":
                 self.dataset = RNAseqLoader(data_path=self.data_path,
                                     covariate_keys=self.args.covariate_keys,
                                     subsample_frac=self.args.subsample_frac, 
@@ -100,11 +100,11 @@ class CellDreamerEstimator:
                                         )})            
             elif self.args.atlas == "hlca":
                 self.datamodule = HLCADataModule(
-                    path=self.args.data_path,
+                    path=self.data_path,
                     batch_size=self.args.batch_size)
             elif self.args.atlas == "cellxgene":
                 self.datamodule = MerlinDataModule(
-                    self.args.data_path,
+                    self.data_path,
                     columns=self.args.categories,
                     batch_size=self.args.batch_size)
             else:
@@ -167,14 +167,15 @@ class CellDreamerEstimator:
         elif self.args.task == "cell_generation":
             if self.args.atlas == "cellxgene":
                 self.args.denoising_module_kwargs["in_dim"] = len(pd.read_parquet(join(self.args.data_path, 'var.parquet')))
-                self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)
+                # self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)
             elif self.args.atlas == "hlca":
                 self.args.denoising_module_kwargs["in_dim"] = 2000  # 2000 highly-variable genes
-                self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)
+                # self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)
             elif self.args.atlas == "pbmc":
                 raise NotImplementedError("The atlas {} is not implemented".format(self.args.atlas)) 
         elif self.args.task == "toy_generation":
-            self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)
+            # self.args.generative_model_kwargs["n_covariates"] = len(self.args.categories)
+            pass
         else:
             raise NotImplementedError(f"The task {self.args.task} is not implemented")
 
@@ -204,8 +205,6 @@ class CellDreamerEstimator:
                                             default_root_dir=self.training_dir, 
                                             logger=logger, 
                                             **self.args.trainer_kwargs)
-            
-
         
     def init_feature_embeddings(self):
         """
@@ -238,18 +237,33 @@ class CellDreamerEstimator:
                     num_classes["y_"+cov] = self.args.cov_embedding_dimensions
                     
         elif self.args.task == "cell_generation":
-            metadata_path = Path(self.args.metadata_path) / "categorical_lookup"
-            for cat in self.args.categories:
-                # Categorical covariates are embedded using a one-hot encoding
-                n_cat = len(pd.read_parquet(metadata_path / f"{cat}.parquet"))
-                self.feature_embeddings["y_" + cat] = CategoricalFeaturizer(n_cat,
-                                                                            self.args.one_hot_encode_features,
-                                                                            self.device,
-                                                                            embedding_dimensions=self.args.embedding_dimensions)
-                if self.args.one_hot_encode_features:
-                    num_classes["y_" + cat] = n_cat
-                else:
-                    num_classes["y_" + cat] = self.args.embedding_dimensions
+            if self.args.atlas == "pbmc":
+                metadata_path = Path(self.args.metadata_path) / "categorical_lookup"
+                for cat in self.args.categories:
+                    # Categorical covariates are embedded using a one-hot encoding
+                    n_cat = len(pd.read_parquet(metadata_path / f"{cat}.parquet"))
+                    self.feature_embeddings["y_" + cat] = CategoricalFeaturizer(n_cat,
+                                                                                self.args.one_hot_encode_features,
+                                                                                self.device,
+                                                                                embedding_dimensions=self.args.embedding_dimensions)
+                    if self.args.one_hot_encode_features:
+                        num_classes["y_" + cat] = n_cat
+                    else:
+                        num_classes["y_" + cat] = self.args.embedding_dimensions
+            elif self.args.atlas == "hlca":
+                for cat in self.args.categories:
+                    n_cat = len(self.args.categories[cat])
+                    self.feature_embeddings["y_" + cat] = CategoricalFeaturizer(n_cat,
+                                                                                self.args.one_hot_encode_features,
+                                                                                self.device,
+                                                                                embedding_dimensions=self.args.embedding_dimensions)
+                    if self.args.one_hot_encode_features:
+                        num_classes["y_" + cat] = n_cat
+                    else:
+                        num_classes["y_" + cat] = self.args.embedding_dimensions
+
+            else:
+                raise NotImplementedError("The atlas {} is not implemented".format(self.args.atlas))
 
         elif self.args.task == "toy_generation":
             for cat in self.args.categories:
@@ -286,7 +300,7 @@ class CellDreamerEstimator:
                     autoencoder_model=self.autoencoder,
                     feature_embeddings=self.feature_embeddings,
                     task=self.args.task,
-                    use_drugs=self.args.use_drugs,
+                    use_drugs=self.args.use_drugs if self.args.use_drugs else False,
                     one_hot_encode_features=self.args.one_hot_encode_features,
                     metric_collector=self.metric_collector,  
                     **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
@@ -299,6 +313,8 @@ class CellDreamerEstimator:
                     autoencoder_model=self.autoencoder,
                     feature_embeddings=self.feature_embeddings,
                     task=self.args.task,
+                    use_drugs=self.args.use_drugs if self.args.use_drugs else False,
+                    one_hot_encode_features=self.args.one_hot_encode_features,
                     metric_collector=self.metric_collector,
                     **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
                 )

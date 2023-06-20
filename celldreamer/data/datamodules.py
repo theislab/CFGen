@@ -1,5 +1,5 @@
 # Adapted from https://github.com/theislab/cellnet/blob/main/cellnet/datamodules.py
-
+import os.path
 from os.path import join
 import lightning.pytorch as pl
 import scanpy as sc
@@ -28,7 +28,11 @@ class ShapeColorDataModule(pl.LightningDataModule):
         test_size = len(self.dataset) - train_size - val_size
         # set random seed
         torch.manual_seed(0)
-        self.train_dataset, self.val_dataset, self.test_dataset = torch.utils.data.random_split(self.dataset, [train_size, val_size, test_size])
+        self.train_dataset, self.val_dataset, self.test_dataset = torch.utils.data.random_split(self.dataset,
+                                                                                                [train_size,
+                                                                                                 val_size,
+                                                                                                 test_size]
+                                                                                                )
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
@@ -51,22 +55,23 @@ class HLCADataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         if not path:  # use default path
             # get root directory that is two levels above this file's directory
-            root = join(__file__, '..', '..')
+            root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             self.path = join(root, 'data', 'hlca')
         else:
             self.path = path
 
-        train_adata = sc.read_h5ad(join(self.path, 'train.h5ad'))
+        train_adata = sc.read_h5ad(join(self.path, 'train_adata.h5ad'))
+
         self.train_dataset = CustomDataset(torch.tensor(train_adata.X.todense()), train_adata.obs['ann_level_5'].values)
-        val_adata = sc.read_h5ad(join(self.path, 'val.h5ad'))
+        val_adata = sc.read_h5ad(join(self.path, 'val_adata.h5ad'))
         self.val_dataset = CustomDataset(torch.tensor(val_adata.X.todense()), val_adata.obs['ann_level_5'].values)
-        test_adata = sc.read_h5ad(join(self.path, 'test.h5ad'))
+        test_adata = sc.read_h5ad(join(self.path, 'test_adata.h5ad'))
         self.test_dataset = CustomDataset(torch.tensor(test_adata.X.todense()), test_adata.obs['ann_level_5'].values)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size)
 
-    def val_dataloader(self):
+    def valid_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
     def test_dataloader(self):
@@ -77,7 +82,7 @@ class CustomDataset(Dataset):
 
     def __init__(self, x, obs=None):
         super(CustomDataset).__init__()
-        assert any([isinstance(x, np.ndarray), isinstance(x, csr_matrix)])
+        assert any([isinstance(x, np.ndarray), isinstance(x, csr_matrix), isinstance(x, torch.Tensor)])
         self.x = x
         self.obs = obs
 

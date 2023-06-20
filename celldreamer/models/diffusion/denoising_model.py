@@ -6,6 +6,7 @@ import torch
 from torch import nn
 import torch.nn.init as init
 
+
 def positional_embedding_vector(t: int, dim: int) -> torch.FloatTensor:
     """
     Args:
@@ -33,31 +34,33 @@ def timestep_embedding(t: torch.Tensor, dim: int):
     emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
     return emb
 
+
 @torch.no_grad()
 def init_zero(module: nn.Module) -> nn.Module:
     for p in module.parameters():
         torch.nn.init.zeros_(p)
     return module
 
+
 class MLPTimeEmbedCond(nn.Module):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
                  time_embed_size: int,
-                 num_classes: int, 
-                 class_emb_size: int, 
-                 encode_class: float = False, 
-                 conditional:bool=True,
-                 dropout: bool=False,
-                 p_dropout: float=0.0,
+                 num_classes: int,
+                 class_emb_size: int,
+                 encode_class: float = False,
+                 conditional: bool = True,
+                 dropout: bool = False,
+                 p_dropout: float = 0.0,
                  batch_norm: bool = False
                  ):
-        
+
         super().__init__()
         """
         Like ResBlockTimeEmbed, but without convolutional layers.
         Instead use linear layers.
-        """ 
+        """
         # Condition embedding
         self.conditional = conditional
         if self.conditional:
@@ -70,7 +73,7 @@ class MLPTimeEmbedCond(nn.Module):
                 class_emb_size = np.sum(list(num_classes.values()))
         else:
             class_emb_size = 0
-            
+
         # Time embedding 
         self.time_embed_net = nn.Sequential(
             nn.Linear(time_embed_size, out_dim),
@@ -85,7 +88,7 @@ class MLPTimeEmbedCond(nn.Module):
         layers.append(nn.SELU())
         if dropout:
             layers.append(nn.Dropout(p=p_dropout))
-    
+
         self.net = nn.Sequential(*layers)
         self.out_layer = nn.Linear(out_dim, out_dim)
 
@@ -94,20 +97,21 @@ class MLPTimeEmbedCond(nn.Module):
         if self.conditional:
             c = self.linear_map_class(y)
             x = torch.cat([x, c], dim=1)
-        
+
         x = self.net(x) + time_embed
         return self.out_layer(x)
+
 
 class MLPTimeStep(nn.Module):
     def __init__(
             self,
-            in_dim: int, 
+            in_dim: int,
             hidden_dims: List[int],
             time_embed_size: int,
-            num_classes: int, 
+            num_classes: int,
             class_emb_size: int,
-            encode_class: float = False, 
-            conditional:bool = True,
+            encode_class: float = False,
+            conditional: bool = True,
             dropout: bool = True,
             p_dropout: float = 0.0,
             batch_norm: bool = False
@@ -117,30 +121,30 @@ class MLPTimeStep(nn.Module):
         self.time_embed_size = time_embed_size
         self.num_classes = num_classes
         self.class_emb_size = class_emb_size
-        
+
         # Set up class conditioning
         if conditional:
             self.linear_map_class = nn.Identity()
             class_emb_size = np.sum(list(num_classes.values()))
         else:
             class_emb_size = 0
-        
+
         # Neural network object
         channels = [in_dim, *hidden_dims, in_dim]
-        channels = [dim+class_emb_size for dim in channels[:-1]]+[channels[-1]]
-        
+        channels = [dim + class_emb_size for dim in channels[:-1]] + [channels[-1]]
+
         layers = []
-        for i in range(len(channels)-1):
-            layers.append(MLPTimeEmbedCond(in_dim=channels[i], 
-                                out_dim=channels[i+1],
-                                time_embed_size=time_embed_size,
-                                num_classes=num_classes, 
-                                class_emb_size=class_emb_size, 
-                                encode_class=encode_class, 
-                                conditional=conditional, 
-                                dropout=dropout,
-                                p_dropout=p_dropout,
-                                batch_norm=batch_norm))
+        for i in range(len(channels) - 1):
+            layers.append(MLPTimeEmbedCond(in_dim=channels[i],
+                                           out_dim=channels[i + 1],
+                                           time_embed_size=time_embed_size,
+                                           num_classes=num_classes,
+                                           class_emb_size=class_emb_size,
+                                           encode_class=encode_class,
+                                           conditional=conditional,
+                                           dropout=dropout,
+                                           p_dropout=p_dropout,
+                                           batch_norm=batch_norm))
         self.net = nn.Sequential(*layers)
 
         # Initialize the parameters using He initialization
@@ -168,6 +172,7 @@ class MLPTimeStep(nn.Module):
             init.kaiming_uniform_(module.weight, mode='fan_in')
             if module.bias is not None:
                 init.constant_(module.bias, 0.0)
+
 
 # UNET for images, adapted from https://github.com/Michedev/DDPMs-Pytorch/blob/master/model/unet.py
 
@@ -208,7 +213,7 @@ class ImageSelfAttention(nn.Module):
 
         attn_output, _ = self.attn_layer(x, x, x)
         return attn_output.reshape(b, c, w, h)
-    
+
 
 class ResBlockTimeEmbedCond(nn.Module):
 
@@ -222,9 +227,8 @@ class ResBlockTimeEmbedCond(nn.Module):
                  p_dropout: float,
                  num_classes: int,
                  class_embed_size: int,
-                 encode_class: float = False, 
-                 conditional:bool=True,
-                 dropout: bool=False,
+                 encode_class: float = False,
+                 conditional: bool = True,
                  ):
         """
          Args:
@@ -237,27 +241,29 @@ class ResBlockTimeEmbedCond(nn.Module):
             p_dropout (float): dropout probability
         """
         super().__init__()
-        
+
         # Condition embedding
         self.conditional = conditional
+        self.class_emb_size = class_embed_size
         if self.conditional:
             if encode_class:
                 self.linear_map_class = nn.Sequential(
-                    nn.Linear(np.sum(list(num_classes.values())), class_emb_size)
+                    nn.Linear(np.sum(list(num_classes.values())), self.class_emb_size)
                 )
             else:
                 self.linear_map_class = nn.Identity()
                 class_emb_size = np.sum(list(num_classes.values()))
         else:
             class_emb_size = 0
-            
+
         # Time embedding 
         self.time_embed_net = nn.Sequential(
-            nn.Linear(time_embed_size, out_dim),
+            nn.Linear(time_embed_size, out_channels),
             nn.SELU(),
-            nn.Linear(out_dim, out_dim))
-        
+            nn.Linear(out_channels, out_channels))
+
         # The feature net
+        num_groups_in = self.find_max_num_groups(in_channels)
         self.conv = nn.Sequential(
             nn.GroupNorm(num_groups_in, in_channels),
             nn.GELU(),
@@ -276,7 +282,6 @@ class ResBlockTimeEmbedCond(nn.Module):
         )
         self.skip_connection = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
 
-
     def find_max_num_groups(self, in_channels: int) -> int:
         for i in range(4, 0, -1):
             if in_channels % i == 0:
@@ -290,10 +295,10 @@ class ResBlockTimeEmbedCond(nn.Module):
         if self.conditonal:
             c = self.linear_map_class(y)
             x = torch.cat([x, c], dim=1)
-            
+
         h = h + time_embed
         return self.out_layer(h) + self.skip_connection(x)
-        
+
 
 class UNetTimeStepClassSetConditioned(nn.Module):
     """
@@ -336,7 +341,6 @@ class UNetTimeStepClassSetConditioned(nn.Module):
                                   p_dropout=p_dropouts[i],
                                   num_classes=num_classes,
                                   class_embed_size=class_embed_size,
-                                  assert_shapes=assert_shapes
                                   ) for i in range(len(channels) - 1)
         ])
 
@@ -351,7 +355,7 @@ class UNetTimeStepClassSetConditioned(nn.Module):
                                                   p_dropout=p_dropouts[-1],
                                                   num_classes=num_classes,
                                                   class_embed_size=class_embed_size,
-                                                  assert_shapes=assert_shapes)
+                                                  )
         self.upsample_blocks = nn.ModuleList([
             ResBlockTimeEmbedCond(in_channels=(2 if i != 0 else 1) * channels[-i - 1],
                                   out_channels=channels[-i - 2],
@@ -362,7 +366,6 @@ class UNetTimeStepClassSetConditioned(nn.Module):
                                   p_dropout=p_dropouts[-i - 1],
                                   num_classes=num_classes,
                                   class_embed_size=class_embed_size,
-                                  assert_shapes=assert_shapes
                                   ) for i in range(len(channels) - 1)
         ])
         self.dropouts = nn.ModuleList([nn.Dropout(p) for p in p_dropouts])
