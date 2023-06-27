@@ -1,9 +1,12 @@
 pynvml
 setuptools
+pyarrow
+merlin-dataloader
+merlin-core
 numpy
 pandas
 torch
-pytorch-lightning
+lightning
 torchmetrics
 tensorboard
 tqdm
@@ -14,6 +17,9 @@ scanpy
 rdkit 
 jupyter
 scipy
+scikit-learn==1.2.1
 dgl
 dgllife
 descriptastorus
+torchvision
+wandb

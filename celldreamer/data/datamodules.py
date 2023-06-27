@@ -9,6 +9,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from torch.utils.data import Dataset
 from celldreamer.data.toy.shape_color import ShapeColorDataset
+from celldreamer.data.hlca.hlca import HLCADataset
 
 
 class ShapeColorDataModule(pl.LightningDataModule):
@@ -37,7 +38,7 @@ class ShapeColorDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
 
-    def valid_dataloader(self):
+    def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
     def test_dataloader(self):
@@ -52,6 +53,9 @@ class HLCADataModule(pl.LightningDataModule):
                  path: str = None,
                  batch_size: int = 4096):
         super(HLCADataModule, self).__init__()
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
         self.batch_size = batch_size
         if not path:  # use default path
             # get root directory that is two levels above this file's directory
@@ -60,52 +64,24 @@ class HLCADataModule(pl.LightningDataModule):
         else:
             self.path = path
 
-        train_adata = sc.read_h5ad(join(self.path, 'train_adata.h5ad'))
+        # self.train_dataset = HLCADataset(adata_path=self.path, mode='train')
+        # self.val_dataset = HLCADataset(adata_path=self.path, mode='val')
+        # self.test_dataset = HLCADataset(adata_path=self.path, mode='test')
 
-        self.train_dataset = CustomDataset(torch.tensor(train_adata.X.todense()), train_adata.obs['ann_level_5'].values)
-        val_adata = sc.read_h5ad(join(self.path, 'val_adata.h5ad'))
-        self.val_dataset = CustomDataset(torch.tensor(val_adata.X.todense()), val_adata.obs['ann_level_5'].values)
-        test_adata = sc.read_h5ad(join(self.path, 'test_adata.h5ad'))
-        self.test_dataset = CustomDataset(torch.tensor(test_adata.X.todense()), test_adata.obs['ann_level_5'].values)
+    def setup(self, stage=None):
+        if stage == "fit":
+            self.train_dataset = HLCADataset(adata_path=self.path, mode='train')
+            self.val_dataset = HLCADataset(adata_path=self.path, mode='val')
+        elif stage == "test":
+            self.test_dataset = HLCADataset(adata_path=self.path, mode='test')
+        else:
+            raise ValueError("Stage must be either fit or test")
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size)
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
 
-    def valid_dataloader(self):
+    def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size)
-
-
-class CustomDataset(Dataset):
-
-    def __init__(self, x, obs=None):
-        super(CustomDataset).__init__()
-        assert any([isinstance(x, np.ndarray), isinstance(x, csr_matrix), isinstance(x, torch.Tensor)])
-        self.x = x
-        self.obs = obs
-
-    def __len__(self):
-        return self.x.shape[0]
-
-    def __getitem__(self, idx):
-        if isinstance(idx, int):
-            idx = [idx]
-        x = self.x[idx, :]
-        if isinstance(x, csr_matrix):
-            x = x.toarray()
-
-        if self.obs is not None:
-            # replicate merlin dataloader output format
-            out = (
-                {
-                    'X': x.squeeze(),
-                    'idx': self.obs.iloc[idx]['idx'].to_numpy().reshape((-1, 1)),
-                    'cell_type': self.obs.iloc[idx]['cell_type'].to_numpy().reshape((-1, 1))
-                }, None
-            )
-        else:
-            out = ({'X': x.squeeze()}, None)
-
-        return out

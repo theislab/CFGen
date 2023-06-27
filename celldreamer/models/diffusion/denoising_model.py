@@ -84,7 +84,8 @@ class MLPTimeEmbedCond(nn.Module):
         layers = []
         layers.append(nn.Linear(in_dim, out_dim))
         if batch_norm:
-            layers.append(nn.BatchNorm1d(out_dim))
+            # layers.append(nn.BatchNorm1d(out_dim)) this results in a dim error
+            raise NotImplementedError
         layers.append(nn.SELU())
         if dropout:
             layers.append(nn.Dropout(p=p_dropout))
@@ -94,10 +95,12 @@ class MLPTimeEmbedCond(nn.Module):
 
     def forward(self, x, time_embed, y):
         time_embed = self.time_embed_net(time_embed)
+
         if self.conditional:
             c = self.linear_map_class(y)
             x = torch.cat([x, c], dim=1)
 
+        out = self.net(x)
         x = self.net(x) + time_embed
         return self.out_layer(x)
 

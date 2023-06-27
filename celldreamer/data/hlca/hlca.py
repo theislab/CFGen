@@ -4,6 +4,7 @@ from torchvision import transforms
 import random
 import scanpy as sc
 import numpy as np
+import os
 
 def str_obs_to_int(adata, obs_key):
     """
@@ -53,18 +54,18 @@ class HLCADataset(Dataset):
         """
         self.mode = mode
         if self.mode == 'train':
-            self.adata = sc.read_h5ad(adata_path + "train_adata.h5ad")
+            self.adata = sc.read_h5ad(os.path.join(adata_path, "train_adata.h5ad"))
         elif self.mode == 'val':
-            self.adata = sc.read_h5ad(adata_path + "val_adata.h5ad")
+            self.adata = sc.read_h5ad(os.path.join(adata_path, "val_adata.h5ad"))
         elif self.mode == 'test':
-            self.adata = sc.read_h5ad(adata_path + "test_adata.h5ad")
+            self.adata = sc.read_h5ad(os.path.join(adata_path, "test_adata.h5ad"))
         else:
             raise ValueError("Invalid mode. Must be train, val, or test.")
 
         # Convert categorical columns to integer classes
         categorical_columns = [
-            "BMI",
-            "age_or_mean_of_age_range",
+            # "BMI",
+            # "age_or_mean_of_age_range",
             "ann_level_1",
             "dataset",
             "lung_condition",
@@ -111,8 +112,8 @@ class HLCADataset(Dataset):
 
         batch = {
             "X": transcriptomes.toarray(),
-            "y": {"y_BMI": y_BMI,
-                  "y_age_or_mean_of_age_range": y_age_or_mean_of_age_range,
+            "y": {# "y_BMI": y_BMI,
+                  # "y_age_or_mean_of_age_range": y_age_or_mean_of_age_range,
                   "y_ann_level_1": y_ann_level_1,
                   # "y_ann_level_2": y_ann_level_2,
                   # "y_ann_level_3": y_ann_level_3,
