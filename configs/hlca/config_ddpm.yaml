@@ -1,0 +1,194 @@
+args:
+  # General training config
+  train: True  # Whether to train the model
+  experiment_name: try_experiment_hlca
+  task: cell_generation # task (cell_generation or perturbation_modelling)
+  atlas: hlca
+  dataset_path: Null
+  batch_size: 256
+  resume: False
+  train_autoencoder: False # Train autoencoder or only the diffusion model
+  use_latent_repr: False # Latent diffusion or direct data feature diffusion
+  pretrained_autoencoder: False
+  checkpoint_autoencoder: Null
+  pretrained_generative: False
+  chekpoint_path: Null
+  use_drugs: False
+  use_pca: True
+
+  # CHANGE
+  # Perturbation setting specific
+  # covariate_keys: [louvain]
+  # split_rates: [0.95, 0.025, 0.025]
+
+  # HLCA specific
+  embedding_dimensions: 100
+  categories:
+    ann_level_1:
+      - Epithelial
+      - Immune
+      - Stroma
+      - Endothelial
+    dataset:
+      - Krasnow_2020
+      - Banovich_Kropski_2020
+      - Seibold_2020_10Xv2
+      - Barbry_Leroy_2020
+      - Nawijn_2021
+      - Seibold_2020_10Xv3
+      - Meyer_2019
+      - Misharin_2021
+      - Misharin_Budinger_2018
+      - Lafyatis_Rojas_2019_10Xv2
+      - Jain_Misharin_2021_10Xv2
+      - Jain_Misharin_2021_10Xv1
+      - Teichmann_Meyer_2019
+      - Lafyatis_Rojas_2019_10Xv1
+    lung_condition:
+      - Healthy (tumor adjacent)
+      - Healthy
+    smoking_status:
+      - never
+      - former
+      - active
+      - null
+    sex:
+      - female
+      - male
+    tissue:
+      - respiratory airway
+      - lung parenchyma
+      - nose
+    self_reported_ethnicity:
+      - unknown
+      - European
+      - African
+      - Pacific Islander
+      - American
+      - Asian
+      - admixed ancestry
+    development_stage:
+      - 51-year-old human stage
+      - 41-year-old human stage
+      - 23-year-old human stage
+      - 35-year-old human stage
+      - seventh decade human stage
+      - 46-year-old human stage
+      - 44-year-old human stage
+      - fifth decade human stage
+      - 52-year-old human stage
+      - 21-year-old human stage
+      - 25-year-old human stage
+      - 63-year-old human stage
+      - 55-year-old human stage
+      - sixth decade human stage
+      - 53-year-old human stage
+      - 29-year-old human stage
+      - 30-year-old human stage
+      - 27-year-old human stage
+      - 10-year-old human stage
+      - 75-year-old human stage
+      - 42-year-old human stage
+      - 57-year-old human stage
+      - 47-year-old human stage
+      - 38-year-old human stage
+      - 58-year-old human stage
+      - 18-year-old human stage
+      - 64-year-old human stage
+      - fourth decade human stage
+      - 33-year-old human stage
+      - 37-year-old human stage
+      - 34-year-old human stage
+      - 59-year-old human stage
+      - 24-year-old human stage
+      - 61-year-old human stage
+      - 69-year-old human stage
+      - 36-year-old human stage
+      - 49-year-old human stage
+      - 22-year-old human stage
+      - 62-year-old human stage
+      - unknown
+      - 54-year-old human stage
+      - 31-year-old human stage
+      - 66-year-old human stage
+      - 26-year-old human stage
+      - 56-year-old human stage
+      - 40-year-old human stage
+      - 68-year-old human stage
+      - 76-year-old human stage
+      - 71-year-old human stage
+      - 15-year-old human stage
+
+  cov_embedding_dimensions: Null  # Dimensionality of t
+  one_hot_encode_features: True
+  subsample_frac: 1
+  standardize: False
+
+  # General model
+  generative_model: diffusion
+  denoising_model: mlp
+
+  # Autoencoder
+  autoencoder_kwargs: Null
+
+  # Checkpoint kwargs
+  checkpoint_kwargs:
+    filename: epoch_{epoch:01d}
+    monitor: loss/valid_loss
+    mode: min
+    every_n_epochs: 1
+    save_last: True
+    auto_insert_metric_name: False
+
+  # Early stopping kwargs
+  early_stopping_kwargs:
+    monitor: loss/train_loss
+    patience: 50
+    mode: min
+    min_delta: 0.
+    verbose: False
+    strict: True
+    check_finite: True
+    stopping_threshold: Null
+    divergence_threshold: Null
+    check_on_train_epoch_end: Null
+
+  # Logger kwargs
+  logger_kwargs:
+    offline: True
+    id: Null
+    anonymous: Null
+    project: celldreamer
+    log_model: False
+
+  # CHANGE
+  # Denoising model specific
+  denoising_module_kwargs:
+    hidden_dims: [32, 32]
+    time_embed_size: 100
+    class_emb_size: Null
+    encode_class: False
+    conditional: False
+    dropout: False
+    p_dropout: 0.0
+    batch_norm: False
+
+  # CHANGE
+  # Diffusion model specific
+  generative_model_kwargs:
+    T: 1000
+    w: 0
+    p_uncond: 0
+    classifier_free: False
+    learning_rate: 0.001
+    weight_decay: 0.0001
+
+  # Autoencoder trainer hparams
+  trainer_kwargs:
+    max_epochs: 5
+    accelerator: gpu
+    devices: 1
+    check_val_every_n_epoch: 1
+    log_every_n_steps: 1
+    detect_anomaly: False
+    deterministic: False

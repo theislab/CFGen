@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Literal
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import torch
 from anndata import AnnData
 from torch import nn

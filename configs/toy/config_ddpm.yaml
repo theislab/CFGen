@@ -1,0 +1,135 @@
+args:
+  # General training config
+  train: True  # Whether to train the model
+  experiment_name: try_experiment_hlca
+  task: toy_generation # task (cell_generation or perturbation_modelling)
+  dataset_path: Null
+  batch_size: 256
+  resume: False
+  train_autoencoder: False # Train autoencoder or only the diffusion model
+  use_latent_repr: False # Latent diffusion or direct data feature diffusion
+  pretrained_autoencoder: False
+  checkpoint_autoencoder: Null
+  pretrained_generative: False
+  chekpoint_path: Null
+  use_drugs: False
+  use_pca: True
+
+  # CHANGE
+  # Perturbation setting specific
+  # covariate_keys: [louvain]
+  # split_rates: [0.95, 0.025, 0.025]
+
+  # Toy specific
+  num_samples: 40000
+  embedding_dimensions: 100
+  categories:
+    shapes:
+      - circle
+      - square
+    colors:
+      - lightblue
+      - lightgreen
+      - lightyellow
+      - lightgray
+    sizes:
+      - small
+      - medium
+      - large
+    positions:
+      - topleft
+      - topright
+      - bottomleft
+      - bottomright
+
+  cov_embedding_dimensions: Null  # Dimensionality of t
+  one_hot_encode_features: True
+  subsample_frac: 1
+  standardize: False
+
+  # General model
+  generative_model: diffusion
+  denoising_model: unet
+  denoising_module_kwargs:
+    channels:
+      - 3
+      - 32
+      - 64
+      - 128
+    kernel_sizes:
+      - 3
+      - 3
+      - 3
+    strides:
+      - 1
+      - 1
+      - 1
+    paddings:
+      - 1
+      - 1
+      - 1
+    downsample: true
+    p_dropouts:
+      - 0.0
+      - 0.0
+      - 0.0
+    time_embed_size: 100
+    num_classes:
+      shapes: 2
+      colors: 4
+      sizes: 3
+      positions: 4
+    class_embed_size: 100
+
+  # Autoencoder
+  autoencoder_kwargs: Null
+
+  # Checkpoint kwargs
+  checkpoint_kwargs:
+    filename: epoch_{epoch:01d}
+    monitor: loss/valid_loss
+    mode: min
+    every_n_epochs: 1
+    save_last: True
+    auto_insert_metric_name: False
+
+  # Early stopping kwargs
+  early_stopping_kwargs:
+    monitor: loss/train_loss
+    patience: 50
+    mode: min
+    min_delta: 0.
+    verbose: False
+    strict: True
+    check_finite: True
+    stopping_threshold: Null
+    divergence_threshold: Null
+    check_on_train_epoch_end: Null
+
+  # Logger kwargs
+  logger_kwargs:
+    offline: True
+    id: Null
+    anonymous: Null
+    project: celldreamer
+    log_model: False
+
+  # CHANGE
+  # Diffusion model specific
+  generative_model_kwargs:
+    T: 1000
+    w: 0
+    p_uncond: 0
+    classifier_free: False
+    learning_rate: 0.001
+    weight_decay: 0.0001
+
+  # Autoencoder trainer hparams
+  trainer_kwargs:
+    max_epochs: 500
+    accelerator: gpu
+    devices: 1
+    check_val_every_n_epoch: 1
+    log_every_n_steps: 1
+    detect_anomaly: False
+    deterministic: False

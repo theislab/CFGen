@@ -3,8 +3,9 @@ args:
   train: True  # Whether to train the model 
   experiment_name: try_experiment_pbmc 
   task: cell_generation # task (cell_generation or perturbation_modelling)
+  atlas : pbmc
   dataset_path: datasets/scrnaseq_dataset/pbmc3k_processed.h5ad
-  batch_size: 256  
+  batch_size: 256
   resume: False
   train_autoencoder: False # Train autoencoder or only the diffusion model
   use_latent_repr: False # Latent diffusion or direct data feature diffusion 
