@@ -17,3 +17,4 @@ scipy
 dgl
 dgllife
 descriptastorus
+scvi-tools
