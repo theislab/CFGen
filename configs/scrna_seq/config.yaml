@@ -11,13 +11,13 @@ args:
   n_dimensions: Null
   pretrained_generative: False
   chekpoint_path: Null  
+  one_hot_encode_features: True
   layer: X_norm
   
   # CHANGE 
   # Perturbation setting specific
   covariate_keys: [experimental_time]
   split_rates: [0.90, 0.05, 0.05]
-  one_hot_encode_features: True
   subsample_frac: 1
 
   # General model 
@@ -70,7 +70,7 @@ args:
   generative_model_kwargs: 
     learning_rate: 0.001 
     weight_decay: 0.0001 
-    noise_schedule: fixed_linear
+    noise_schedule: learned_linear
     gamma_min: -5.0
     gamma_max: 3.0
     antithetic_time_sampling: True 

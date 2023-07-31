@@ -45,7 +45,7 @@ class MLP(torch.nn.Module):
         elif final_activation == "sigmoid":
             self.final_activation = torch.nn.Sigmoid()
         else:
-            self.final_activation == None
+            self.final_activation = None
 
     def forward(self, x):
         x = self.net(x)

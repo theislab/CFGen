@@ -125,7 +125,7 @@ class VDM(pl.LightningModule):
             f"{dataset}/gamma_0": gamma_0.item(),
             f"{dataset}/gamma_1": gamma_1.item(),
         }
-        self.log_dict(metrics)
+        self.log_dict(metrics, prog_bar=True)
         return loss.mean()
 
     # Private methods

@@ -128,7 +128,6 @@ class CellDreamerEstimator:
                 self.generative_model = VDM(
                     denoising_model=denoising_model,
                     feature_embeddings=self.feature_embeddings,
-                    one_hot_encode_features=self.args.one_hot_encode_features,
                     **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
                 )
             else:
