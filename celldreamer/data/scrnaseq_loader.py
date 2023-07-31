@@ -10,7 +10,8 @@ class RNAseqLoader:
         covariate_keys=None,
         subsample_frac=1,
         use_pca=True, 
-        n_dimensions=50
+        n_dimensions=50, 
+        layer="X_norm"
         ): 
         # Read adata
         data = sc.read(data_path)
@@ -23,7 +24,7 @@ class RNAseqLoader:
         if use_pca:
             self.genes = torch.Tensor(data.obsm["X_pca"])[:, :n_dimensions]
         else:
-            self.genes = torch.Tensor(data.X)
+            self.genes = torch.Tensor(data.layers[layer].A)
         
         # Covariate to index
         self.id2cov = {}

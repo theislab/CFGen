@@ -3,19 +3,16 @@ import numpy as np
 
 import torch
 from torch import nn
-from torch import sigmoid, exp, sqrt, autograd, linspace, argmax
+from torch import sigmoid, sqrt, autograd, linspace
 from torch.special import expm1
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-from typing import Callable, Optional
-from tqdm import tqdm
-from functools import partial
 from tqdm import trange
 
 from scvi.distributions import NegativeBinomial
 
-from celldreamer.models.vdm import FixedLinearSchedule, LearnedLinearSchedule
+from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
 
 
@@ -30,18 +27,22 @@ class VDM(pl.LightningModule):
                  noise_schedule: str = "fixed_linear", 
                  gamma_min: float = -13.3, 
                  gamma_max: float = 5.0,
-                 antithetic_time_sampling: bool = True 
+                 antithetic_time_sampling: bool = True, 
+                 scaling_method: int = "log_normalization"
                  ):
         
-        self.denoising_model = denoising_model
+        super().__init__()
+        self.denoising_model = denoising_model.to(self.device)
         self.feature_embeddings = feature_embeddings
-        self.one_hot_encoder = one_hot_encode_features
+        self.one_hot_encode_features = one_hot_encode_features
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.in_dim = denoising_model.in_dim
         self.antithetic_time_sampling = antithetic_time_sampling
+        self.scaling_method = scaling_method
         
         # Define a dimensionality-preserving encoder 
+        z0_from_x_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], self.in_dim]
         self.z0_from_x = MLP(**z0_from_x_kwargs)
         
         # Define the inverse dispersion parameter 
@@ -56,10 +57,10 @@ class VDM(pl.LightningModule):
             raise ValueError(f"Unknown noise schedule {noise_schedule}")
     
     def training_step(self, batch, batch_idx):
-        return self._step(batch, 'train')
+        return self._step(batch, dataset='train')
 
     def validation_step(self, batch, batch_idx):
-        return self._step(batch, 'valid')
+        return self._step(batch, dataset='valid')
     
     # Forward
     def _step(self, batch, dataset: Literal['train', 'valid']):
@@ -69,15 +70,15 @@ class VDM(pl.LightningModule):
         """
         # Collect observation
         x = batch["X"].to(self.device)
-        library_size = x.sum(1)
-        x_log = torch.log(1+x)
-        x0 = self.z0_from_x(x_log)
+        library_size = x.sum(1).unsqueeze(1)
+        x_scaled = self._scale_batch(x)
+        x0 = self.z0_from_x(x_scaled)
         
         # Collect concatenated labels
         y = self._featurize_batch_y(batch)
         
         # Sample time 
-        times = self._sample_times(x.shape[0])
+        times = self._sample_times(x.shape[0]).requires_grad_(True)
         
         # Sample noise 
         noise = torch.rand_like(x)
@@ -96,18 +97,18 @@ class VDM(pl.LightningModule):
             create_graph=True,
             retain_graph=True,
         )[0]
-        pred_loss = ((model_out - noise) ** 2).sum(x_t.shape[1:])  # (B, )
+        pred_loss = ((model_out - noise) ** 2).sum(1)  # (B, )
         diffusion_loss = 0.5 * pred_loss * gamma_grad 
 
         # Latent loss
         gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
         sigma_1_sq = sigmoid(gamma_1)
         mean_sq = (1 - sigma_1_sq) * x**2  # (alpha_1 * x)**2
-        latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(x_t.shape[1:]) # (B, )
+        latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1) # (B, )
         
         # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, x0)  # (B, C, H, W, vocab_size)
-        recons_loss = recons_loss.sum(recons_loss.shape[1:])
+        recons_loss = self.log_probs_x_z0(x, x0, library_size)  
+        recons_loss = recons_loss.sum(1)
         
         # Total loss    
         loss = diffusion_loss + latent_loss + recons_loss
@@ -117,7 +118,7 @@ class VDM(pl.LightningModule):
         
         # Save results
         metrics = {
-            f"{dataset}/bpd": loss.mean(),
+            f"{dataset}/loss": loss.mean(),
             f"{dataset}/diff_loss": diffusion_loss.mean(),
             f"{dataset}/latent_loss": latent_loss.mean(),
             f"{dataset}/loss_recon": recons_loss.mean(),
@@ -125,7 +126,7 @@ class VDM(pl.LightningModule):
             f"{dataset}/gamma_1": gamma_1.item(),
         }
         self.log_dict(metrics)
-        return loss.mean(), metrics
+        return loss.mean()
 
     # Private methods
     def _featurize_batch_y(self, batch):
@@ -172,10 +173,10 @@ class VDM(pl.LightningModule):
         sigma_t = sqrt(sigmoid(gamma_t))
         sigma_s = sqrt(sigmoid(gamma_s))
 
-        pred_noise = self.model(z, gamma_t)
+        pred_noise = self.denoising_model(z, gamma_t)
         if clip_samples:
             x_start = (z - sigma_t * pred_noise) / alpha_t
-            x_start.clamp_(-1.0, 1.0)
+            x_start.clamp_(-1, 1)
             mean = alpha_s * (z * (1 - c) / alpha_t + c * x_start)
         else:
             mean = alpha_s / alpha_t * (z - c * sigma_t * pred_noise)
@@ -184,18 +185,68 @@ class VDM(pl.LightningModule):
     
     @torch.no_grad()
     def sample(self, batch_size, n_sample_steps, clip_samples, library_size=1e4):
-        z = torch.randn((batch_size, *self.in_dim), device=self.device)
+        z = torch.randn((batch_size, self.in_dim), device=self.device)
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
             z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples)
         # Sample negative binomial 
         z_softmax = F.softmax(z, dim=1)
         distr = NegativeBinomial(mu=library_size*z_softmax, theta=torch.exp(self.theta))
-        return distr.sample(batch_size)
+        return distr.sample(), z
     
     def log_probs_x_z0(self, x, z_0, library_size):
+        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        gamma_0_padded = unsqueeze_right(gamma_0, x.ndim - gamma_0.ndim)
+        mean = sqrt(sigmoid(-gamma_0_padded))  # x * alpha
+        scale = sqrt(sigmoid(gamma_0_padded))
+        z_0 = mean * z_0 + scale * torch.rand_like(z_0)
+        z_0 = z_0 / mean
         z_0_softmax = F.softmax(z_0, dim=1)
         distr = NegativeBinomial(mu=library_size*z_0_softmax, theta=torch.exp(self.theta))
         recon_loss = -distr.log_prob(x)
         return recon_loss
     
+    def configure_optimizers(self):
+        """
+        Optimizer configuration 
+        """ 
+        optimizer_config = {'optimizer': torch.optim.AdamW(self.parameters(), 
+                                                           self.learning_rate, 
+                                                           betas=(0.9, 0.99), 
+                                                           weight_decay=self.weight_decay, 
+                                                           eps=1e-8)}
+
+        return optimizer_config
+
+    def _scale_batch(self, x):
+        if self.scaling_method == "log_normalization":
+            x_scaled = torch.log(1+x)  # scale input 
+        elif self.scaling_method == "z_score_normalization":
+            x_scaled = self._z_score_normalize(x)
+        elif self.scaling_method == "minmax_normalization":
+            x_scaled = self._min_max_scale(x)
+        elif self.scaling_method == "unnormalized":
+            x_scaled = x
+        else:
+            raise ValueError(f"Unknown normalization {self.scaling_method}")
+        return x_scaled
+            
+    def _z_score_normalize(self, data, epsilon=1e-8):
+        mean = torch.mean(data, dim=0)
+        std = torch.std(data, dim=0)
+        
+        # Handle zero variance by adding epsilon to the standard deviation
+        std += epsilon
+        
+        normalized_data = (data - mean) / std
+        return normalized_data
+
+    def _min_max_scale(self, data, epsilon=1e-8):
+        min_val = torch.min(data, dim=0)[0]
+        max_val = torch.max(data, dim=0)[0]
+        
+        # Handle zero variance by setting a small constant value for the range
+        range_val = max_val - min_val + epsilon
+        
+        scaled_data = (data - min_val) / range_val * 2 - 1
+        return scaled_data

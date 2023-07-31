@@ -1,196 +1,292 @@
-import abc
-import gc
-from typing import Callable, Dict, List
-
-import numpy as np
-import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import ContinuousBernoulli
-from torchmetrics import ExplainedVariance, MeanSquaredError, MetricCollection
-from celldreamer.models.base.utils import _get_norm_layer, MLP
+from torch.optim import Adam
+from scvi.distributions import NegativeBinomial, ZeroInflatedNegativeBinomial 
+from torch.distributions import Normal, kl_divergence
+import pytorch_lightning as pl
+
+from celldreamer.models.base.utils import MLP
 
 
-class BaseAutoEncoder(pl.LightningModule, abc.ABC):
-
-    autoencoder: nn.Module  # autoencoder mapping from gene_dim to gene_dim
-
+class BaseAutoencoder(pl.LightningModule):
     def __init__(
-            self,
-            in_dim: int,
-            gc_frequency: int = 5, 
-            reconst_loss: str = 'continuous_bernoulli',
-            learning_rate: float = 0.005,
-            weight_decay: float = 0.1,
-            optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
-            lr_scheduler: Callable = None,
-            lr_scheduler_kwargs: Dict = None      
+        self,
+        in_dim,
+        hidden_dims,
+        batch_norm,
+        dropout,
+        dropout_p,
+        activation=torch.nn.ReLU,
+        likelihood="nb",
     ):
-        super(BaseAutoEncoder, self).__init__()
+        super(BaseAutoencoder, self).__init__()
 
+        # Attributes
         self.in_dim = in_dim
-        self.gc_freq = gc_frequency
-        self.reconst_loss = reconst_loss
-        self.lr = learning_rate
-        self.weight_decay = weight_decay
-        self.optim = optimizer
-        self.lr_scheduler = lr_scheduler
-        self.lr_scheduler_kwargs = lr_scheduler_kwargs
+        self.hidden_dims = hidden_dims
+        self.batch_norm = batch_norm
+        self.activation = activation
+        self.dropout = dropout
+        self.dropout_p = dropout_p
+        self.likelihood = likelihood
+        self.latent_dim = hidden_dims[-1]
 
-        metrics = MetricCollection({
-            'explained_var_weighted': ExplainedVariance(multioutput='variance_weighted'),
-            'explained_var_uniform': ExplainedVariance(multioutput='uniform_average'),
-            'mse': MeanSquaredError()
-        })
+        # Encoder
+        self.encoder_layers = MLP(
+            hidden_dims=[in_dim, *hidden_dims[:-1]],
+            batch_norm=batch_norm,
+            dropout=dropout,
+            dropout_p=dropout_p,
+            activation=activation,
+        )
 
-        self.train_metrics = metrics.clone(prefix='train_')
-        self.val_metrics = metrics.clone(prefix='val_')
-        self.test_metrics = metrics.clone(prefix='test_')
+        # Decoder
+        self.decoder_layers = MLP(
+            hidden_dims=[*hidden_dims[::-1]],
+            batch_norm=batch_norm,
+            dropout=dropout,
+            dropout_p=dropout_p,
+            activation=activation,
+        )
 
-    def _calc_reconstruction_loss(self, preds: torch.Tensor, targets: torch.Tensor, reduction: str = 'mean'):
-        if self.reconst_loss == 'continuous_bernoulli':
-            loss = - ContinuousBernoulli(probs=preds).log_prob(targets)
-            if reduction == 'mean':
-                loss = loss.mean()
-            elif reduction == 'sum':
-                loss = loss.sum()
-        elif self.reconst_loss == 'bce':
-            loss = F.binary_cross_entropy(preds, targets, reduction=reduction)
-        elif self.reconst_loss == 'mae':
-            loss = F.l1_loss(preds, targets, reduction=reduction)
+        if likelihood == "gaussian":
+            self.log_sigma = torch.nn.Parameter(torch.randn(self.in_dim))
+            self.decoder_mu = torch.nn.Linear(hidden_dims[0], self.in_dim)
+
+        elif likelihood == "nb":
+            self.theta = torch.nn.Parameter(torch.randn(self.in_dim))
+            self.decoder_mu = torch.nn.Linear(hidden_dims[0], self.in_dim)
+
+        elif likelihood == "zinb":
+            self.theta = torch.nn.Parameter(torch.randn(self.in_dim))
+            self.decoder_mu = torch.nn.Linear(hidden_dims[0], self.in_dim)
+            self.decoder_rho = torch.nn.Linear(hidden_dims[0], self.in_dim)
+
         else:
-            loss = F.mse_loss(preds, targets, reduction=reduction)
-        return loss
+            raise NotImplementedError
 
-    @abc.abstractmethod
-    def _step(self, batch):
-        """Calculate predictions (int64 tensor) and loss"""
+    def encode(self, x):
         pass
 
+    def decode(self, z, library_size):
+        h = self.decoder_layers(z)
+
+        if self.likelihood == "gaussian":
+            mu = self.decoder_mu(h)
+            return dict(mu=mu)
+
+        elif self.likelihood == "nb":
+            mu = self.decoder_mu(h)
+            mu = F.softmax(mu, dim=-1)
+            mu = mu*library_size.unsqueeze(-1)
+            return dict(mu=mu)
+
+        elif self.likelihood == "zinb":
+            mu = self.decoder_mu(h)
+            mu = F.softmax(mu, dim=-1)
+            mu = mu*library_size.unsqueeze(-1)
+            rho = self.decoder_rho(h)
+            return dict(mu=mu, rho=rho)
+
+        else:
+            raise NotImplementedError
+
     def forward(self, batch):
-        x_in = batch['X']
-        # do not use covariates
-        x_latent = self.encoder(x_in)
-        x_reconst = self.decoder(x_latent)
-        return x_latent, x_reconst
+        pass
+
+    def reconstruction_loss(self, x, decoder_output):
+        if self.likelihood == "gaussian":
+            mu = decoder_output["mu"]
+            distr = Normal(loc=mu, theta=torch.exp(self.log_sigma)*torch.eye(self.in_dim))
+            recon_loss = -distr.log_prob(x).sum(-1)
+
+        elif self.likelihood == "nb":
+            mu = decoder_output["mu"]
+            distr = NegativeBinomial(mu=mu, theta=torch.exp(self.theta))
+            recon_loss = -distr.log_prob(x).sum(-1)
+
+        elif self.likelihood == "zinb":
+            mu, rho = decoder_output["mu"], decoder_output["rho"]
+            distr = ZeroInflatedNegativeBinomial(mu=mu, theta=torch.exp(self.theta), zi_logits=rho)
+            recon_loss = -distr.log_prob(x).sum(-1)
+
+        else:
+            raise NotImplementedError
+        return recon_loss
+    
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=1e-3)
+
+
+class AE(BaseAutoencoder):
+    def __init__(
+        self,
+        in_dim,
+        hidden_dims,
+        batch_norm,
+        dropout,
+        dropout_p,
+        activation=torch.nn.ELU,
+        likelihood="nb",
+    ):
+        super(AE, self).__init__(
+            in_dim,
+            hidden_dims,
+            batch_norm,
+            dropout,
+            dropout_p,
+            activation,
+            likelihood,
+        )
+        
+        self.latent_layer = torch.nn.Linear(hidden_dims[-2], self.latent_dim)
+    
+    def encode(self, x):
+        h = self.encoder_layers(x)
+        z = self.latent_layer(h)
+        return dict(z=z)
+    
+    def forward(self, batch):
+        x = batch["X"]
+        library_size = x.sum(1)
+        x_log = torch.log(1 + x)  # for now log transf
+        z = self.encode(x_log)["z"]
+        return self.decode(z, library_size)
+    
+    def step(self, batch, prefix):
+        x = batch["X"]
+        decoder_output = self.forward(batch)
+        loss = torch.mean(self.reconstruction_loss(x, decoder_output))
+        self.log(f"{prefix}/loss", loss, prog_bar=True)
+        if prefix == "train":
+            return loss
 
     def training_step(self, batch, batch_idx):
-        preds, loss = self._step(batch)
-        self.log('train_loss', loss, on_epoch=True)
-        self.log_dict(self.train_metrics(preds, batch['X']), on_epoch=True)
-        if batch_idx % self.gc_freq == 0:
-            gc.collect()
+        loss = self.step(batch, "train")
         return loss
 
     def validation_step(self, batch, batch_idx):
-        preds, loss = self._step(batch)
-        self.log('val_loss', loss)
-        metrics = self.val_metrics(preds, batch['X'])
-        self.log_dict(metrics)
-        self.log('hp_metric', metrics['val_mse'])
-
-        if batch_idx % self.gc_freq == 0:
-            gc.collect()
-
-    def test_step(self, batch, batch_idx):
-        preds, loss = self._step(batch)
-        self.log('test_loss', loss)
-        self.log_dict(self.test_metrics(preds, batch['X']))
-        if batch_idx % self.gc_freq == 0:
-            gc.collect()
-
-    def on_train_epoch_end(self) -> None:
-        gc.collect()
-
-    def on_validation_epoch_end(self) -> None:
-        gc.collect()
-
-    def configure_optimizers(self):
-        optimizer_config = {'optimizer': self.optim(self.parameters(), 
-                                                    lr=self.lr, 
-                                                    weight_decay=self.weight_decay)}
-        if self.lr_scheduler is not None:
-            lr_scheduler_kwargs = {} if self.lr_scheduler_kwargs is None else self.lr_scheduler_kwargs
-            interval = lr_scheduler_kwargs.pop('interval', 'epoch')
-            monitor = lr_scheduler_kwargs.pop('monitor', 'val_loss_epoch')
-            frequency = lr_scheduler_kwargs.pop('frequency', 1)
-            scheduler = self.lr_scheduler(optimizer_config['optimizer'], **lr_scheduler_kwargs)
-            optimizer_config['lr_scheduler'] = {
-                'scheduler': scheduler,
-                'interval': interval,
-                'monitor': monitor,
-                'frequency': frequency
-            }
-        return optimizer_config
+        self.step(batch, "val")
 
 
-class MLP_AutoEncoder(BaseAutoEncoder):
-
+class VAE(BaseAutoencoder):
     def __init__(
-            self,
-            # fixed params
-            in_dim: int,
-            # model specific params
-            hidden_dim_encoder: List[int],
-            hidden_dim_decoder: List[int],
-            batch_norm: bool = True,
-            layer_norm: bool = False,
-            activation: Callable[[], torch.nn.Module] = nn.SELU,
-            output_activation: Callable[[], torch.nn.Module] = nn.Sigmoid,
-            reconst_loss: int = "mse", 
-            dropout: float = 0.2,
-            learning_rate: float = 0.005,
-            weight_decay: float = 0.1,
-            optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.AdamW,
-            lr_scheduler: Callable = None,
-            lr_scheduler_kwargs: Dict = None,
-    ): 
-            
-        super(MLP_AutoEncoder, self).__init__(
-            in_dim=in_dim,
-            reconst_loss=reconst_loss,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            optimizer=optimizer, 
-            lr_scheduler=lr_scheduler,
-            lr_scheduler_kwargs=lr_scheduler_kwargs, 
+        self,
+        in_dim,
+        hidden_dims,
+        batch_norm,
+        dropout,
+        dropout_p,
+        n_epochs: int,
+        kl_warmup_fraction: 0.5,
+        kl_weight: None, 
+        activation=torch.nn.ReLU,
+        likelihood:str="nb"  
+    ):
+        super(VAE, self).__init__(
+            in_dim,
+            hidden_dims,
+            batch_norm,
+            dropout,
+            dropout_p,
+            activation,
+            likelihood,
         )
+
+        # Latent space
+        self.mu = nn.Linear(hidden_dims[-2], self.latent_dim)
+        self.logvar = nn.Linear(hidden_dims[-2], self.latent_dim)
+        if kl_weight==None:
+            self.kl_weight = 0
+            self.kl_weight_increase = 1/(kl_warmup_fraction*n_epochs)
+            self.anneal_kl = True
+        else:
+            self.kl_weight = kl_weight
+            self.anneal_kl = False
         
-        # save hyperparameters
-        self.save_hyperparameters(ignore=['feature_means'])
+    def encode(self, x):
+        h = self.encoder_layers(x)
+        mu, logvar = self.mu(h), self.logvar(h)
+        z = self.reparameterize(mu, logvar)
+        return dict(z=z,
+                    mu=mu,
+                    logvar=logvar)
 
-        # Define encoder network
-        self.encoder = MLP(
-            in_channels=in_dim,
-            hidden_channels=hidden_dim_encoder,
-            norm_layer=_get_norm_layer(batch_norm=batch_norm, layer_norm=layer_norm),
-            activation_layer=activation,
-            inplace=False,
-            dropout=dropout
-        )
-        # Define decoder network
-        self.decoder = nn.Sequential(
-            MLP(
-                in_channels=hidden_dim_encoder[-1],
-                hidden_channels=hidden_dim_decoder + [in_dim],
-                norm_layer=_get_norm_layer(batch_norm=batch_norm, layer_norm=layer_norm),
-                activation_layer=activation,
-                inplace=False,
-                dropout=dropout
-            ),
-            output_activation()
-        )
-        self.predict_bottleneck = False
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        z = mu + eps * std
+        return z
 
-    def _step(self, batch: Dict[str, torch.Tensor]):
-        """
-        Step function for training, validation and testing
-        :param batch: batch of data
-        :return: loss, predictions, targets
-        """
-        # print('batch keys', batch.keys())
-        _, x_reconst = self(batch)
-        loss = self._calc_reconstruction_loss(x_reconst, batch['X'], reduction='mean')
+    def forward(self, batch):
+        x = batch["X"]
+        library_size = x.sum(1)
+        x_log = torch.log(1 + x)  # just for numerical stability
+        z, mu, logvar = self.encode(x_log).values()
+        return self.decode(z, library_size), mu, logvar
 
-        return x_reconst, loss
+    def kl_divergence(self, mu, logvar):
+        p =  Normal(mu, torch.sqrt(torch.exp(0.5 * logvar)))
+        q = Normal(torch.zeros_like(mu), torch.ones_like(mu))
+        kl_div = kl_divergence(p, q).sum(dim=-1)
+        return kl_div
+        
+    def step(self, batch, prefix):
+        x = batch["X"]
+        decoder_output, mu, logvar = self.forward(batch)
+        recon_loss = self.reconstruction_loss(x, decoder_output)
+        kl_div = self.kl_divergence(mu, logvar)
+        kl_weight = min([self.kl_weight, 1])
+
+        loss = torch.mean(recon_loss + kl_weight * kl_div)
+        dict_losses = {f"{prefix}/loss": loss,
+                       f"{prefix}/kl": kl_div.mean(),
+                       f"{prefix}/lik": recon_loss.mean()}
+        self.log_dict(dict_losses, prog_bar=True)
+        if prefix == "train":
+            return loss
+
+    def training_step(self, batch, batch_idx):
+        loss = self.step(batch, "train")
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        self.step(batch, "val")
+    
+    def amortized_sampling(self, batch):
+        z = self.encode(batch)["z"]
+        return self.sample_decoder(z)
+
+    def random_sampling(self, batch_size):
+        z = torch.randn(batch_size, self.latent_dim)
+        return self.sample_decoder(z)
+        
+    def sample_decoder(self, z_batch):
+        # Decode a z_output
+        decoder_output = self.decode(z_batch)
+        if self.likelihood == "gaussian":
+            mu = decoder_output["mu"]
+            distr = Normal(loc=mu, theta=torch.sqrt(torch.exp(self.log_sigma)))
+            return distr.sample(z_batch)
+
+        elif self.likelihood == "nb":
+            mu = decoder_output["mu"]
+            distr = NegativeBinomial(mu=mu, theta=torch.exp(self.theta))
+            return distr.sample(z_batch)
+
+        elif self.likelihood == "zinb":
+            mu, rho = decoder_output["mu"], decoder_output["rho"]
+            distr = ZeroInflatedNegativeBinomial(
+                mu=mu, theta=torch.exp(self.theta), zi_logits=rho
+            )
+            return distr.sample(z_batch)
+        else:
+            raise NotImplementedError
+    
+    def on_train_epoch_end(self):
+        if self.anneal_kl:
+            self.kl_weight += self.kl_weight_increase
+        else:
+            self.kl_weight += 0
+            

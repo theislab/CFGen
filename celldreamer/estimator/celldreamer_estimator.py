@@ -10,11 +10,12 @@ from pytorch_lightning.loggers import WandbLogger
 # Restore once the dataset is ready
 
 from celldreamer.paths import TRAINING_FOLDER
-from celldreamer.models.base.autoencoder import MLP_AutoEncoder
+from celldreamer.models.base.autoencoder import AE
 from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
 
-from celldreamer.models.diffusion.denoising_model import MLPTimeStep
+from celldreamer.models.vdm.denoising_model import MLPTimeStep
+from celldreamer.models.vdm.vdm import VDM
 
 class CellDreamerEstimator:
     def __init__(self, args):
@@ -53,7 +54,8 @@ class CellDreamerEstimator:
                                 covariate_keys=self.args.covariate_keys,
                                 subsample_frac=self.args.subsample_frac, 
                                 use_pca=self.args.use_pca, 
-                                n_dimensions=self.args.n_dimensions)
+                                n_dimensions=self.args.n_dimensions, 
+                                layer=self.args.layer)
             
             train_data, test_data, valid_data = random_split(self.dataset, lengths=self.args.split_rates)
             self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(
@@ -117,9 +119,6 @@ class CellDreamerEstimator:
                 num_classes["y_"+cov] = len(cov_names)
             else:
                 num_classes["y_"+cov] = self.args.cov_embedding_dimensions
-                            
-        # Save number of classes                   
-        self.args.denoising_module_kwargs["num_classes"] = num_classes
 
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
@@ -127,14 +126,10 @@ class CellDreamerEstimator:
         if self.args.generative_model == 'diffusion':
             if self.args.denoising_model == 'mlp':
                 denoising_model = MLPTimeStep(**self.args.denoising_module_kwargs).to(self.device)
-                self.generative_model = ConditionalGaussianDDPM(
+                self.generative_model = VDM(
                     denoising_model=denoising_model,
-                    autoencoder_model=self.autoencoder,
                     feature_embeddings=self.feature_embeddings,
-                    task=self.args.task,
-                    use_drugs=self.args.use_drugs,
                     one_hot_encode_features=self.args.one_hot_encode_features,
-                    metric_collector=self.metric_collector,  
                     **self.args.generative_model_kwargs  # model_kwargs should contain the rest of the arguments
                 )
             else:
@@ -143,15 +138,6 @@ class CellDreamerEstimator:
             raise NotImplementedError
 
     def train(self):
-        if self.args.use_latent_repr and self.args.train_autoencoder:
-            # Fit autoencoder model 
-            self.trainer_autoencoder.fit(
-                self.autoencoder,
-                train_dataloaders=self.datamodule.train_dataloader,
-                val_dataloaders=self.datamodule.valid_dataloader,
-                ckpt_path=None if not self.args.pretrained_autoencoder else self.args.checkpoint_autoencoder
-                )
-        
         self.trainer_generative.fit(
                 self.generative_model,
                 train_dataloaders=self.datamodule.train_dataloader,

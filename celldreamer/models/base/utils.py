@@ -7,6 +7,8 @@ def unsqueeze_right(x, num_dims=1):
     return x.view(x.shape + (1,) * num_dims)
 
 def kl_std_normal(mean_squared, var):
+    """Gaussian KL divergence
+    """
     return 0.5 * (var + mean_squared - torch.log(var.clamp(min=1e-15)) - 1.0)
 
 class MLP(torch.nn.Module):

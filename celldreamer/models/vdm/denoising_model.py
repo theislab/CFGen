@@ -39,6 +39,7 @@ class MLPTimeEmbedCond(nn.Module):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
+                 time_embed_size: int,
                  batch_norm: bool = False,
                  dropout: bool=False,
                  dropout_p: float=0.0,
@@ -56,12 +57,15 @@ class MLPTimeEmbedCond(nn.Module):
             layers.append(nn.BatchNorm1d(out_dim))
         layers.append(nn.SELU())
         if dropout:
-            layers.append(nn.Dropout(p=p_dropout))
+            layers.append(nn.Dropout(p=dropout_p))
         self.net = nn.Sequential(*layers)
         self.out_layer = nn.Linear(out_dim, out_dim)
+        
+        # Linear projection time 
+        self.time_proj = nn.Linear(time_embed_size, out_dim)
 
     def forward(self, x, t):        
-        x = self.net(x) + t
+        x = self.net(x) + self.time_proj(t)
         return self.out_layer(x)
 
 class MLPTimeStep(nn.Module):
@@ -71,7 +75,7 @@ class MLPTimeStep(nn.Module):
             hidden_dims: List[int],
             time_embed_size: int,
             dropout: bool = True,
-            p_dropout: float = 0.0,
+            dropout_p: float = 0.0,
             batch_norm: bool = False,
             gamma_min: float = -13.3, 
             gamma_max: float = 5.0,
@@ -81,7 +85,7 @@ class MLPTimeStep(nn.Module):
         self.hidden_dims = hidden_dims
         self.time_embed_size = time_embed_size
         self.dropout = dropout
-        self.p_dropout = p_dropout
+        self.dropout_p = dropout_p
         self.batch_norm = batch_norm
         self.gamma_max = gamma_max
         self.gamma_min = gamma_min
@@ -90,9 +94,10 @@ class MLPTimeStep(nn.Module):
         dims = [in_dim, *hidden_dims, in_dim]
         
         layers = []
-        for i in range(len(channels)-1):
-            layers.append(MLPTimeEmbedCond(in_channels = dims[i],
-                                            out_channels = dims[i+1],
+        for i in range(len(dims)-1):
+            layers.append(MLPTimeEmbedCond(in_dim = dims[i],
+                                            out_dim = dims[i+1],
+                                            time_embed_size = time_embed_size,
                                             batch_norm = batch_norm,
                                             dropout = dropout,
                                             dropout_p = dropout_p))
@@ -102,7 +107,7 @@ class MLPTimeStep(nn.Module):
         self.embed_conditioning = nn.Sequential(
             nn.Linear(self.time_embed_size, self.time_embed_size),
             nn.SELU(),
-            nn.Linear(self.time_embed_size, in_dim),
+            nn.Linear(self.time_embed_size, self.time_embed_size),
             nn.SELU(),
         )
 
