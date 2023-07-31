@@ -3,7 +3,7 @@ args:
   train: True  # Whether to train the model 
   experiment_name: try_experiment_eb 
   task: cell_generation # task (cell_generation or perturbation_modelling)
-  dataset_path: /nfs/homedirs/pala/celldreamer/datasets/scrnaseq_dataset/eb_phate.h5ad
+  dataset_path: ../datasets/scrnaseq_dataset/eb_phate.h5ad
   batch_size: 256  
   cov_embedding_dimensions: Null
   resume: False
@@ -17,11 +17,9 @@ args:
   # Perturbation setting specific
   covariate_keys: [experimental_time]
   split_rates: [0.90, 0.05, 0.05]
-
   one_hot_encode_features: True
   subsample_frac: 1
-  standardize: False
-             
+
   # General model 
   generative_model: diffusion  
   denoising_model: mlp
@@ -50,7 +48,7 @@ args:
 
   # Logger kwargs
   logger_kwargs: 
-    offline: False
+    offline: True
     id: Null 
     anonymous: Null 
     project: celldreamer
@@ -62,10 +60,10 @@ args:
     hidden_dims: [512]
     time_embed_size: 50 
     dropout: False
-    dropout_p: 0.1
+    dropout_p: 0
     batch_norm: True
-    gamma_min: -13.3
-    gamma_max: 5.0
+    gamma_min: -5.0
+    gamma_max: 3.0
     
   # CHANGE      
   # Diffusion model specific
@@ -73,15 +71,16 @@ args:
     learning_rate: 0.001 
     weight_decay: 0.0001 
     noise_schedule: fixed_linear
-    gamma_min: -13.3
-    gamma_max: 5.0
+    gamma_min: -5.0
+    gamma_max: 3.0
     antithetic_time_sampling: True 
     scaling_method: log_normalization
     z0_from_x_kwargs:
       dims: [512]
       batch_norm:  True
       dropout: False 
-      dropout_p: 0.1 
+      dropout_p: 0.0
+      final_activation: Null
                   
   # Autoencoder trainer hparams
   trainer_kwargs:

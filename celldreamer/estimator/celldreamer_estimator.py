@@ -49,33 +49,32 @@ class CellDreamerEstimator:
         Initialization of the data module
         """        
         # Initialize dataloaders for the different tasks 
-        if self.args.task == "cell_generation":
-            self.dataset = RNAseqLoader(data_path=self.data_path,
-                                covariate_keys=self.args.covariate_keys,
-                                subsample_frac=self.args.subsample_frac, 
-                                use_pca=self.args.use_pca, 
-                                n_dimensions=self.args.n_dimensions, 
-                                layer=self.args.layer)
-            
-            train_data, test_data, valid_data = random_split(self.dataset, lengths=self.args.split_rates)
-            self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(
-                                                        train_data,
-                                                        batch_size=self.args.batch_size,
-                                                        shuffle=True,
-                                                        num_workers=8
-                                                    ),
-                                    "valid_dataloader": torch.utils.data.DataLoader(
-                                                        valid_data,
-                                                        batch_size=self.args.batch_size,
-                                                        shuffle=False,
-                                                        num_workers=8
-                                                    ),
-                                    "test_dataloader": torch.utils.data.DataLoader(
-                                                        test_data,
-                                                        batch_size=self.args.batch_size,
-                                                        shuffle=False,
-                                                        num_workers=8
-                                    )})            
+        self.dataset = RNAseqLoader(data_path=self.data_path,
+                            covariate_keys=self.args.covariate_keys,
+                            subsample_frac=self.args.subsample_frac, 
+                            use_pca=self.args.use_pca, 
+                            n_dimensions=self.args.n_dimensions, 
+                            layer=self.args.layer)
+        
+        train_data, test_data, valid_data = random_split(self.dataset, lengths=self.args.split_rates)
+        self.datamodule = Args({"train_dataloader": torch.utils.data.DataLoader(
+                                                    train_data,
+                                                    batch_size=self.args.batch_size,
+                                                    shuffle=True,
+                                                    num_workers=8
+                                                ),
+                                "valid_dataloader": torch.utils.data.DataLoader(
+                                                    valid_data,
+                                                    batch_size=self.args.batch_size,
+                                                    shuffle=False,
+                                                    num_workers=8
+                                                ),
+                                "test_dataloader": torch.utils.data.DataLoader(
+                                                    test_data,
+                                                    batch_size=self.args.batch_size,
+                                                    shuffle=False,
+                                                    num_workers=8
+                                )})            
     
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object

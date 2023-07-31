@@ -20,13 +20,12 @@ class VDM(pl.LightningModule):
     def __init__(self,
                  denoising_model: nn.Module,
                  feature_embeddings: dict, 
-                 one_hot_encode_features: bool,
                  z0_from_x_kwargs: dict,
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
                  noise_schedule: str = "fixed_linear", 
-                 gamma_min: float = -13.3, 
-                 gamma_max: float = 5.0,
+                 gamma_min: float = -5.0, 
+                 gamma_max: float = 1.0,
                  antithetic_time_sampling: bool = True, 
                  scaling_method: int = "log_normalization"
                  ):
@@ -34,7 +33,6 @@ class VDM(pl.LightningModule):
         super().__init__()
         self.denoising_model = denoising_model.to(self.device)
         self.feature_embeddings = feature_embeddings
-        self.one_hot_encode_features = one_hot_encode_features
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.in_dim = denoising_model.in_dim
@@ -70,24 +68,26 @@ class VDM(pl.LightningModule):
         """
         # Collect observation
         x = batch["X"].to(self.device)
+        # Quantify library size 
         library_size = x.sum(1).unsqueeze(1)
+        # Scale batch to reasonable range 
         x_scaled = self._scale_batch(x)
-        x0 = self.z0_from_x(x_scaled)
+        z0 = self.z0_from_x(x_scaled)
         
         # Collect concatenated labels
         y = self._featurize_batch_y(batch)
         
         # Sample time 
-        times = self._sample_times(x.shape[0]).requires_grad_(True)
+        times = self._sample_times(z0.shape[0]).requires_grad_(True)
         
         # Sample noise 
-        noise = torch.rand_like(x)
+        noise = torch.rand_like(z0)
         
         # Sample an observation undergoing noising 
-        x_t, gamma_t = self.sample_q_t_0(x=x0, times=times, noise=noise)
+        z_t, gamma_t = self.sample_q_t_0(x=z0, times=times, noise=noise)
         
         # Forward through the model 
-        model_out = self.denoising_model(x_t, gamma_t)
+        model_out = self.denoising_model(z_t, gamma_t)
         
         # Diffusion loss
         gamma_grad = autograd.grad(  # gamma_grad shape: (B, )
@@ -103,11 +103,11 @@ class VDM(pl.LightningModule):
         # Latent loss
         gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
         sigma_1_sq = sigmoid(gamma_1)
-        mean_sq = (1 - sigma_1_sq) * x**2  # (alpha_1 * x)**2
+        mean_sq = (1 - sigma_1_sq) * z0**2  # (alpha_1 * x)**2
         latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1) # (B, )
         
         # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, x0, library_size)  
+        recons_loss = self.log_probs_x_z0(x, z0, library_size)  
         recons_loss = recons_loss.sum(1)
         
         # Total loss    
@@ -184,22 +184,31 @@ class VDM(pl.LightningModule):
         return mean + scale * torch.randn_like(z)
     
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, clip_samples, library_size=1e4):
+    def sample(self, batch_size, n_sample_steps, clip_samples, ndim, library_size=1e4):
+        # Get mean at time 0 for scaling 
+        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        gamma_0_padded = unsqueeze_right(gamma_0, ndim - gamma_0.ndim)
+        mean_0 = sqrt(sigmoid(-gamma_0_padded)) 
+        # Sample
         z = torch.randn((batch_size, self.in_dim), device=self.device)
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
             z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples)
         # Sample negative binomial 
+        z = z / mean_0  # scale
         z_softmax = F.softmax(z, dim=1)
         distr = NegativeBinomial(mu=library_size*z_softmax, theta=torch.exp(self.theta))
         return distr.sample(), z
     
     def log_probs_x_z0(self, x, z_0, library_size):
+        # Get the gamma at time 0 
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
         gamma_0_padded = unsqueeze_right(gamma_0, x.ndim - gamma_0.ndim)
-        mean = sqrt(sigmoid(-gamma_0_padded))  # x * alpha
+        # Mean and variance at 0
+        mean = sqrt(sigmoid(-gamma_0_padded)) 
         scale = sqrt(sigmoid(gamma_0_padded))
         z_0 = mean * z_0 + scale * torch.rand_like(z_0)
+        # Normalize z_0
         z_0 = z_0 / mean
         z_0_softmax = F.softmax(z_0, dim=1)
         distr = NegativeBinomial(mu=library_size*z_0_softmax, theta=torch.exp(self.theta))
@@ -220,7 +229,7 @@ class VDM(pl.LightningModule):
 
     def _scale_batch(self, x):
         if self.scaling_method == "log_normalization":
-            x_scaled = torch.log(1+x)  # scale input 
+            x_scaled = torch.log(1 + x)  # scale input 
         elif self.scaling_method == "z_score_normalization":
             x_scaled = self._z_score_normalize(x)
         elif self.scaling_method == "minmax_normalization":

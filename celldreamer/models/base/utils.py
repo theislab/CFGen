@@ -17,7 +17,8 @@ class MLP(torch.nn.Module):
                  batch_norm: bool, 
                  dropout: bool, 
                  dropout_p: float, 
-                 activation = torch.nn.SELU):
+                 activation = torch.nn.SELU, 
+                 final_activation = None):
         
         super(MLP, self).__init__()
 
@@ -38,6 +39,17 @@ class MLP(torch.nn.Module):
                 block.append(torch.nn.Dropout(dropout_p))
             layers.append(torch.nn.Sequential(*block))
         self.net = torch.nn.Sequential(*layers)
+        
+        if final_activation == "tanh":
+            self.final_activation = torch.nn.Tanh()
+        elif final_activation == "sigmoid":
+            self.final_activation = torch.nn.Sigmoid()
+        else:
+            self.final_activation == None
 
     def forward(self, x):
-        return self.net(x)
+        x = self.net(x)
+        if not self.final_activation:
+            return x
+        else:
+            return self.final_activation(x)
