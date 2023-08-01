@@ -151,7 +151,7 @@ class VDM(pl.LightningModule):
             times = torch.rand(batch_size, device=self.device)
         return times
 
-    def sample_q_t_0(self, x, times, noise=None):
+    def sample_q_t_0(self, x, times, deterministic=False, noise=None):
         """Samples from the distributions q(x_t | x_0) at the given time steps."""
         with torch.enable_grad():  # Need gradient to compute loss even when evaluating
             gamma_t = self.gamma(times)
@@ -160,10 +160,10 @@ class VDM(pl.LightningModule):
         scale = sqrt(sigmoid(gamma_t_padded))
         if noise is None:
             noise = torch.randn_like(x)
-        return mean + noise * scale, gamma_t    
+        return mean + noise * scale * (not deterministic), gamma_t    
 
     @torch.no_grad()
-    def sample_p_s_t(self, z, t, s, clip_samples):
+    def sample_p_s_t(self, z, t, s, clip_samples, deterministic):
         """Samples from p(z_s | z_t, x). Used for standard ancestral sampling."""
         gamma_t = self.gamma(t)
         gamma_s = self.gamma(s)
@@ -181,10 +181,10 @@ class VDM(pl.LightningModule):
         else:
             mean = alpha_s / alpha_t * (z - c * sigma_t * pred_noise)
         scale = sigma_s * sqrt(c)
-        return mean + scale * torch.randn_like(z)
+        return mean + scale * torch.randn_like(z) * (not deterministic)
     
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, clip_samples, ndim, library_size=1e4):
+    def sample(self, batch_size, n_sample_steps, clip_samples, ndim, deterministic=False, library_size=1e4):
         # Get mean at time 0 for scaling 
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
         gamma_0_padded = unsqueeze_right(gamma_0, ndim - gamma_0.ndim)
@@ -193,7 +193,29 @@ class VDM(pl.LightningModule):
         z = torch.randn((batch_size, self.in_dim), device=self.device)
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
-            z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples)
+            z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples, deterministic=deterministic)
+        # Sample negative binomial 
+        z = z / mean_0  # scale
+        z_softmax = F.softmax(z, dim=1)
+        distr = NegativeBinomial(mu=library_size*z_softmax, theta=torch.exp(self.theta))
+        return distr.sample(), z
+   
+    @torch.no_grad()
+    def reconstruct(self, x, time, n_sample_steps, clip_samples, ndim, deterministic=False):
+        # Get mean at time 0 for scaling 
+        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        gamma_0_padded = unsqueeze_right(gamma_0, ndim - gamma_0.ndim)
+        mean_0 = sqrt(sigmoid(-gamma_0_padded)) 
+        # Encode x
+        z0 = self.z0_from_x(x)
+        # Get the library size 
+        library_size = x.sum(1).unsqueeze(1)
+        times = time*torch.ones(x.shape[0], 1)
+        # Sample
+        z, _ = self.sample_q_t_0(z0, times, deterministic=deterministic)
+        steps = linspace(time, 0.0, n_sample_steps + 1, device=self.device)
+        for i in trange(n_sample_steps, desc="sampling"):
+            z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples=clip_samples, deterministic=deterministic)
         # Sample negative binomial 
         z = z / mean_0  # scale
         z_softmax = F.softmax(z, dim=1)
