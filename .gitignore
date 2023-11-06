@@ -140,7 +140,7 @@ dmypy.json
 # Folders for package
 build/
 logs/
-project_dir/
+project_dir
 dist/
 *.egg-info/
 
