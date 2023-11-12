@@ -141,7 +141,6 @@ dmypy.json
 build/
 logs/
 scripts/
-configs/
 
 dist/
 *.egg-info/
