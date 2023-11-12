@@ -14,7 +14,8 @@ scanpy
 rdkit 
 jupyter
 scipy
-dgl
-dgllife
-descriptastorus
 scvi-tools
+hydra-core
+wandb 
+hydra-optuna-sweeper
+hydra-submitit-launcher
