@@ -1,10 +1,18 @@
 import torch 
 import pandas as pd
-from celldreamer.paths import EMBEDDING_DIR
 import torch.nn.functional as F
 
 class CategoricalFeaturizer(torch.nn.Module):
     def __init__(self, n_cat, one_hot_encode_features, device, embedding_dimensions=None):
+        """
+        Categorical feature embedding module.
+
+        Args:
+            n_cat (int): Number of categories.
+            one_hot_encode_features (bool): Whether to one-hot encode features.
+            device (torch.device): Device to place the module on.
+            embedding_dimensions (int, optional): Number of dimensions for embeddings. Defaults to None.
+        """
         super().__init__()
         self.n_cat = n_cat
         self.device = device
@@ -16,10 +24,10 @@ class CategoricalFeaturizer(torch.nn.Module):
         """Extract features 
 
         Args:
-            obs (torch.Tensor): the batch of observations 
+            obs (torch.Tensor): The batch of observations 
 
         Returns:
-            torch.Tensor: extracted embeddings 
+            torch.Tensor: Extracted embeddings 
         """
         obs = obs.to(self.device)
         if self.one_hot_encode_features: 
