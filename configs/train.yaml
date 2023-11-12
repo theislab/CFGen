@@ -1,0 +1,17 @@
+# @package _global_
+
+# Default configurations
+defaults:
+  - _self_
+  - checkpoints: default
+  - dataset: default 
+  - denoising_module: default
+  - early_stopping: default
+  - generative_model: default
+  - hparams_search: null
+  - hydra: default
+  - launcher: default
+  - logger: default
+  - trainer: default
+  - training_config: default
+  

@@ -1,0 +1,13 @@
+learning_rate: 0.001 
+weight_decay: 0.00001 
+noise_schedule: fixed_linear
+gamma_min: -5.0
+gamma_max: 3.0
+antithetic_time_sampling: True 
+scaling_method: log_normalization
+z0_from_x_kwargs:
+  dims: [512]
+  batch_norm:  True
+  dropout: False 
+  dropout_p: 0.0
+  final_activation: Null
