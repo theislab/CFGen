@@ -31,7 +31,7 @@ class CellDreamerEstimator:
         self.data_path = Path(self.args.dataset.dataset_path)
         
         # Initialize training directory         
-        self.training_dir = TRAINING_FOLDER / self.unique_id
+        self.training_dir = TRAINING_FOLDER / self.args.logger.project / self.unique_id
         self.plotting_dir = self.training_dir / "plots"
         print("Create the training folders...")
         self.training_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +124,7 @@ class CellDreamerEstimator:
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
-        denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
+        denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim+1 if self.args.generative_model.train_library_size else self.in_dim, 
                                             time_varying=True, 
                                             **self.args.denoising_module).to(self.device)
         
@@ -132,6 +132,7 @@ class CellDreamerEstimator:
             denoising_model=denoising_model,
             feature_embeddings=self.feature_embeddings,
             plotting_folder=self.plotting_dir,
+            in_dim=self.in_dim,
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
         )
 

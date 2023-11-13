@@ -1,5 +1,6 @@
 offline: False
 id: Null 
 anonymous: Null 
-project: hparams_search
+project: celldreamer 
+group: hparam_search
 log_model: False 

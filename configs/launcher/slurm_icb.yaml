@@ -11,4 +11,4 @@ hydra:
     mem_gb: 90
     gres: gpu:1
     timeout_min: 1440
-    array_parallelism: 4 # max num of tasks to run in parallel (via job array)
+    array_parallelism: 10 # max num of tasks to run in parallel (via job array)

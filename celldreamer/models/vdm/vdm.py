@@ -15,7 +15,7 @@ from scvi.distributions import NegativeBinomial
 
 from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
-from celldreamer.eval.evaluate import compute_generated_umap, compute_real_fake_wasserstein
+from celldreamer.eval.evaluate import compute_umap_and_wasserstein
 
 class VDM(pl.LightningModule):
     def __init__(self,
@@ -23,14 +23,16 @@ class VDM(pl.LightningModule):
                  feature_embeddings: dict, 
                  z0_from_x_kwargs: dict,
                  plotting_folder: Path,
+                 in_dim: int,
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
                  noise_schedule: str = "fixed_linear", 
                  gamma_min: float = -5.0, 
                  gamma_max: float = 1.0,
                  antithetic_time_sampling: bool = True, 
-                 scaling_method: int = "log_normalization"
-                 ):
+                 scaling_method: int = "log_normalization",
+                 train_library_size: bool = False, 
+                 generative_library_size: float = 1000):
         """
         Variational Diffusion Model (VDM).
 
@@ -39,6 +41,7 @@ class VDM(pl.LightningModule):
             feature_embeddings (dict): Feature embeddings for covariates.
             z0_from_x_kwargs (dict): Arguments for the z0_from_x MLP.
             plotting_folder (Path): Folder for saving plots.
+            in_dim (int): Number of genes.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
             weight_decay (float, optional): Weight decay. Defaults to 0.0001.
             noise_schedule (str, optional): Noise schedule type. Defaults to "fixed_linear".
@@ -46,6 +49,8 @@ class VDM(pl.LightningModule):
             gamma_max (float, optional): Maximum value for gamma in noise schedule. Defaults to 1.0.
             antithetic_time_sampling (bool, optional): Use antithetic time sampling. Defaults to True.
             scaling_method (int, optional): Scaling method for input data. Defaults to "log_normalization".
+            train_library_size (bool, optional): Whether the library size should be trained with the densoising.
+            generative_library_size (float, optional): library size for generated samples. 
         """
         super().__init__()
         
@@ -53,10 +58,14 @@ class VDM(pl.LightningModule):
         self.feature_embeddings = feature_embeddings
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.in_dim = denoising_model.in_dim
+        self.in_dim = in_dim
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
         self.plotting_folder = plotting_folder
+        self.train_library_size = train_library_size
+        self.generative_library_size = generative_library_size
+        
+        # Used to collect test outputs
         self.testing_ouputs = []
         
         # Define a dimensionality-preserving encoder to optimize jointly with the diffusion model
@@ -73,6 +82,9 @@ class VDM(pl.LightningModule):
             self.gamma = LearnedLinearSchedule(gamma_min, gamma_max)
         else:
             raise ValueError(f"Unknown noise schedule {noise_schedule}")
+        
+        # save hyper-parameters to self.hparams (auto-logged by W&B)
+        self.save_hyperparameters()
     
     def training_step(self, batch, batch_idx):
         """
@@ -86,12 +98,6 @@ class VDM(pl.LightningModule):
             torch.Tensor: Loss value.
         """
         return self._step(batch, dataset='train')
-
-    def on_train_end(self):
-        """
-        Compute UMAP of generated cells at the end of training
-        """
-        compute_generated_umap(self, 1000, 1000, False, 1000, self.plotting_folder)
 
     def validation_step(self, batch, batch_idx):
         """
@@ -262,7 +268,7 @@ class VDM(pl.LightningModule):
         pred_noise = self.denoising_model(z, unsqueeze_right(gamma_t, z.ndim - gamma_t.ndim))
         if clip_samples:
             x_start = (z - sigma_t * pred_noise) / alpha_t
-            x_start.clamp_(-1, 1)
+            x_start.clamp_(-1.0, 1.0)
             mean = alpha_s * (z * (1 - c) / alpha_t + c * x_start)
         else:
             mean = alpha_s / alpha_t * (z - c * sigma_t * pred_noise)
@@ -283,7 +289,7 @@ class VDM(pl.LightningModule):
         Returns:
             torch.Tensor: Sampled values.
         """
-        z = torch.randn((batch_size, self.in_dim), device=self.device)
+        z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
             z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples)
@@ -408,9 +414,17 @@ class VDM(pl.LightningModule):
         Returns:
             None
         """
-        # Concatenate all observations
+        # Concatenate all test observations
         testing_outputs = torch.cat(self.testing_ouputs, dim=0)
-        wd = compute_real_fake_wasserstein(self, testing_outputs, 1000, 1000, False, 1000)
-        self.log("Wasserstein distance", wd)
-        return testing_outputs
+        # Plot UMAP of generated cells and real test cells
+        wd = compute_umap_and_wasserstein(model=self, 
+                                            batch_size=1000, 
+                                            n_sample_steps=1000, 
+                                            clip_samples=False, 
+                                            library_size=self.generative_library_size,
+                                            plotting_folder=self.plotting_folder, 
+                                            X_real=testing_outputs)
+        # Compute Wasserstein distance between real test set and generated data 
+        self.log("wasserstein_distance", wd)
+        return wd
     

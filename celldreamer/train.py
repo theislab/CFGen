@@ -17,10 +17,20 @@ def train(cfg: DictConfig):
     Returns:
         None
     """
+    # Initialize estimator 
     estimator = CellDreamerEstimator(cfg)
+    # Train and test 
     estimator.train()
     estimator.test()
-
+    # Get test metric dictionary
+    metrics_dict = estimator.trainer_generative.callback_metrics
+    # Retrurn test metric (if any) for hparam tuning
+    test_metric = cfg.get("optimized_metric")  # Assifgns None if not initialized 
+    if test_metric:
+        return metrics_dict[test_metric]
+    else:
+        return None
+    
 if __name__ == "__main__":
     import traceback
     try:

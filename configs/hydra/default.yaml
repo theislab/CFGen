@@ -1,5 +1,4 @@
 run:
-  dir: ../project_folder/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  dir: ../project_folder/celldreamer/run_files/${now:%Y-%m-%d}_${now:%H-%M-%S}
 sweep:
-  dir: ../project_folder/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
-  subdir: ${hydra.job.num}
+  dir: ../project_folder/celldreamer/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
