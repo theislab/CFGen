@@ -37,7 +37,7 @@ class RNAseqLoader:
                 self.X = torch.Tensor(adata.X.todense())
         
         # Covariate to index
-        self.id2cov = {}  # cov_name: dict_cov_2_id
+        self.id2cov = {}  # cov_name: dict_cov_2_id 
         self.Y_cov = {} # cov: cov_ids
         for cov_name in covariate_keys:
             cov = np.array(adata.obs[cov_name])

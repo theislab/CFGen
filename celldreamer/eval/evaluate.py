@@ -71,7 +71,6 @@ def compute_umap_and_wasserstein(model,
     annot = ["generated" for _ in range(len(X_generated))]+["real" for _ in range(len(X_real))]
     annot_df = pd.DataFrame({"dataset_type": annot})
     adata_real_fake = sc.AnnData(X=X, obs=annot_df)
-    
     adata_real_fake = scanpy_pipeline(adata_real_fake)
     plot_and_save_umap(adata_real_fake, plotting_folder, real_and_fake_dataset=True)    
     return wd
