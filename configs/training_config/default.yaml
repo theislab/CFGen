@@ -1,0 +1,6 @@
+experiment_name: default_exp 
+task: cell_generation # task (cell_generation or perturbation_modelling)
+batch_size: 256
+chekpoint_path: Null  
+denoising_model: mlp
+one_hot_encode_features: True

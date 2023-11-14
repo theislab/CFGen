@@ -140,7 +140,8 @@ dmypy.json
 # Folders for package
 build/
 logs/
-project_dir/
+scripts/
+
 dist/
 *.egg-info/
 
@@ -157,3 +158,6 @@ dist/
 *.pdf
 *.png
 *.csv
+
+#symlink folder
+project_folder

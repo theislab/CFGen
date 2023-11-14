@@ -1,0 +1,9 @@
+dataset_path: ../datasets/scrnaseq_dataset/eb_phate.h5ad
+covariate_keys: [experimental_time]
+use_pca: False
+n_dimensions: Null
+one_hot_encode_features: True
+layer_key: X_norm
+subsample_frac: 1
+split_rates: [0.90, 0.05, 0.05]
+cov_embedding_dimensions: Null

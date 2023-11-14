@@ -1,29 +1,40 @@
-import yaml 
-
+import hydra
+import sys
+from omegaconf import DictConfig
 from celldreamer.estimator.celldreamer_estimator import CellDreamerEstimator
-from celldreamer.paths import PERT_DATA_DIR
-from celldreamer.data.utils import Args
 
-def train(args):
-    estimator = CellDreamerEstimator(args)
-    estimator.train()
+@hydra.main(config_path="../configs", config_name="train", version_base=None)
+def train(cfg: DictConfig):
+    """
+    Main training function using Hydra.
 
-if __name__=="__main__":
-    import argparse
-    # Create the parser
-    parser = argparse.ArgumentParser(description="Parse configuration file")
-    
-    # Add arguments
-    parser.add_argument('-f', '--file', type=str, help='Path to yaml configuration')
-    
-    # Parse the arguments
-    args = parser.parse_args()
-    
-    # Read config file 
-    with open(args.pat, "r") as stream:
-        args = yaml.safe_load(args)
-    
-    estimator = CellDreamerEstimator(args)
-    
+    Args:
+        cfg (DictConfig): Configuration parameters.
+
+    Raises:
+        Exception: Any exception during training.
+
+    Returns:
+        None
+    """
+    # Initialize estimator 
+    estimator = CellDreamerEstimator(cfg)
+    # Train and test 
     estimator.train()
-     
+    estimator.test()
+    # Get test metric dictionary
+    metrics_dict = estimator.trainer_generative.callback_metrics
+    # Retrurn test metric (if any) for hparam tuning
+    test_metric = cfg.get("optimized_metric")  # Assifgns None if not initialized 
+    if test_metric:
+        return metrics_dict[test_metric]
+    else:
+        return None
+    
+if __name__ == "__main__":
+    import traceback
+    try:
+        train()
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        raise
