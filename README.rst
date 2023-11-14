@@ -39,7 +39,7 @@ See `environment.yml` and `requirements.txt` for the required packages.
 
 Compatibility
 -------------
-`celldreamer`is compatible with Python 3.10.
+`celldreamer` is compatible with Python 3.10.
 
 Licence
 -------
