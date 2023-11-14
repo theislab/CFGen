@@ -3,7 +3,7 @@ weight_decay: 0.00001
 noise_schedule: fixed_linear
 gamma_min: -5.0
 gamma_max: 3.0
-train_library_size: False
+train_library_size: Train
 antithetic_time_sampling: True 
 scaling_method: log_normalization
 generative_library_size: 1000

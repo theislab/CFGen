@@ -72,6 +72,12 @@ class VDM(pl.LightningModule):
         z0_from_x_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], self.in_dim]
         self.z0_from_x = MLP(**z0_from_x_kwargs)
         
+        # If we train library size, design a library size encoder
+        if self.train_library_size:
+            library_size_enc_kwargs = z0_from_x_kwargs.copy()
+            library_size_enc_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], 1]
+            self.library_size_enc = MLP(**library_size_enc_kwargs)
+        
         # Define the inverse dispersion parameter (negative binomial)
         self.theta = torch.nn.Parameter(torch.randn(self.in_dim))
             
@@ -126,11 +132,14 @@ class VDM(pl.LightningModule):
         """
         # Collect observation
         x = batch["X"].to(self.device)
-        # Quantify library size 
-        library_size = x.sum(1).unsqueeze(1)
         # Scale batch to reasonable range 
         x_scaled = self._scale_batch(x)
         z0 = self.z0_from_x(x_scaled)
+        # Quantify library size 
+        if self.train_library_size:
+            library_size = x.sum(1).unsqueeze(1)
+        else:
+            library_size = torch.exp(self.library_size_enc(z0))
         
         # Collect concatenated labels
         y = self._featurize_batch_y(batch)  #TODO: For now we don't implement conditional version
@@ -293,6 +302,8 @@ class VDM(pl.LightningModule):
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
             z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples)
+        if self.train_library_size:
+            library_size = torch.exp(self.library_size_enc(z))
         z_softmax = F.softmax(z, dim=1)
         distr = NegativeBinomial(mu=library_size*z_softmax, theta=torch.exp(self.theta))
         return distr.sample()

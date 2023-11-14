@@ -124,7 +124,7 @@ class CellDreamerEstimator:
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
-        denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim+1 if self.args.generative_model.train_library_size else self.in_dim, 
+        denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
                                             time_varying=True, 
                                             **self.args.denoising_module).to(self.device)
         
