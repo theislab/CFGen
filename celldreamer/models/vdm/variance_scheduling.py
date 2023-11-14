@@ -51,3 +51,4 @@ class LearnedLinearSchedule(nn.Module):
             torch.Tensor: Value of the schedule at time step `t`.
         """
         return self.b + self.w.abs() * t
+    
