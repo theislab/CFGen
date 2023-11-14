@@ -11,8 +11,8 @@ scanpy
 jupyter
 scipy
 scvi-tools
-hydra-core
 wandb 
+hydra-core
 hydra-optuna-sweeper
 hydra-submitit-launcher
 pot
