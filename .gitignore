@@ -158,5 +158,5 @@ dist/
 *.png
 *.csv
 
-#symlink folder
+# symlink folder
 project_folder
