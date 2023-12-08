@@ -1,4 +1,4 @@
-dataset_path: ../datasets/scrnaseq_dataset/eb_phate.h5ad
+dataset_path: ../datasets/eb_phate.h5ad
 covariate_keys: [experimental_time]
 use_pca: False
 n_dimensions: Null

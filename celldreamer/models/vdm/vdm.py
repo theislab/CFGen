@@ -8,10 +8,10 @@ from torch import sigmoid, sqrt, autograd, linspace
 from torch.special import expm1
 import torch.nn.functional as F
 import pytorch_lightning as pl
-
 from tqdm import trange
 
 from scvi.distributions import NegativeBinomial
+from torch.distributions import Normal
 
 from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
@@ -24,6 +24,7 @@ class VDM(pl.LightningModule):
                  z0_from_x_kwargs: dict,
                  plotting_folder: Path,
                  in_dim: int,
+                 size_factor_statistics: dict,
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
                  noise_schedule: str = "fixed_linear", 
@@ -31,8 +32,9 @@ class VDM(pl.LightningModule):
                  gamma_max: float = 1.0,
                  antithetic_time_sampling: bool = True, 
                  scaling_method: int = "log_normalization",
-                 train_library_size: bool = False, 
-                 generative_library_size: float = 1000):
+                 pretrain_encoder: float = False, 
+                 pretraining_encoder_epochs: int = 0, 
+                 use_tanh_encoder: bool = False):
         """
         Variational Diffusion Model (VDM).
 
@@ -49,8 +51,9 @@ class VDM(pl.LightningModule):
             gamma_max (float, optional): Maximum value for gamma in noise schedule. Defaults to 1.0.
             antithetic_time_sampling (bool, optional): Use antithetic time sampling. Defaults to True.
             scaling_method (int, optional): Scaling method for input data. Defaults to "log_normalization".
-            train_library_size (bool, optional): Whether the library size should be trained with the densoising.
-            generative_library_size (float, optional): library size for generated samples. 
+            pretrain_encoder (bool, optional): Pretrain the likelihood encoder.
+            pretrain_encoder_epochs (bool, optional): How many epochs used for the pretraining.
+            use_tanh_encoder (bool, optional): Whether to use TanH activation function at the end of the encoder for z0.
         """
         super().__init__()
         
@@ -59,24 +62,27 @@ class VDM(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.in_dim = in_dim
+        self.size_factor_statistics = size_factor_statistics
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
         self.plotting_folder = plotting_folder
-        self.train_library_size = train_library_size
-        self.generative_library_size = generative_library_size
+        self.pretrain_encoder = pretrain_encoder
+        self.pretraining_encoder_epochs = pretraining_encoder_epochs
+        self.model_type = denoising_model.model_type
+        self.use_tanh_encoder = use_tanh_encoder
         
         # Used to collect test outputs
         self.testing_ouputs = []
         
         # Define a dimensionality-preserving encoder to optimize jointly with the diffusion model
         z0_from_x_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], self.in_dim]
-        self.z0_from_x = MLP(**z0_from_x_kwargs)
+        self.z0_from_x = MLP(**z0_from_x_kwargs, final_activation="tanh" if use_tanh_encoder else None)
         
-        # If we train library size, design a library size encoder
-        if self.train_library_size:
-            library_size_enc_kwargs = z0_from_x_kwargs.copy()
-            library_size_enc_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], 1]
-            self.library_size_enc = MLP(**library_size_enc_kwargs)
+        # If we train size factor, design a size factor encoder
+        if self.model_type=="learnt_size_factor":
+            size_factor_enc_kwargs = z0_from_x_kwargs.copy()
+            size_factor_enc_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], 1]
+            self.size_factor_enc = MLP(**size_factor_enc_kwargs)
         
         # Define the inverse dispersion parameter (negative binomial)
         self.theta = torch.nn.Parameter(torch.randn(self.in_dim))
@@ -135,64 +141,69 @@ class VDM(pl.LightningModule):
         # Scale batch to reasonable range 
         x_scaled = self._scale_batch(x)
         z0 = self.z0_from_x(x_scaled)
-        # Quantify library size 
-        if self.train_library_size:
-            library_size = x.sum(1).unsqueeze(1)
+        # Quantify size factor 
+        if not self.model_type=="learnt_size_factor":
+            log_size_factor = torch.log(x.sum(1).unsqueeze(1))
         else:
-            library_size = torch.exp(self.library_size_enc(z0))
-        
-        # Collect concatenated labels
-        y = self._featurize_batch_y(batch)  #TODO: For now we don't implement conditional version
-        
-        # Sample time 
-        times = self._sample_times(z0.shape[0]).requires_grad_(True)
-        
-        # Sample noise 
-        noise = torch.rand_like(z0)
-        
-        # Sample an observation undergoing noising 
-        z_t, gamma_t, gamma_t_padded = self.sample_q_t_0(x=z0, times=times, noise=noise)
-        
-        # Forward through the model 
-        model_out = self.denoising_model(z_t, gamma_t_padded)
-        
-        # Diffusion loss
-        gamma_grad = autograd.grad(  # gamma_grad shape: (B, )
-            gamma_t,  # (B, )
-            times,  # (B, )
-            grad_outputs=torch.ones_like(gamma_t),
-            create_graph=True,
-            retain_graph=True,
-        )[0]
-        pred_loss = ((model_out - noise) ** 2).sum(1)  # (B, )
-        diffusion_loss = 0.5 * pred_loss * gamma_grad 
-
-        # Latent loss
-        gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
-        sigma_1_sq = sigmoid(gamma_1)
-        mean_sq = (1 - sigma_1_sq) * z0**2  # (alpha_1 * x)**2
-        latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1) # (B, )
-        
+            log_size_factor = self.size_factor_enc(z0)
+            
         # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, z0, library_size)  
+        recons_loss = self.log_probs_x_z0(x, z0, torch.exp(log_size_factor))
         recons_loss = recons_loss.sum(1)
         
-        # Total loss    
-        loss = diffusion_loss + latent_loss + recons_loss
+        if (self.current_epoch > self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
+            # Collect concatenated labels
+            y = self._featurize_batch_y(batch)  #TODO: For now we don't implement conditional version
+            
+            # Sample time 
+            times = self._sample_times(z0.shape[0]).requires_grad_(True)
+            
+            # Sample noise 
+            noise = torch.rand_like(z0)
+            
+            # Sample an observation undergoing noising 
+            z_t, gamma_t, gamma_t_padded = self.sample_q_t_0(x=z0, times=times, noise=noise)
+            
+            # Forward through the model 
+            model_out = self.denoising_model(z_t, gamma_t_padded, log_size_factor)
+            
+            # Diffusion loss
+            gamma_grad = autograd.grad(  # gamma_grad shape: (B, )
+                gamma_t,  # (B, )
+                times,  # (B, )
+                grad_outputs=torch.ones_like(gamma_t),
+                create_graph=True,
+                retain_graph=True,
+            )[0]
+            pred_loss = ((model_out - noise) ** 2).sum(1)  # (B, )
+            diffusion_loss = 0.5 * pred_loss * gamma_grad 
 
-        with torch.no_grad():
-            gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
-        
-        # Save results
-        metrics = {
-            f"{dataset}/loss": loss.mean(),
-            f"{dataset}/diff_loss": diffusion_loss.mean(),
-            f"{dataset}/latent_loss": latent_loss.mean(),
-            f"{dataset}/loss_recon": recons_loss.mean(),
-            f"{dataset}/gamma_0": gamma_0.item(),
-            f"{dataset}/gamma_1": gamma_1.item(),
-        }
-        self.log_dict(metrics, prog_bar=True)
+            # Latent loss
+            gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
+            sigma_1_sq = sigmoid(gamma_1)
+            mean_sq = (1 - sigma_1_sq) * z0**2  # (alpha_1 * x)**2
+            latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1) # (B, )
+            
+            # Total loss    
+            loss = diffusion_loss + latent_loss + recons_loss
+
+            with torch.no_grad():
+                gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+            
+            # Save results
+            metrics = {
+                f"{dataset}/diff_loss": diffusion_loss.mean(),
+                f"{dataset}/latent_loss": latent_loss.mean(),
+                f"{dataset}/loss_recon": recons_loss.mean(),
+                f"{dataset}/gamma_0": gamma_0.item(),
+                f"{dataset}/gamma_1": gamma_1.item(),
+            }
+            self.log_dict(metrics, prog_bar=True)
+         
+        else:
+            loss = recons_loss
+            
+        self.log(f"{dataset}/loss", loss.mean())
         return loss.mean()
 
     # Private methods
@@ -252,7 +263,7 @@ class VDM(pl.LightningModule):
         return mean + noise * scale, gamma_t, gamma_t_padded
 
     @torch.no_grad()
-    def sample_p_s_t(self, z, t, s, clip_samples):
+    def sample_p_s_t(self, z, t, s, size_factor, clip_samples):
         """
         Samples from p(z_s | z_t, x). Used for standard ancestral sampling.
 
@@ -273,8 +284,8 @@ class VDM(pl.LightningModule):
         alpha_s = sqrt(sigmoid(-gamma_s))
         sigma_t = sqrt(sigmoid(gamma_t))
         sigma_s = sqrt(sigmoid(gamma_s))
-
-        pred_noise = self.denoising_model(z, unsqueeze_right(gamma_t, z.ndim - gamma_t.ndim))
+        
+        pred_noise = self.denoising_model(z, unsqueeze_right(gamma_t, z.ndim - gamma_t.ndim), size_factor)
         if clip_samples:
             x_start = (z - sigma_t * pred_noise) / alpha_t
             x_start.clamp_(-1.0, 1.0)
@@ -285,7 +296,7 @@ class VDM(pl.LightningModule):
         return mean + scale * torch.randn_like(z) 
 
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, clip_samples, library_size=1e4):
+    def sample(self, batch_size, n_sample_steps, clip_samples):
         """
         Sample from the model.
 
@@ -293,35 +304,50 @@ class VDM(pl.LightningModule):
             batch_size (int): Batch size.
             n_sample_steps (int): Number of sample steps.
             clip_samples: Whether to clip samples.
-            library_size (float): Library size.
 
         Returns:
             torch.Tensor: Sampled values.
         """
+        # Sample random vector
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
+        # gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        # alpha_0= sqrt(sigmoid(-gamma_0))
+            
+        # Sample from mean and std of log size 
+        if self.model_type=="conditional_latent" or self.model_type=="factorized_latent":
+            mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"], self.size_factor_statistics["sd"]
+            size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
+            log_size_factor = size_factor_dist.sample((batch_size,)).to(self.device).view(-1,1)
+        else:
+            log_size_factor = self.size_factor_enc(z)
+        size_factor = torch.exp(log_size_factor)
+        print(mean_size_factor, sd_size_factor)
+        
+        # Generate samples
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
-            z = self.sample_p_s_t(z, steps[i], steps[i + 1], clip_samples)
-        if self.train_library_size:
-            library_size = torch.exp(self.library_size_enc(z))
+            z = self.sample_p_s_t(z, steps[i], steps[i + 1], log_size_factor, clip_samples)
         z_softmax = F.softmax(z, dim=1)
-        distr = NegativeBinomial(mu=library_size*z_softmax, theta=torch.exp(self.theta))
+
+        distr = NegativeBinomial(mu=size_factor*z_softmax, theta=torch.exp(self.theta))
         return distr.sample()
     
-    def log_probs_x_z0(self, x, z_0, library_size):
+    def log_probs_x_z0(self, x, z_0, size_factor):
         """
         Compute log p(x | z_0) for all possible values of each pixel in x.
 
         Args:
             x: Input data.
             z_0: Latent variable.
-            library_size (float): Library size.
+            size_factor (float): size factor.
 
         Returns:
             torch.Tensor: Log probabilities.
         """
+        # gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        # alpha_0= sqrt(sigmoid(-gamma_0))
         z_0_softmax = F.softmax(z_0, dim=1)
-        distr = NegativeBinomial(mu=library_size*z_0_softmax, theta=torch.exp(self.theta))
+        distr = NegativeBinomial(mu=size_factor*z_0_softmax, theta=torch.exp(self.theta))
         recon_loss = -distr.log_prob(x)
         return recon_loss
     
@@ -432,9 +458,9 @@ class VDM(pl.LightningModule):
                                             batch_size=1000, 
                                             n_sample_steps=1000, 
                                             clip_samples=False, 
-                                            library_size=self.generative_library_size,
                                             plotting_folder=self.plotting_folder, 
                                             X_real=testing_outputs)
+        
         # Compute Wasserstein distance between real test set and generated data 
         self.log("wasserstein_distance", wd)
         return wd

@@ -1,6 +1,7 @@
 import numpy as np
 import scanpy as sc
 import torch
+from celldreamer.data.utils import compute_size_factor_lognorm
 
 class RNAseqLoader:
     """Class for RNAseq data loader."""
@@ -35,6 +36,9 @@ class RNAseqLoader:
                 self.X = torch.Tensor(adata.layers[layer_key].todense())
             else:
                 self.X = torch.Tensor(adata.X.todense())
+        
+        # Compute mean and logvar of size factor
+        self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(self.X)
         
         # Covariate to index
         self.id2cov = {}  # cov_name: dict_cov_2_id 

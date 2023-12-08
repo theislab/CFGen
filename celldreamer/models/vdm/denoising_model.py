@@ -7,6 +7,7 @@ from torch import nn
 import torch.nn.init as init
 
 from celldreamer.models.base.utils import MLP
+from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
 
 def get_timestep_embedding(timesteps,
                            embedding_dim: int,
@@ -198,7 +199,12 @@ class MLPTimeStep(nn.Module):
 # Simple time MLP 
 
 class SimpleMLPTimeStep(torch.nn.Module):
-    def __init__(self, in_dim, out_dim=None, w=64, time_varying=False):
+    def __init__(self,
+                 in_dim, 
+                 out_dim=None, 
+                 w=64, 
+                 time_varying=False, 
+                 model_type="conditional_latent"):
         """
         Simple Multi-Layer Perceptron (MLP) with optional time variation.
 
@@ -210,12 +216,14 @@ class SimpleMLPTimeStep(torch.nn.Module):
         """
         super().__init__()
         self.in_dim = in_dim
+        self.time_varying = time_varying
+        self.model_type = model_type
         
         if out_dim is None:
             out_dim = in_dim
             
         self.net = torch.nn.Sequential(
-            torch.nn.Linear(in_dim + (1 if time_varying else 0), w),
+            torch.nn.Linear(in_dim + (1 if time_varying else 0) + (1 if self.model_type=="conditional_latent" else 0), w),
             torch.nn.SELU(),
             torch.nn.Linear(w, w),
             torch.nn.SELU(),
@@ -224,17 +232,31 @@ class SimpleMLPTimeStep(torch.nn.Module):
             torch.nn.Linear(w, out_dim),
         )
 
-    def forward(self, x, g_t):
+    def forward(self, x, g_t=None, l=None):
         """
         Forward pass of the SimpleMLPTimeStep.
 
         Args:
             x (torch.Tensor): Input tensor.
             g_t (torch.Tensor): Time tensor.
+            l (torch.Tensor): Size factor
 
         Returns:
             torch.Tensor: Output tensor.
         """
-        if g_t.shape[0] == 1:
-            g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
-        return self.net(torch.cat([x, g_t], dim=1))
+        # If g_t is not across all batch, repeat over the batch
+        if self.time_varying:
+            if g_t.shape[0] == 1:
+                g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
+            if g_t.ndim != x.ndim:
+                g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
+        
+        if self.model_type=="conditional_latent":
+            if l.ndim != l.ndim:
+                l = unsqueeze_right(l, x.ndim-l.ndim)    
+        
+        if self.time_varying:
+            x = torch.cat([x, g_t], dim=1)
+        if self.model_type=="conditional_latent":
+            x = torch.cat([x, l], dim=1)
+        return self.net(x)

@@ -41,7 +41,7 @@ class CellDreamerEstimator:
         
         print("Initialize data module...")
         self.init_datamodule()  # Initialize the data module  
-        self.get_fixed_model_params()  # Initialize the data derived model params 
+        self.get_fixed_rna_model_params()  # Initialize the data derived model params 
         self.init_trainer()
         
         print("Initialize feature embeddings...")
@@ -128,11 +128,15 @@ class CellDreamerEstimator:
                                             time_varying=True, 
                                             **self.args.denoising_module).to(self.device)
         
+        size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
+                                  "sd": self.dataset.log_size_factor_sd}
+        
         self.generative_model = VDM(
             denoising_model=denoising_model,
             feature_embeddings=self.feature_embeddings,
             plotting_folder=self.plotting_dir,
             in_dim=self.in_dim,
+            size_factor_statistics=size_factor_statistics,
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
         )
 
@@ -160,5 +164,4 @@ class CellDreamerEstimator:
         self.trainer_generative.test(
             self.generative_model,
             dataloaders=self.test_dataloader)
-        
-        
+    

@@ -38,7 +38,6 @@ def compute_umap_and_wasserstein(model,
                                     batch_size, 
                                     n_sample_steps, 
                                     clip_samples, 
-                                    library_size, 
                                     plotting_folder, 
                                     X_real):
     """
@@ -57,7 +56,7 @@ def compute_umap_and_wasserstein(model,
         AnnData: Annotated Data object containing the generated samples with UMAP coordinates.
     """
     # Generate data and compute Wasserstein distance from test data
-    X_generated = model.sample(batch_size, n_sample_steps, clip_samples, library_size)
+    X_generated = model.sample(batch_size, n_sample_steps, clip_samples)
     wd = wasserstein(X_real, X_generated)
     # Compute and plot UMAP of generated data
     X_generated = X_generated.cpu().numpy()
