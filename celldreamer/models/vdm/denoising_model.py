@@ -6,8 +6,7 @@ import torch
 from torch import nn
 import torch.nn.init as init
 
-from celldreamer.models.base.utils import MLP
-from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
+from celldreamer.models.base.utils import unsqueeze_right
 
 def get_timestep_embedding(timesteps,
                            embedding_dim: int,
@@ -197,7 +196,6 @@ class MLPTimeStep(nn.Module):
                 init.constant_(module.bias, 0.0)
 
 # Simple time MLP 
-
 class SimpleMLPTimeStep(torch.nn.Module):
     def __init__(self,
                  in_dim, 
@@ -252,7 +250,7 @@ class SimpleMLPTimeStep(torch.nn.Module):
                 g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
         
         if self.model_type=="conditional_latent":
-            if l.ndim != l.ndim:
+            if l.ndim != x.ndim:
                 l = unsqueeze_right(l, x.ndim-l.ndim)    
         
         if self.time_varying:
