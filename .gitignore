@@ -140,6 +140,7 @@ dmypy.json
 # Folders for package
 build/
 logs/
+notebooks/cache/
 
 dist/
 *.egg-info/
@@ -147,6 +148,7 @@ dist/
 
 # Anndata objects - too large in sfairazero
 *.h5ad
+*.loom
 
 # Trained models
 *.ckpt

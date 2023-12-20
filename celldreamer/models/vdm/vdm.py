@@ -13,6 +13,7 @@ from tqdm import trange
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Normal
 
+from celldreamer.model.base import CellEncoder
 from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
 from celldreamer.eval.evaluate import compute_umap_and_wasserstein
@@ -21,12 +22,13 @@ class VDM(pl.LightningModule):
     def __init__(self,
                  denoising_model: nn.Module,
                  feature_embeddings: dict, 
-                 z0_from_x_kwargs: dict,
+                 x0_from_x_kwargs: dict,
                  plotting_folder: Path,
                  in_dim: int,
                  size_factor_statistics: dict,
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
+                 encoder_type: str = "fixed", 
                  noise_schedule: str = "fixed_linear", 
                  gamma_min: float = -5.0, 
                  gamma_max: float = 1.0,
@@ -41,7 +43,7 @@ class VDM(pl.LightningModule):
         Args:
             denoising_model (nn.Module): Denoising model.
             feature_embeddings (dict): Feature embeddings for covariates.
-            z0_from_x_kwargs (dict): Arguments for the z0_from_x MLP.
+            x0_from_x (dict): Arguments for the x0_from_x MLP.
             plotting_folder (Path): Folder for saving plots.
             in_dim (int): Number of genes.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
@@ -63,6 +65,7 @@ class VDM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.in_dim = in_dim
         self.size_factor_statistics = size_factor_statistics
+        self.encoder_type = encoder_type
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
         self.plotting_folder = plotting_folder
@@ -75,13 +78,18 @@ class VDM(pl.LightningModule):
         self.testing_ouputs = []
         
         # Define a dimensionality-preserving encoder to optimize jointly with the diffusion model
-        z0_from_x_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], self.in_dim]
-        self.z0_from_x = MLP(**z0_from_x_kwargs, final_activation="tanh" if use_tanh_encoder else None)
-        
+        if encoder_type == "learnt":
+            x0_from_x_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], self.in_dim]
+            self.x0_from_x = MLP(**x0_from_x_kwargs, final_activation="tanh" if use_tanh_encoder else None)
+        elif encoder_type == "fixed":
+            self.x0_from_x = CellEncoder()
+        else:
+            raise NotImplementedError
+            
         # If we train size factor, design a size factor encoder
         if self.model_type=="learnt_size_factor":
-            size_factor_enc_kwargs = z0_from_x_kwargs.copy()
-            size_factor_enc_kwargs["dims"] = [self.in_dim, *z0_from_x_kwargs["dims"], 1]
+            size_factor_enc_kwargs = x0_from_x_kwargs.copy()
+            size_factor_enc_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], 1]
             self.size_factor_enc = MLP(**size_factor_enc_kwargs)
         
         # Define the inverse dispersion parameter (negative binomial)
@@ -138,17 +146,22 @@ class VDM(pl.LightningModule):
         """
         # Collect observation
         x = batch["X"].to(self.device)
+        
         # Scale batch to reasonable range 
-        x_scaled = self._scale_batch(x)
-        z0 = self.z0_from_x(x_scaled)
+        if self.encoder_type == "learnt":
+            x_scaled = self._scale_batch(x)
+            x0 = self.x0_from_x(x_scaled)
+        elif self.encoder_type == "fixed":
+            x0 = self.x0_from_x(x)
+            
         # Quantify size factor 
         if not self.model_type=="learnt_size_factor":
             log_size_factor = torch.log(x.sum(1).unsqueeze(1))
         else:
-            log_size_factor = self.size_factor_enc(z0)
+            log_size_factor = self.size_factor_enc(x0)
             
         # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, z0, torch.exp(log_size_factor))
+        recons_loss = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor))  #TODO: change here
         recons_loss = recons_loss.sum(1)
         
         if (self.current_epoch > self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
@@ -156,13 +169,13 @@ class VDM(pl.LightningModule):
             y = self._featurize_batch_y(batch)  #TODO: For now we don't implement conditional version
             
             # Sample time 
-            times = self._sample_times(z0.shape[0]).requires_grad_(True)
+            times = self._sample_times(x0.shape[0]).requires_grad_(True)
             
             # Sample noise 
-            noise = torch.rand_like(z0)
+            noise = torch.rand_like(x0)
             
             # Sample an observation undergoing noising 
-            z_t, gamma_t, gamma_t_padded = self.sample_q_t_0(x=z0, times=times, noise=noise)
+            z_t, gamma_t, gamma_t_padded = self.sample_q_t_0(x=x0, times=times, noise=noise)
             
             # Forward through the model 
             model_out = self.denoising_model(z_t, gamma_t_padded, log_size_factor)
@@ -181,7 +194,7 @@ class VDM(pl.LightningModule):
             # Latent loss
             gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
             sigma_1_sq = sigmoid(gamma_1)
-            mean_sq = (1 - sigma_1_sq) * z0**2  # (alpha_1 * x)**2
+            mean_sq = (1 - sigma_1_sq) * x0**2  # (alpha_1 * x)**2
             latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1) # (B, )
             
             # Total loss    
@@ -310,29 +323,33 @@ class VDM(pl.LightningModule):
         """
         # Sample random vector
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
-        # gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
-        # alpha_0= sqrt(sigmoid(-gamma_0))
             
-        # Sample from mean and std of log size 
+        # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
         if self.model_type=="conditional_latent" or self.model_type=="factorized_latent":
             mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"], self.size_factor_statistics["sd"]
             size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
             log_size_factor = size_factor_dist.sample((batch_size,)).to(self.device).view(-1,1)
         else:
-            log_size_factor = self.size_factor_enc(z)
-        size_factor = torch.exp(log_size_factor)
-        print(mean_size_factor, sd_size_factor)
+            log_size_factor = None 
         
         # Generate samples
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
             z = self.sample_p_s_t(z, steps[i], steps[i + 1], log_size_factor, clip_samples)
-        z_softmax = F.softmax(z, dim=1)
-
-        distr = NegativeBinomial(mu=size_factor*z_softmax, theta=torch.exp(self.theta))
+        
+        # Sample x0 from z0  
+        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))   
+        x_0 = z / sqrt(sigmoid(-gamma_0))
+        
+        # Derive size factor
+        if self.model_type=="learnt_size_factor":
+            log_size_factor = self.size_factor_enc(x_0)
+            
+        size_factor = torch.exp(log_size_factor)
+        distr = NegativeBinomial(mu=size_factor*x_0, theta=torch.exp(self.theta))
         return distr.sample()
     
-    def log_probs_x_z0(self, x, z_0, size_factor):
+    def log_probs_x_z0(self, x, x_0, size_factor):
         """
         Compute log p(x | z_0) for all possible values of each pixel in x.
 
@@ -344,10 +361,11 @@ class VDM(pl.LightningModule):
         Returns:
             torch.Tensor: Log probabilities.
         """
-        # gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
-        # alpha_0= sqrt(sigmoid(-gamma_0))
-        z_0_softmax = F.softmax(z_0, dim=1)
-        distr = NegativeBinomial(mu=size_factor*z_0_softmax, theta=torch.exp(self.theta))
+        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+        z_0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
+        
+        # z_0_softmax = F.softmax(z_0, dim=1)
+        distr = NegativeBinomial(mu=size_factor*z_0_rescaled, theta=torch.exp(self.theta))
         recon_loss = -distr.log_prob(x)
         return recon_loss
     

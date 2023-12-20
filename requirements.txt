@@ -8,6 +8,7 @@ matplotlib
 scikit-learn
 leidenalg
 scanpy 
+scvelo
 jupyter
 scipy
 scvi-tools

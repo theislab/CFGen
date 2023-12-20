@@ -8,11 +8,11 @@ class CellEncoder(torch.nn.Module):
         super().__init__()
         self.encoder_type = encoder_type 
     
-    def encode(self, x, l):
-        # Scale down 
-        if l.ndim != x.ndim:
-            l = unsqueeze_right(l, x.ndim-l.ndim) 
-        # Propportion 
+    def encode(self, x):
+        l = x.sum(1, keepdim=True)  #TODO: check if right param
+        # Proportion 
         x = x/l
-        
-        
+        return x
+    
+# TO TRY:
+# log1p + rescale, CDF approach dataset dependent, see which one converges faster
