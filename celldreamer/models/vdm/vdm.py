@@ -3,9 +3,8 @@ import numpy as np
 from pathlib import Path
 
 import torch
-from torch import nn, autograd, linspace
+from torch import nn, autograd, linspace, sigmoid, sqrt
 import torch.nn.functional as F
-from torch.nn.functional import sigmoid, sqrt
 from torch.special import expm1
 import pytorch_lightning as pl
 from tqdm import trange
@@ -13,7 +12,7 @@ from tqdm import trange
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Normal
 
-from celldreamer.model.base.cell_decoder import CellDecoder
+from celldreamer.models.base.cell_decoder import CellDecoder
 from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
 from celldreamer.eval.evaluate import compute_umap_and_wasserstein
@@ -151,8 +150,8 @@ class VDM(pl.LightningModule):
         if self.encoder_type == "learnt":
             x_scaled = self._scale_batch(x)
             x0 = self.x0_from_x(x_scaled)
-        elif self.encoder_type == "fixed":
-            x0 = self.scaler.scale(x["X_norm"].to(self.device), reverse=False)  # scaled 
+        else:
+            x0 = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)  # scaled 
             
         # Quantify size factor 
         if not self.model_type == "learnt_size_factor":
@@ -339,17 +338,18 @@ class VDM(pl.LightningModule):
 
         # Sample x0 from z0  
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))   
-        x_0 = z / sqrt(sigmoid(-gamma_0))
+        z0_rescaled = z / sqrt(sigmoid(-gamma_0))
 
         # Derive size factor
         if self.model_type == "learnt_size_factor":
-            log_size_factor = self.size_factor_enc(x_0)
-
-        if self.encoder_type == "log_exp":
-            distr = NegativeBinomial(mu=x_0, theta=torch.exp(self.theta))
+            log_size_factor = self.size_factor_enc(z0_rescaled)
+            
+        size_factor = torch.exp(log_size_factor)
+        if self.encoder_type != "learnt":
+            z0_rescaled = self._decode(z0_rescaled, size_factor)
+            distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(self.theta))
         else:
-            size_factor = torch.exp(log_size_factor)
-            distr = NegativeBinomial(mu=size_factor * x_0, theta=torch.exp(self.theta))
+            distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))
         return distr.sample()
 
     def log_probs_x_z0(self, x, x_0, size_factor):
@@ -366,10 +366,7 @@ class VDM(pl.LightningModule):
         """
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
         z0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
-        if self.encoder_type == "fixed":
-            z0_rescaled = self.cell_decoder(self.scaler.scale(z0_rescaled, reverse=True), size_factor)
-        else:
-            z0_rescaled = F.softmax(z0_rescaled, dim=1)
+        z0_rescaled = self._decode(z0_rescaled, size_factor)
 
         if self.encoder_type == "learnt":
             distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))
@@ -378,6 +375,14 @@ class VDM(pl.LightningModule):
 
         recon_loss = -distr.log_prob(x)
         return recon_loss
+
+    def _decode(self, z, size_factor):
+        # Decode the rescaled z
+        if self.encoder_type != "learnt":
+            z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
+        else:
+            z = F.softmax(z, dim=1)
+        return z
 
     def configure_optimizers(self):
         """
@@ -467,7 +472,7 @@ class VDM(pl.LightningModule):
         Returns:
             torch.Tensor: Loss value.
         """
-        self.testing_ouputs.append(batch["X"])
+        self.testing_outputs.append(batch["X"])
 
     def on_test_epoch_end(self, *arg, **kwargs):
         """
@@ -480,7 +485,7 @@ class VDM(pl.LightningModule):
             None
         """
         # Concatenate all test observations
-        testing_outputs = torch.cat(self.testing_ouputs, dim=0)
+        testing_outputs = torch.cat(self.testing_outputs, dim=0)
         # Plot UMAP of generated cells and real test cells
         wd = compute_umap_and_wasserstein(model=self, 
                                             batch_size=1000, 

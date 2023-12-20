@@ -44,7 +44,7 @@ class RNAseqLoader:
                 self.X = torch.Tensor(adata.X.todense())
         
         # Get normalized gene expression 
-        self.X_norm = normalize_expression(self.X, self.X.sum(1), encoder_type)
+        self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
         
         # Initialize scaler object 
         self.scaler = Scaler(target_max=target_max, target_min=target_min)

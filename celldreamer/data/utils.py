@@ -41,7 +41,7 @@ class Scaler:
         X_scaled = (X - min_val) / (max_val - min_val) * (new_max - new_min) + new_min
         # Clip to the lower end
         if reverse:
-            X_scaled = torch.clip(X_scaled, min=new_min)
+            X_scaled = torch.clamp(X_scaled, min=torch.tensor([new_min]).to(X_scaled))
         return X_scaled
 
 def normalize_expression(X, size_factor, encoder_type):

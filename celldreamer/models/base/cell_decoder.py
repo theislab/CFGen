@@ -8,7 +8,7 @@ class CellDecoder(torch.nn.Module):
         super().__init__()
         self.encoder_type = encoder_type 
     
-    def forward(self, x, size_factor):
+    def forward(self, X, size_factor):
         if self.encoder_type == "proportions":
             X = X * size_factor
         elif self.encoder_type == "log_gexp":
