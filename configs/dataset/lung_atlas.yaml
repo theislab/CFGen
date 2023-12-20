@@ -1,0 +1,12 @@
+dataset_path: ../datasets/processed/lung_atlas.h5ad
+layer_key: X_counts
+covariate_keys: [cell_type]
+subsample_frac: 1
+use_pca: False
+encoder_type: "proportions"
+target_max: 1
+target_min: -1
+n_dimensions: Null
+one_hot_encode_features: True
+split_rates: [0.90, 0.05, 0.05]
+cov_embedding_dimensions: Null

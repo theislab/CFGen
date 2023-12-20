@@ -3,17 +3,17 @@ import numpy as np
 from pathlib import Path
 
 import torch
-from torch import nn
-from torch import sigmoid, sqrt, autograd, linspace
-from torch.special import expm1
+from torch import nn, autograd, linspace
 import torch.nn.functional as F
+from torch.nn.functional import sigmoid, sqrt
+from torch.special import expm1
 import pytorch_lightning as pl
 from tqdm import trange
 
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Normal
 
-from celldreamer.model.base import CellEncoder
+from celldreamer.model.base.cell_decoder import CellDecoder
 from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
 from celldreamer.eval.evaluate import compute_umap_and_wasserstein
@@ -26,15 +26,16 @@ class VDM(pl.LightningModule):
                  plotting_folder: Path,
                  in_dim: int,
                  size_factor_statistics: dict,
+                 scaler, 
+                 encoder_type: str = "fixed", 
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
-                 encoder_type: str = "fixed", 
                  noise_schedule: str = "fixed_linear", 
                  gamma_min: float = -5.0, 
                  gamma_max: float = 1.0,
                  antithetic_time_sampling: bool = True, 
-                 scaling_method: int = "log_normalization",
-                 pretrain_encoder: float = False, 
+                 scaling_method: str = "log_normalization",  # Change int to str
+                 pretrain_encoder: bool = False,  # Change float to bool
                  pretraining_encoder_epochs: int = 0, 
                  use_tanh_encoder: bool = False):
         """
@@ -43,7 +44,7 @@ class VDM(pl.LightningModule):
         Args:
             denoising_model (nn.Module): Denoising model.
             feature_embeddings (dict): Feature embeddings for covariates.
-            x0_from_x (dict): Arguments for the x0_from_x MLP.
+            x0_from_x_kwargs (dict): Arguments for the x0_from_x MLP.
             plotting_folder (Path): Folder for saving plots.
             in_dim (int): Number of genes.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
@@ -52,9 +53,9 @@ class VDM(pl.LightningModule):
             gamma_min (float, optional): Minimum value for gamma in noise schedule. Defaults to -5.0.
             gamma_max (float, optional): Maximum value for gamma in noise schedule. Defaults to 1.0.
             antithetic_time_sampling (bool, optional): Use antithetic time sampling. Defaults to True.
-            scaling_method (int, optional): Scaling method for input data. Defaults to "log_normalization".
+            scaling_method (str, optional): Scaling method for input data. Defaults to "log_normalization".
             pretrain_encoder (bool, optional): Pretrain the likelihood encoder.
-            pretrain_encoder_epochs (bool, optional): How many epochs used for the pretraining.
+            pretraining_encoder_epochs (int, optional): How many epochs used for the pretraining.
             use_tanh_encoder (bool, optional): Whether to use TanH activation function at the end of the encoder for z0.
         """
         super().__init__()
@@ -65,6 +66,7 @@ class VDM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.in_dim = in_dim
         self.size_factor_statistics = size_factor_statistics
+        self.scaler = scaler
         self.encoder_type = encoder_type
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
@@ -75,19 +77,17 @@ class VDM(pl.LightningModule):
         self.use_tanh_encoder = use_tanh_encoder
         
         # Used to collect test outputs
-        self.testing_ouputs = []
+        self.testing_outputs = []  # Fix typo
         
-        # Define a dimensionality-preserving encoder to optimize jointly with the diffusion model
+        # If the encoder is fixed, we just need an inverting decoder. If learnt, the decoding is simply the softmax operation 
         if encoder_type == "learnt":
             x0_from_x_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], self.in_dim]
             self.x0_from_x = MLP(**x0_from_x_kwargs, final_activation="tanh" if use_tanh_encoder else None)
-        elif encoder_type == "fixed":
-            self.x0_from_x = CellEncoder()
         else:
-            raise NotImplementedError
+            self.cell_decoder = CellDecoder(self.encoder_type)
             
         # If we train size factor, design a size factor encoder
-        if self.model_type=="learnt_size_factor":
+        if self.model_type == "learnt_size_factor":
             size_factor_enc_kwargs = x0_from_x_kwargs.copy()
             size_factor_enc_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], 1]
             self.size_factor_enc = MLP(**size_factor_enc_kwargs)
@@ -152,21 +152,21 @@ class VDM(pl.LightningModule):
             x_scaled = self._scale_batch(x)
             x0 = self.x0_from_x(x_scaled)
         elif self.encoder_type == "fixed":
-            x0 = self.x0_from_x(x)
+            x0 = self.scaler.scale(x["X_norm"].to(self.device), reverse=False)  # scaled 
             
         # Quantify size factor 
-        if not self.model_type=="learnt_size_factor":
+        if not self.model_type == "learnt_size_factor":
             log_size_factor = torch.log(x.sum(1).unsqueeze(1))
         else:
             log_size_factor = self.size_factor_enc(x0)
             
         # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor))  #TODO: change here
+        recons_loss = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor))  
         recons_loss = recons_loss.sum(1)
         
         if (self.current_epoch > self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
             # Collect concatenated labels
-            y = self._featurize_batch_y(batch)  #TODO: For now we don't implement conditional version
+            y = self._featurize_batch_y(batch)  # TODO: For now, we don't implement the conditional version
             
             # Sample time 
             times = self._sample_times(x0.shape[0]).requires_grad_(True)
@@ -195,7 +195,7 @@ class VDM(pl.LightningModule):
             gamma_1 = self.gamma(torch.tensor([1.0], device=self.device))
             sigma_1_sq = sigmoid(gamma_1)
             mean_sq = (1 - sigma_1_sq) * x0**2  # (alpha_1 * x)**2
-            latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1) # (B, )
+            latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1)  # (B, )
             
             # Total loss    
             loss = diffusion_loss + latent_loss + recons_loss
@@ -291,13 +291,13 @@ class VDM(pl.LightningModule):
         """
         gamma_t = self.gamma(t)
         gamma_s = self.gamma(s)
-        
+
         c = -expm1(gamma_s - gamma_t)
         alpha_t = sqrt(sigmoid(-gamma_t))
         alpha_s = sqrt(sigmoid(-gamma_s))
         sigma_t = sqrt(sigmoid(gamma_t))
         sigma_s = sqrt(sigmoid(gamma_s))
-        
+
         pred_noise = self.denoising_model(z, unsqueeze_right(gamma_t, z.ndim - gamma_t.ndim), size_factor)
         if clip_samples:
             x_start = (z - sigma_t * pred_noise) / alpha_t
@@ -323,32 +323,35 @@ class VDM(pl.LightningModule):
         """
         # Sample random vector
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
-            
+
         # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
-        if self.model_type=="conditional_latent" or self.model_type=="factorized_latent":
+        if self.model_type == "conditional_latent" or self.model_type == "factorized_latent":
             mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"], self.size_factor_statistics["sd"]
             size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
-            log_size_factor = size_factor_dist.sample((batch_size,)).to(self.device).view(-1,1)
+            log_size_factor = size_factor_dist.sample((batch_size,)).to(self.device).view(-1, 1)
         else:
             log_size_factor = None 
-        
+
         # Generate samples
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
         for i in trange(n_sample_steps, desc="sampling"):
             z = self.sample_p_s_t(z, steps[i], steps[i + 1], log_size_factor, clip_samples)
-        
+
         # Sample x0 from z0  
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))   
         x_0 = z / sqrt(sigmoid(-gamma_0))
-        
+
         # Derive size factor
-        if self.model_type=="learnt_size_factor":
+        if self.model_type == "learnt_size_factor":
             log_size_factor = self.size_factor_enc(x_0)
-            
-        size_factor = torch.exp(log_size_factor)
-        distr = NegativeBinomial(mu=size_factor*x_0, theta=torch.exp(self.theta))
+
+        if self.encoder_type == "log_exp":
+            distr = NegativeBinomial(mu=x_0, theta=torch.exp(self.theta))
+        else:
+            size_factor = torch.exp(log_size_factor)
+            distr = NegativeBinomial(mu=size_factor * x_0, theta=torch.exp(self.theta))
         return distr.sample()
-    
+
     def log_probs_x_z0(self, x, x_0, size_factor):
         """
         Compute log p(x | z_0) for all possible values of each pixel in x.
@@ -362,13 +365,20 @@ class VDM(pl.LightningModule):
             torch.Tensor: Log probabilities.
         """
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
-        z_0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
-        
-        # z_0_softmax = F.softmax(z_0, dim=1)
-        distr = NegativeBinomial(mu=size_factor*z_0_rescaled, theta=torch.exp(self.theta))
+        z0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
+        if self.encoder_type == "fixed":
+            z0_rescaled = self.cell_decoder(self.scaler.scale(z0_rescaled, reverse=True), size_factor)
+        else:
+            z0_rescaled = F.softmax(z0_rescaled, dim=1)
+
+        if self.encoder_type == "learnt":
+            distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))
+        else:
+            distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(self.theta))
+
         recon_loss = -distr.log_prob(x)
         return recon_loss
-    
+
     def configure_optimizers(self):
         """
         Optimizer configuration 
@@ -377,10 +387,10 @@ class VDM(pl.LightningModule):
             dict: Optimizer configuration.
         """
         optimizer_config = {'optimizer': torch.optim.AdamW(self.parameters(), 
-                                                           self.learning_rate, 
-                                                           betas=(0.9, 0.99), 
-                                                           weight_decay=self.weight_decay, 
-                                                           eps=1e-8)}
+                                                        self.learning_rate, 
+                                                        betas=(0.9, 0.99), 
+                                                        weight_decay=self.weight_decay, 
+                                                        eps=1e-8)}
 
         return optimizer_config
 
@@ -405,7 +415,7 @@ class VDM(pl.LightningModule):
         else:
             raise ValueError(f"Unknown normalization {self.scaling_method}")
         return x_scaled
-            
+
     def _z_score_normalize(self, data, epsilon=1e-8):
         """
         Z-score normalize data.
@@ -419,10 +429,10 @@ class VDM(pl.LightningModule):
         """
         mean = torch.mean(data, dim=0)
         std = torch.std(data, dim=0)
-        
+
         # Handle zero variance by adding epsilon to the standard deviation
         std += epsilon
-        
+
         normalized_data = (data - mean) / std
         return normalized_data
 
@@ -439,13 +449,13 @@ class VDM(pl.LightningModule):
         """
         min_val = torch.min(data, dim=0)[0]
         max_val = torch.max(data, dim=0)[0]
-        
+
         # Handle zero variance by setting a small constant value for the range
         range_val = max_val - min_val + epsilon
-        
+
         scaled_data = (data - min_val) / range_val * 2 - 1
         return scaled_data
-    
+
     def test_step(self, batch, batch_idx):
         """
         Training step for VDM.
@@ -458,7 +468,7 @@ class VDM(pl.LightningModule):
             torch.Tensor: Loss value.
         """
         self.testing_ouputs.append(batch["X"])
-    
+
     def on_test_epoch_end(self, *arg, **kwargs):
         """
         Concatenates all observations from the test data loader in a single dataset.
@@ -478,8 +488,8 @@ class VDM(pl.LightningModule):
                                             clip_samples=False, 
                                             plotting_folder=self.plotting_folder, 
                                             X_real=testing_outputs)
-        
+        self.testing_outputs = []
+
         # Compute Wasserstein distance between real test set and generated data 
         self.log("wasserstein_distance", wd)
         return wd
-    
