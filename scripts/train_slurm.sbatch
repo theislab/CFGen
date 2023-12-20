@@ -23,4 +23,4 @@
 source $HOME/.bashrc
 conda activate celldreamer
 
-python ../celldreamer/train.py launcher=slurm_icb 
+python ../celldreamer/train.py 
