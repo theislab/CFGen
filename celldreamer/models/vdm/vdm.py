@@ -345,8 +345,9 @@ class VDM(pl.LightningModule):
             log_size_factor = self.size_factor_enc(z0_rescaled)
             
         size_factor = torch.exp(log_size_factor)
+        # Decode to parameterize negative binomial
+        z0_rescaled = self._decode(z0_rescaled, size_factor)
         if self.encoder_type != "learnt":
-            z0_rescaled = self._decode(z0_rescaled, size_factor)
             distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(self.theta))
         else:
             distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))

@@ -23,4 +23,4 @@
 source $HOME/.bashrc
 conda activate celldreamer
 
-python ../celldreamer/train.py 
+python ../celldreamer/train.py
