@@ -11,7 +11,6 @@ class RNAseqLoader:
         layer_key: str,
         covariate_keys=None,
         subsample_frac=1,
-        use_pca=True,
         encoder_type="proportions", 
         target_max=1, 
         target_min=-1):
@@ -23,7 +22,6 @@ class RNAseqLoader:
             layer_key (str): Layer key.
             covariate_keys (list, optional): List of covariate names. Defaults to None.
             subsample_frac (float, optional): Fraction of the dataset to use. Defaults to 1.
-            use_pca (bool, optional): Use principal components for generation. Defaults to True.
             encoder_type (str, optional): Must be in (proportions, log_gexp, log_gexp_scaled).
             target_max (float, optional): Maximum value for scaling gene expression. Defaults to 1.
             target_min (float, optional): Minimum value for scaling gene expression. Defaults to 1.

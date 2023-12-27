@@ -80,7 +80,7 @@ class VDM(pl.LightningModule):
         self.sampling_covariate = sampling_covariate
         
         # Used to collect test outputs
-        self.testing_outputs = []  # Fix typo
+        self.testing_outputs = []  
         
         # If the encoder is fixed, we just need an inverting decoder. If learnt, the decoding is simply the softmax operation 
         if encoder_type == "learnt":
@@ -163,11 +163,20 @@ class VDM(pl.LightningModule):
         else:
             log_size_factor = self.size_factor_enc(x0)
             
-        # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=True)  
-        recons_loss = recons_loss.sum(1)
+        # Compute log p(x | x_0) to train theta
+        recons_loss_enc = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=False)  
+        recons_loss_enc = recons_loss_enc.sum(1)
+        
+        # Freeze the encoder if the pretraining phase is done 
+        if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder):
+            for param in self.x0_from_x.parameters():
+                param.requires_grad = False           
         
         if (self.current_epoch > self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
+            # Sample to generate x0 from z0
+            recons_loss_diff = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=True)  
+            recons_loss_diff = recons_loss_diff.sum(1)
+            
             # Collect concatenated labels
             y = self._featurize_batch_y(batch)  # TODO: For now, we don't implement the conditional version
             
@@ -201,7 +210,7 @@ class VDM(pl.LightningModule):
             latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1)  # (B, )
             
             # Total loss    
-            loss = diffusion_loss + latent_loss + recons_loss
+            loss = diffusion_loss + latent_loss + recons_loss_enc + recons_loss_diff
 
             with torch.no_grad():
                 gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
@@ -210,14 +219,15 @@ class VDM(pl.LightningModule):
             metrics = {
                 f"{dataset}/diff_loss": diffusion_loss.mean(),
                 f"{dataset}/latent_loss": latent_loss.mean(),
-                f"{dataset}/loss_recon": recons_loss.mean(),
+                f"{dataset}/loss_recon_enc": recons_loss_enc.mean(),
+                f"{dataset}/loss_recon_recon": recons_loss_diff.mean(),
                 f"{dataset}/gamma_0": gamma_0.item(),
                 f"{dataset}/gamma_1": gamma_1.item(),
             }
             self.log_dict(metrics, prog_bar=True)
          
         else:
-            loss = recons_loss
+            loss = recons_loss_enc
             
         self.log(f"{dataset}/loss", loss.mean())
         return loss.mean()
@@ -376,13 +386,15 @@ class VDM(pl.LightningModule):
             gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
             z0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
             z0_rescaled = self._decode(z0_rescaled, size_factor)
+            theta = self.theta.detach()
         else:
             z0_rescaled = self._decode(x_0, size_factor)
+            theta = self.theta
 
         if self.encoder_type == "learnt":
-            distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))
+            distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(theta))
         else:
-            distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(self.theta))
+            distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(theta))
 
         recon_loss = -distr.log_prob(x)
         return recon_loss

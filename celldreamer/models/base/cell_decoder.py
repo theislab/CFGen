@@ -18,3 +18,4 @@ class CellDecoder(torch.nn.Module):
         else:
             raise NotImplementedError
         return X 
+    

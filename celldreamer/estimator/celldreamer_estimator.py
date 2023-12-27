@@ -59,13 +59,13 @@ class CellDreamerEstimator:
                                     layer_key=self.args.dataset.layer_key,
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
-                                    use_pca=self.args.dataset.use_pca, 
                                     encoder_type=self.args.dataset.encoder_type,
                                     target_max=self.args.dataset.target_max, 
                                     target_min=self.args.dataset.target_min)
 
         # Initialize the data loaders 
-        self.train_data, self.test_data, self.valid_data = random_split(self.dataset, lengths=self.args.dataset.split_rates)   
+        self.train_data, self.test_data, self.valid_data = random_split(self.dataset,
+                                                                        lengths=self.args.dataset.split_rates)   
         self.train_dataloader = torch.utils.data.DataLoader(self.train_data,
                                                             batch_size=self.args.training_config.batch_size,
                                                             shuffle=True,

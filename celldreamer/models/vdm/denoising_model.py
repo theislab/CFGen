@@ -230,4 +230,4 @@ class SimpleMLPTimeStep(pl.LightningModule):
             x = torch.cat([x, g_t], dim=1)
         if self.model_type=="conditional_latent":
             x = torch.cat([x, l], dim=1)
-        return self.net(x)
+        return self.net(x) + x
