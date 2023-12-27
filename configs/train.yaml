@@ -10,7 +10,7 @@ defaults:
   - generative_model: default
   - hparams_search: null
   - hydra: default
-  - launcher: default
+  - launcher: slurm_tum
   - logger: default
   - trainer: default
   - training_config: default

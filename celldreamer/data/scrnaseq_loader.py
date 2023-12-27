@@ -34,14 +34,9 @@ class RNAseqLoader:
         if subsample_frac < 1:
             sc.pp.subsample(adata, fraction=subsample_frac)
         # Transform genes to tensors
-        if use_pca:
-            self.X = torch.Tensor(adata.obsm["X_pca"])
-            self.X = (self.X - self.X.mean(1).unsqueeze(-1)) / self.X.std(1).unsqueeze(-1)
-        else:
-            if layer_key in adata.layers:
-                self.X = torch.Tensor(adata.layers[layer_key].todense())
-            else:
-                self.X = torch.Tensor(adata.X.todense())
+        if layer_key not in adata.layers:
+            adata.layers[layer_key] = adata.X.copy()
+        self.X = torch.Tensor(adata.layers[layer_key].todense())
         
         # Get normalized gene expression 
         self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
@@ -49,9 +44,6 @@ class RNAseqLoader:
         # Initialize scaler object 
         self.scaler = Scaler(target_max=target_max, target_min=target_min)
         self.scaler.fit(self.X_norm)
-        
-        # Compute mean and logvar of size factor
-        self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(self.X)
         
         # Covariate to index
         self.id2cov = {}  # cov_name: dict_cov_2_id 
@@ -62,6 +54,9 @@ class RNAseqLoader:
             zip_cov_cat = dict(zip(unique_cov, np.arange(len(unique_cov))))  
             self.id2cov[cov_name] = zip_cov_cat
             self.Y_cov[cov_name] = torch.tensor([zip_cov_cat[c] for c in cov])
+        
+        # Compute mean and logvar of size factor
+        self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata, layer_key, self.id2cov)
     
     def get_scaler(self):
         """Return the scaler object

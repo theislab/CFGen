@@ -65,7 +65,7 @@ def normalize_expression(X, size_factor, encoder_type):
         raise NotImplementedError    
     return X
 
-def compute_size_factor_lognorm(X):
+def compute_size_factor_lognorm(adata, layer, id2cov):
     """Compute the mean and variance of the log size factors.
 
     Args:
@@ -74,9 +74,20 @@ def compute_size_factor_lognorm(X):
     Returns:
         tuple: Mean and standard deviation of the log size factors.
     """
-    log_size_factors = torch.log(X.sum(1))
-    log_size_factors_mean = log_size_factors.mean()
-    log_size_factors_sd = log_size_factors.std()
-    return log_size_factors_mean, log_size_factors_sd
-
+    # Each dictionary will contain one key for each covariate, associated to a torch value with log size factor 
+    # mean/variance per category
+    log_size_factors_mean, log_size_factors_sd = {}, {}
     
+    for cov_name in id2cov:
+        log_size_factors_mean_cov, log_size_factors_sd_cov = [], []
+        # Iterate over the categories under the covariate
+        for cov_cat in id2cov[cov_name]:
+            adata_cov = adata[adata.obs[cov_name]==cov_cat]
+            # Get log size factor of the gene expression of a certain 
+            log_size_factors_cov = torch.log(torch.tensor(adata_cov.layers[layer].todense().sum(1)))
+            mean, sd = log_size_factors_cov.mean(), log_size_factors_cov.std()
+            # Append results 
+            log_size_factors_mean_cov.append(mean)
+            log_size_factors_sd_cov.append(sd)
+        log_size_factors_mean[cov_name], log_size_factors_sd[cov_name] = torch.stack(log_size_factors_mean_cov), torch.stack(log_size_factors_sd_cov)
+    return log_size_factors_mean, log_size_factors_sd

@@ -27,7 +27,7 @@ class FixedLinearSchedule(nn.Module):
         return self.gamma_min + (self.gamma_max - self.gamma_min) * t
 
 
-class LearnedLinearSchedule(nn.Module):
+class LearntLinearSchedule(nn.Module):
     def __init__(self, gamma_min, gamma_max):
         """
         Learned linear schedule for a value between `gamma_min` and `gamma_max`.

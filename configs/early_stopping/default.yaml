@@ -1,5 +1,5 @@
 monitor: valid/loss
-patience: 100
+patience: 10000
 mode: min
 min_delta: 0.
 verbose: False

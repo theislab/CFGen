@@ -22,7 +22,7 @@ hydra:
 
     # define hyperparameter search space
     params:
-      denoising_module.w: choice(64, 128, 256)
+      denoising_module.hidden_dim: choice(64, 128)
       denoising_module.model_type: choice(learnt_size_factor, conditional_latent, factorized_latent)
       generative_model.learning_rate: choice(0.0001, 0.001) 
       generative_model.noise_schedule: choice(fixed_linear, learnt_linear)

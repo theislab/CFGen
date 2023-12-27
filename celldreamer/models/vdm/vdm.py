@@ -13,7 +13,7 @@ from scvi.distributions import NegativeBinomial
 from torch.distributions import Normal
 
 from celldreamer.models.base.cell_decoder import CellDecoder
-from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearnedLinearSchedule
+from celldreamer.models.vdm.variance_scheduling import FixedLinearSchedule, LearntLinearSchedule
 from celldreamer.models.base.utils import MLP, unsqueeze_right, kl_std_normal
 from celldreamer.eval.evaluate import compute_umap_and_wasserstein
 
@@ -26,6 +26,8 @@ class VDM(pl.LightningModule):
                  in_dim: int,
                  size_factor_statistics: dict,
                  scaler, 
+                 sampling_covariate: str, 
+                 model_type: str,
                  encoder_type: str = "fixed", 
                  learning_rate: float = 0.001, 
                  weight_decay: float = 0.0001, 
@@ -46,6 +48,7 @@ class VDM(pl.LightningModule):
             x0_from_x_kwargs (dict): Arguments for the x0_from_x MLP.
             plotting_folder (Path): Folder for saving plots.
             in_dim (int): Number of genes.
+            sampling_covariate (str): covariare controlling the size factor sampling 
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
             weight_decay (float, optional): Weight decay. Defaults to 0.0001.
             noise_schedule (str, optional): Noise schedule type. Defaults to "fixed_linear".
@@ -72,8 +75,9 @@ class VDM(pl.LightningModule):
         self.plotting_folder = plotting_folder
         self.pretrain_encoder = pretrain_encoder
         self.pretraining_encoder_epochs = pretraining_encoder_epochs
-        self.model_type = denoising_model.model_type
+        self.model_type = model_type
         self.use_tanh_encoder = use_tanh_encoder
+        self.sampling_covariate = sampling_covariate
         
         # Used to collect test outputs
         self.testing_outputs = []  # Fix typo
@@ -94,11 +98,11 @@ class VDM(pl.LightningModule):
         # Define the inverse dispersion parameter (negative binomial)
         self.theta = torch.nn.Parameter(torch.randn(self.in_dim))
             
-        assert noise_schedule in ["fixed_linear", "learned_linear"]
+        assert noise_schedule in ["fixed_linear", "learnt_linear"]
         if noise_schedule == "fixed_linear":
             self.gamma = FixedLinearSchedule(gamma_min, gamma_max)
-        elif noise_schedule == "learned_linear":
-            self.gamma = LearnedLinearSchedule(gamma_min, gamma_max)
+        elif noise_schedule == "learnt_linear":
+            self.gamma = LearntLinearSchedule(gamma_min, gamma_max)
         else:
             raise ValueError(f"Unknown noise schedule {noise_schedule}")
         
@@ -152,15 +156,15 @@ class VDM(pl.LightningModule):
             x0 = self.x0_from_x(x_scaled)
         else:
             x0 = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)  # scaled 
-            
+        
         # Quantify size factor 
-        if not self.model_type == "learnt_size_factor":
+        if self.model_type != "learnt_size_factor":
             log_size_factor = torch.log(x.sum(1).unsqueeze(1))
         else:
             log_size_factor = self.size_factor_enc(x0)
             
         # Compute log p(x | z_0) for all possible values of each pixel in x.
-        recons_loss = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor))  
+        recons_loss = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=True)  
         recons_loss = recons_loss.sum(1)
         
         if (self.current_epoch > self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
@@ -175,7 +179,7 @@ class VDM(pl.LightningModule):
             
             # Sample an observation undergoing noising 
             z_t, gamma_t, gamma_t_padded = self.sample_q_t_0(x=x0, times=times, noise=noise)
-            
+                        
             # Forward through the model 
             model_out = self.denoising_model(z_t, gamma_t_padded, log_size_factor)
             
@@ -308,7 +312,7 @@ class VDM(pl.LightningModule):
         return mean + scale * torch.randn_like(z) 
 
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, clip_samples):
+    def sample(self, batch_size, n_sample_steps, clip_samples, covariate):
         """
         Sample from the model.
 
@@ -325,9 +329,11 @@ class VDM(pl.LightningModule):
 
         # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
         if self.model_type == "conditional_latent" or self.model_type == "factorized_latent":
-            mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"], self.size_factor_statistics["sd"]
+            mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
+            random_indices = torch.randint(0, len(mean_size_factor), (batch_size,))
+            mean_size_factor, sd_size_factor = mean_size_factor[random_indices], sd_size_factor[random_indices]
             size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
-            log_size_factor = size_factor_dist.sample((batch_size,)).to(self.device).view(-1, 1)
+            log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
         else:
             log_size_factor = None 
 
@@ -338,22 +344,23 @@ class VDM(pl.LightningModule):
 
         # Sample x0 from z0  
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))   
-        z0_rescaled = z / sqrt(sigmoid(-gamma_0))
-
+        z = z / sqrt(sigmoid(-gamma_0))
+        
         # Derive size factor
         if self.model_type == "learnt_size_factor":
-            log_size_factor = self.size_factor_enc(z0_rescaled)
+            log_size_factor = self.size_factor_enc(z)
             
         size_factor = torch.exp(log_size_factor)
         # Decode to parameterize negative binomial
-        z0_rescaled = self._decode(z0_rescaled, size_factor)
+        z = self._decode(z, size_factor)
         if self.encoder_type != "learnt":
-            distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(self.theta))
+            distr = NegativeBinomial(mu=z, theta=torch.exp(self.theta))
         else:
-            distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))
-        return distr.sample()
+            distr = NegativeBinomial(mu=size_factor * z, theta=torch.exp(self.theta))
+        sample = distr.sample()
+        return sample
 
-    def log_probs_x_z0(self, x, x_0, size_factor):
+    def log_probs_x_z0(self, x, x_0, size_factor, sample=True):
         """
         Compute log p(x | z_0) for all possible values of each pixel in x.
 
@@ -365,9 +372,12 @@ class VDM(pl.LightningModule):
         Returns:
             torch.Tensor: Log probabilities.
         """
-        gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
-        z0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
-        z0_rescaled = self._decode(z0_rescaled, size_factor)
+        if sample:  
+            gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
+            z0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
+            z0_rescaled = self._decode(z0_rescaled, size_factor)
+        else:
+            z0_rescaled = self._decode(x_0, size_factor)
 
         if self.encoder_type == "learnt":
             distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(self.theta))
@@ -493,7 +503,8 @@ class VDM(pl.LightningModule):
                                             n_sample_steps=1000, 
                                             clip_samples=False, 
                                             plotting_folder=self.plotting_folder, 
-                                            X_real=testing_outputs)
+                                            X_real=testing_outputs, 
+                                            sampling_covariate=self.sampling_covariate)
         self.testing_outputs = []
 
         # Compute Wasserstein distance between real test set and generated data 

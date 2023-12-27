@@ -6,9 +6,9 @@
 
 #SBATCH -J train_slurm
 
-#SBATCH -p gpu_p
+#SBATCH -p gpu_all
 
-#SBATCH --qos=gpu_normal
+#SBATCH --qos=phd
 
 #SBATCH --gres=gpu:1
 
@@ -20,7 +20,6 @@
 
 #SBATCH --nice=10000
 
-source $HOME/.bashrc
 conda activate celldreamer
 
-python ../celldreamer/train.py
+python ../celldreamer/train.py denoising_module=resnet

@@ -1,4 +1,4 @@
-max_epochs: 100
+max_epochs: 500
 accelerator: gpu 
 devices: 1
 check_val_every_n_epoch: 1

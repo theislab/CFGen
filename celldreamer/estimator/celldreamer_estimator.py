@@ -8,7 +8,7 @@ from pytorch_lightning.loggers import WandbLogger
 from celldreamer.paths import TRAINING_FOLDER
 from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
-from celldreamer.models.vdm.denoising_model import SimpleMLPTimeStep
+from celldreamer.models.vdm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
 from celldreamer.models.vdm.vdm import VDM
 
 
@@ -128,9 +128,21 @@ class CellDreamerEstimator:
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
-        denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
-                                            time_varying=True, 
-                                            **self.args.denoising_module).to(self.device)
+        if self.args.denoising_module.denoising_net == "simple_mlp":
+            denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
+                                                out_dim=self.args.denoising_module.out_dim,
+                                                w=self.args.denoising_module.w,
+                                                model_type=self.args.denoising_module.model_type,
+                                                time_varying=True)
+        else:
+            denoising_model = MLPTimeStep(in_dim=self.in_dim, 
+                                                time_varying=True, 
+                                                gamma_min=self.args.generative_model.gamma_min, 
+                                                gamma_max=self.args.generative_model.gamma_max,
+                                                hidden_dim=self.args.denoising_module.hidden_dim,
+                                                dropout_prob=self.args.denoising_module.dropout_prob,
+                                                n_blocks=self.args.denoising_module.n_blocks, 
+                                                model_type=self.args.denoising_module.model_type).to(self.device)
         
         size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                   "sd": self.dataset.log_size_factor_sd}
@@ -143,6 +155,8 @@ class CellDreamerEstimator:
             size_factor_statistics=size_factor_statistics,
             scaler=self.dataset.get_scaler(),
             encoder_type=self.args.dataset.encoder_type,
+            sampling_covariate=self.args.dataset.sampling_covariate,
+            model_type=denoising_model.model_type, 
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
         )
 

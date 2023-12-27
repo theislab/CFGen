@@ -23,4 +23,6 @@
 source $HOME/.bashrc
 conda activate celldreamer
 
-python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_icb logger=hparams_search
+python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search
+python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search logger.project=celldreamer_search2
+python ../celldreamer/train.py --multirun hparams_search=optuna_resnet denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_resnet
