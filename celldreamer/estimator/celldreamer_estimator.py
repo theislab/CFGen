@@ -69,7 +69,8 @@ class CellDreamerEstimator:
         self.train_dataloader = torch.utils.data.DataLoader(self.train_data,
                                                             batch_size=self.args.training_config.batch_size,
                                                             shuffle=True,
-                                                            num_workers=4)
+                                                            num_workers=4, 
+                                                            drop_last=True)
         
         self.valid_dataloader = torch.utils.data.DataLoader(self.valid_data,
                                                             batch_size=self.args.training_config.batch_size,
