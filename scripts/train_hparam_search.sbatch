@@ -27,3 +27,4 @@ python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=sl
 python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search logger.project=celldreamer_search2
 python ../celldreamer/train.py --multirun hparams_search=optuna_resnet denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_resnet
 python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_freeze
+python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_freeze

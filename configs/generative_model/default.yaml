@@ -6,10 +6,10 @@ gamma_max: 3.0
 antithetic_time_sampling: True 
 scaling_method: log_normalization
 x0_from_x_kwargs:
-  dims: [256, 256]
+  dims: [512, 512]
   batch_norm:  True
   dropout: False 
   dropout_p: 0.0
 pretrain_encoder: True
-pretraining_encoder_epochs: 10
+pretraining_encoder_epochs: 100
 use_tanh_encoder: False

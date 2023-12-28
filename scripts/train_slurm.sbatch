@@ -6,9 +6,9 @@
 
 #SBATCH -J train_slurm
 
-#SBATCH -p gpu_all
+#SBATCH -p gpu_p
 
-#SBATCH --qos=phd
+#SBATCH --qos=gpu_normal
 
 #SBATCH --gres=gpu:1
 
@@ -22,4 +22,5 @@
 
 conda activate celldreamer
 
-python ../celldreamer/train.py denoising_module=resnet
+# python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb 
+python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb dataset.encoder_type=learnt

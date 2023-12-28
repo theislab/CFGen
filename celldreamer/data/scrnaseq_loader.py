@@ -26,6 +26,7 @@ class RNAseqLoader:
             target_max (float, optional): Maximum value for scaling gene expression. Defaults to 1.
             target_min (float, optional): Minimum value for scaling gene expression. Defaults to 1.
         """
+        self.encoder_type = encoder_type
         # Read adata
         adata = sc.read(data_path)
         # Subsample if required
@@ -37,11 +38,12 @@ class RNAseqLoader:
         self.X = torch.Tensor(adata.layers[layer_key].todense())
         
         # Get normalized gene expression 
-        self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
+        if encoder_type != "learnt":
+            self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
         
-        # Initialize scaler object 
-        self.scaler = Scaler(target_max=target_max, target_min=target_min)
-        self.scaler.fit(self.X_norm)
+            # Initialize scaler object 
+            self.scaler = Scaler(target_max=target_max, target_min=target_min)
+            self.scaler.fit(self.X_norm)
         
         # Covariate to index
         self.id2cov = {}  # cov_name: dict_cov_2_id 
@@ -72,9 +74,12 @@ class RNAseqLoader:
             dict: Dictionary containing X (gene expression) and y (covariates).
         """
         X = self.X[i]
-        X_norm = self.X_norm[i]
         y = {"y_" + cov: self.Y_cov[cov][i] for cov in self.Y_cov}
-        return dict(X=X, X_norm=X_norm, y=y)
+        if self.encoder_type != "learnt":
+            X_norm = self.X_norm[i]
+            return dict(X=X, X_norm=X_norm, y=y)
+        else:
+            return dict(X=X, y=y)
 
     def __len__(self):
         """

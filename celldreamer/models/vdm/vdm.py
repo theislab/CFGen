@@ -164,15 +164,16 @@ class VDM(pl.LightningModule):
             log_size_factor = self.size_factor_enc(x0)
             
         # Compute log p(x | x_0) to train theta
-        recons_loss_enc = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=False)  
-        recons_loss_enc = recons_loss_enc.sum(1)
+        if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
+            recons_loss_enc = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=False)  
+            recons_loss_enc = recons_loss_enc.sum(1)
         
         # Freeze the encoder if the pretraining phase is done 
-        if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder):
+        if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type=="learnt"):
             for param in self.x0_from_x.parameters():
-                param.requires_grad = False           
-        
-        if (self.current_epoch > self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
+                param.requires_grad = False  
+                
+        if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
             # Sample to generate x0 from z0
             recons_loss_diff = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=True)  
             recons_loss_diff = recons_loss_diff.sum(1)
@@ -210,7 +211,7 @@ class VDM(pl.LightningModule):
             latent_loss = kl_std_normal(mean_sq, sigma_1_sq).sum(1)  # (B, )
             
             # Total loss    
-            loss = diffusion_loss + latent_loss + recons_loss_enc + recons_loss_diff
+            loss = diffusion_loss + latent_loss + recons_loss_diff
 
             with torch.no_grad():
                 gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
@@ -219,10 +220,10 @@ class VDM(pl.LightningModule):
             metrics = {
                 f"{dataset}/diff_loss": diffusion_loss.mean(),
                 f"{dataset}/latent_loss": latent_loss.mean(),
-                f"{dataset}/loss_recon_enc": recons_loss_enc.mean(),
-                f"{dataset}/loss_recon_recon": recons_loss_diff.mean(),
+                f"{dataset}/loss_recon_diff": recons_loss_diff.mean(),
                 f"{dataset}/gamma_0": gamma_0.item(),
                 f"{dataset}/gamma_1": gamma_1.item(),
+                 f"{dataset}/batch_size": x.shape[0],
             }
             self.log_dict(metrics, prog_bar=True)
          

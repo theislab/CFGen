@@ -13,9 +13,9 @@ hydra:
 
     direction: minimize
 
-    n_jobs: 50
+    n_jobs: 55
     
-    n_trials: 50
+    n_trials: 55
 
     sampler: 
       _target_: optuna.samplers.RandomSampler
@@ -23,12 +23,12 @@ hydra:
     # define hyperparameter search space
     params:
       denoising_module.hidden_dim: choice(64, 128)
-      denoising_module.model_type: choice(learnt_size_factor, conditional_latent, factorized_latent)
+      denoising_module.model_type: choice(conditional_latent, factorized_latent)
       generative_model.learning_rate: choice(0.0001, 0.001) 
       generative_model.noise_schedule: choice(fixed_linear, learnt_linear)
       generative_model.gamma_min: range(-5., -1., step=1)
       generative_model.gamma_max: range(1., 5., step=1)
       generative_model.antithetic_time_sampling: choice(True, False)
-      generative_model.pretraining_encoder_epochs: choice(20, 30)
+      generative_model.pretraining_encoder_epochs: choice(100, 150)
       training_config.batch_size: choice(32, 64, 128, 256)
-      dataset.encoder_type: choice(proportions, log_gexp, log_gexp_scaled)
+      dataset.encoder_type: choice(proportions, log_gexp, log_gexp_scaled, learnt)
