@@ -143,7 +143,9 @@ class CellDreamerEstimator:
                                                 hidden_dim=self.args.denoising_module.hidden_dim,
                                                 dropout_prob=self.args.denoising_module.dropout_prob,
                                                 n_blocks=self.args.denoising_module.n_blocks, 
-                                                model_type=self.args.denoising_module.model_type).to(self.device)
+                                                model_type=self.args.denoising_module.model_type, 
+                                                embedding_dim=self.args.denoising_module.embedding_dim,
+                                                normalization=self.args.denoising_module.normalization).to(self.device)
         
         size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                   "sd": self.dataset.log_size_factor_sd}

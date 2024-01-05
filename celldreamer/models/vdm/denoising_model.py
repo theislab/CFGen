@@ -1,8 +1,59 @@
+import numpy as np
 import pytorch_lightning as pl
 import torch
 from torch import nn
 
 from celldreamer.models.base.utils import unsqueeze_right
+
+# Util functions
+def zero_init(module):
+    """
+    Initializes the weights and biases of a PyTorch module with zero values.
+
+    Args:
+        module (torch.nn.Module): PyTorch module for weight and bias initialization.
+
+    Returns:
+        torch.nn.Module: The input module with weights and biases initialized to zero.
+    """
+    nn.init.constant_(module.weight.data, 0)
+    if hasattr(module, 'bias') and module.bias is not None:
+        nn.init.constant_(module.bias.data, 0)
+    return module
+
+def get_timestep_embedding(
+    timesteps,
+    embedding_dim: int,
+    dtype=torch.float32,
+    max_timescale=10_000,
+    min_timescale=1,
+):
+    """
+    Generates a sinusoidal embedding for a sequence of timesteps.
+
+    Args:
+        timesteps (torch.Tensor): 1-dimensional tensor representing the input timesteps.
+        embedding_dim (int): Dimensionality of the embedding. It must be an even number.
+        dtype (torch.dtype, optional): Data type for the resulting tensor. Default is torch.float32.
+        max_timescale (float, optional): Maximum timescale value for the sinusoidal embedding. Default is 10,000.
+        min_timescale (float, optional): Minimum timescale value for the sinusoidal embedding. Default is 1.
+
+    Returns:
+        torch.Tensor: Sinusoidal embedding tensor for the input timesteps with the specified embedding_dim.
+    """
+    # Adapted from tensor2tensor and VDM codebase.
+    assert timesteps.ndim == 1
+    assert embedding_dim % 2 == 0
+    timesteps *= 1000.0  # In DDPM the time step is in [0, 1000], here [0, 1]
+    num_timescales = embedding_dim // 2
+    inv_timescales = torch.logspace(  # or exp(-linspace(log(min), log(max), n))
+        -np.log10(min_timescale),
+        -np.log10(max_timescale),
+        num_timescales,
+        device=timesteps.device,
+    )
+    emb = timesteps.to(dtype)[:, None] * inv_timescales[None, :]  # (T, D/2)
+    return torch.cat([emb.sin(), emb.cos()], dim=1)  # (T, D)
 
 # ResNet MLP 
 class MLPTimeStep(nn.Module):
@@ -14,12 +65,14 @@ class MLPTimeStep(nn.Module):
                  model_type: str,
                  gamma_min: float, 
                  gamma_max: float,
-                 time_varying=False):
+                 embedding_dim=None, 
+                 normalization="layer"):
         
         super().__init__()
         
         # Gene expression dimension 
         self.in_dim = in_dim
+        self.embedding_dim = embedding_dim
         
         # The network downsizes the input multiple times 
         self.hidden_dim = hidden_dim * (2**n_blocks)
@@ -28,8 +81,18 @@ class MLPTimeStep(nn.Module):
         self.gamma_min = gamma_min
         self.gamma_max = gamma_max
         self.model_type = model_type
-        self.time_varying = time_varying
-        added_dimensions = (1 if time_varying else 0) + (1 if self.model_type=="conditional_latent" else 0)
+        
+        # Condition embeddings 
+        if embedding_dim != None:
+            self.embed_conditioning = nn.Sequential(
+                nn.Linear(embedding_dim, embedding_dim * 4),  # Upsample embedding
+                nn.SiLU(),
+                nn.Linear(embedding_dim * 4, embedding_dim * 4),
+                nn.SiLU(),
+            )
+            added_dimensions = 1 if self.model_type=="conditional_latent" else 0
+        else:
+            added_dimensions = 1 + (1 if self.model_type=="conditional_latent" else 0)
         
         # Initial convolution
         self.net_in = nn.Linear(in_dim, self.hidden_dim)
@@ -42,30 +105,32 @@ class MLPTimeStep(nn.Module):
                                                      out_dim=self.hidden_dim // 2,
                                                      added_dimensions=added_dimensions,
                                                      dropout_prob=dropout_prob,
-                                                     time_varying=time_varying,
-                                                     model_type=model_type))
+                                                     model_type=model_type, 
+                                                     embedding_dim=embedding_dim * 4, 
+                                                     normalization=normalization))
 
             self.up_blocks.insert(-1, ResnetBlock(in_dim=self.hidden_dim // 2,
                                                         out_dim=self.hidden_dim,
                                                         added_dimensions=added_dimensions,
                                                         dropout_prob=dropout_prob,
-                                                        time_varying=time_varying,
-                                                        model_type=model_type))
+                                                        model_type=model_type, 
+                                                        embedding_dim=embedding_dim * 4, 
+                                                        normalization=normalization))
             self.hidden_dim = self.hidden_dim // 2
         
         self.down_blocks = nn.ModuleList(self.down_blocks)
         self.up_blocks = nn.ModuleList(self.up_blocks)
 
         self.net_out = nn.Sequential(
+            nn.LayerNorm(hidden_dim * (2**n_blocks)) if normalization=="layer" else nn.BatchNorm1d(),
             nn.SiLU(),
-            nn.Linear(hidden_dim * (2**n_blocks), in_dim))
+            zero_init(nn.Linear(hidden_dim * (2**n_blocks), in_dim)))
 
     def forward(self, x, g_t, l):
-        if self.time_varying:
-            if g_t.shape[0] == 1:
-                g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
-            if g_t.ndim != x.ndim:
-                g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
+        if g_t.shape[0] == 1:
+            g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
+        if g_t.ndim != x.ndim:
+            g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
         
         if self.model_type=="conditional_latent":
             if l.ndim != x.ndim:
@@ -73,9 +138,11 @@ class MLPTimeStep(nn.Module):
                 
         # Get gamma to shape (B, ).
         t = (g_t - self.gamma_min) / (self.gamma_max - self.gamma_min)
+        if self.embedding_dim:
+            t = self.embed_conditioning(get_timestep_embedding(t, self.embedding_dim))
 
-        h = self.net_in(x)  # (B, embedding_dim, H, W)
-        for down_block in self.down_blocks:  # n_blocks times
+        h = self.net_in(x)  
+        for down_block in self.down_blocks:  # n_locks times
             h = down_block(h, t, l)
         for up_block in self.up_blocks:  
             h = up_block(h, t, l)
@@ -100,13 +167,14 @@ class ResnetBlock(nn.Module):
         out_dim=None,
         added_dimensions=0,
         dropout_prob=0.0,
-        time_varying=True,
-        model_type="conditional_latent"):
+        model_type="conditional_latent", 
+        embedding_dim=None, 
+        normalization="layer"):
         
         super().__init__()
         
-        self.time_varying = time_varying
         self.model_type = model_type
+        self.embedding_dim = embedding_dim
 
         # Set output_dim to input_dim if not provided
         out_dim = in_dim if out_dim is None else out_dim
@@ -115,16 +183,19 @@ class ResnetBlock(nn.Module):
 
         # First linear block with LayerNorm and SiLU activation
         self.net1 = nn.Sequential(
-            nn.Linear(in_dim, out_dim),
+            nn.LayerNorm(out_dim) if normalization=="layer" else nn.BatchNorm1d(),
             nn.SiLU(),
             nn.Linear(out_dim, out_dim))
+        
+        if self.embedding_dim is not None:
+            self.cond_proj = zero_init(nn.Linear(self.embedding_dim, out_dim, bias=False))
 
         # Second linear block with LayerNorm, SiLU activation, and optional dropout
         self.net2 = nn.Sequential(
+            nn.LayerNorm(out_dim + added_dimensions if normalization=="layer" else nn.BatchNorm1d(),
             nn.SiLU(),
             *([nn.Dropout(dropout_prob)] * (dropout_prob > 0.0)),
-            nn.Linear(out_dim + added_dimensions, out_dim),
-        )
+            zero_init(nn.Linear(out_dim))))
 
         # Linear projection for skip connection if input_dim and output_dim differ
         if in_dim != out_dim:
@@ -145,7 +216,10 @@ class ResnetBlock(nn.Module):
         h = self.net1(x)
 
         # Add conditional input if provided
-        if self.time_varying:
+        if self.embedding_dim != None:
+            t = self.cond_proj(t)
+            h = h + t
+        else:
             h = torch.cat([h, t], dim=1)
         if self.model_type=="conditional_latent":
             h = torch.cat([h, l], dim=1)
@@ -159,13 +233,8 @@ class ResnetBlock(nn.Module):
 
         # Add skip connection to the output
         assert x.shape == h.shape
+        
         return x + h
-
-    def _zero_init(self, module):
-        nn.init.constant_(module.weight.data, 0)
-        if hasattr(module, 'bias') and module.bias is not None:
-            nn.init.constant_(module.bias.data, 0)
-        return module
     
 # Simple time MLP 
 class SimpleMLPTimeStep(pl.LightningModule):
@@ -173,7 +242,6 @@ class SimpleMLPTimeStep(pl.LightningModule):
                  in_dim, 
                  out_dim=None, 
                  w=64, 
-                 time_varying=False, 
                  model_type="conditional_latent"):
         """
         Simple Multi-Layer Perceptron (MLP) with optional time variation.
@@ -182,18 +250,16 @@ class SimpleMLPTimeStep(pl.LightningModule):
             in_dim (int): Input dimension.
             out_dim (int, optional): Output dimension. Defaults to None.
             w (int, optional): Hidden layer dimension. Defaults to 64.
-            time_varying (bool, optional): Whether to use time variation. Defaults to False.
         """
         super().__init__()
         self.in_dim = in_dim
-        self.time_varying = time_varying
         self.model_type = model_type
         
         if out_dim is None:
             out_dim = in_dim
             
         self.net = torch.nn.Sequential(
-            torch.nn.Linear(in_dim + (1 if time_varying else 0) + (1 if self.model_type=="conditional_latent" else 0), w),
+            torch.nn.Linear(in_dim + 1 + (1 if self.model_type=="conditional_latent" else 0), w),
             torch.nn.SELU(),
             torch.nn.Linear(w, w),
             torch.nn.SELU(),
@@ -216,18 +282,16 @@ class SimpleMLPTimeStep(pl.LightningModule):
             torch.Tensor: Output tensor.
         """
         # If g_t is not across all batch, repeat over the batch
-        if self.time_varying:
-            if g_t.shape[0] == 1:
-                g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
-            if g_t.ndim != x.ndim:
-                g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
+        if g_t.shape[0] == 1:
+            g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
+        if g_t.ndim != x.ndim:
+            g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
         
         if self.model_type=="conditional_latent":
             if l.ndim != x.ndim:
                 l = unsqueeze_right(l, x.ndim-l.ndim)    
         
-        if self.time_varying:
-            x = torch.cat([x, g_t], dim=1)
+        x = torch.cat([x, g_t], dim=1)
         if self.model_type=="conditional_latent":
             x = torch.cat([x, l], dim=1)
         return self.net(x) + x

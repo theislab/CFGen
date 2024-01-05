@@ -1,6 +1,7 @@
 from typing import Literal
 import numpy as np
 from pathlib import Path
+import copy
 
 import torch
 from torch import nn, autograd, linspace, sigmoid, sqrt
@@ -95,8 +96,8 @@ class VDM(pl.LightningModule):
             size_factor_enc_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], 1]
             self.size_factor_enc = MLP(**size_factor_enc_kwargs)
         
-        # Define the inverse dispersion parameter (negative binomial)
-        self.theta = torch.nn.Parameter(torch.randn(self.in_dim))
+        # Define the (log) inverse dispersion parameter (negative binomial)
+        self.theta = torch.nn.Parameter(torch.randn(self.in_dim), requires_grad=True)
             
         assert noise_schedule in ["fixed_linear", "learnt_linear"]
         if noise_schedule == "fixed_linear":
@@ -150,33 +151,41 @@ class VDM(pl.LightningModule):
         # Collect observation
         x = batch["X"].to(self.device)
         
+        self.log("batch_size", x.shape[0])
+        
         # Scale batch to reasonable range 
         if self.encoder_type == "learnt":
             x_scaled = self._scale_batch(x)
             x0 = self.x0_from_x(x_scaled)
         else:
-            x0 = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)  # scaled 
+            x0 = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
         
         # Quantify size factor 
         if self.model_type != "learnt_size_factor":
-            log_size_factor = torch.log(x.sum(1).unsqueeze(1))
+            size_factor = x.sum(1).unsqueeze(1)
+            log_size_factor = torch.log(size_factor)
         else:
             log_size_factor = self.size_factor_enc(x0)
-            
+            size_factor = torch.exp(log_size_factor)
+
         # Compute log p(x | x_0) to train theta
         if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
-            recons_loss_enc = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=False)  
-            recons_loss_enc = recons_loss_enc.sum(1)
-        
+            print("Training encoder")
+            recons_loss_enc = self.log_probs_x_z0(x, x0, size_factor, sample=False)  
+            recons_loss_enc = recons_loss_enc.sum(1) / self.in_dim
+            self.log(f"{dataset}/recons_loss_enc", recons_loss_enc.mean())
+            
         # Freeze the encoder if the pretraining phase is done 
         if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type=="learnt"):
+            print("Freeze encoder")
             for param in self.x0_from_x.parameters():
-                param.requires_grad = False  
-                
+                param.requires_grad = False
+    
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
+            print("Train diff")
             # Sample to generate x0 from z0
-            recons_loss_diff = self.log_probs_x_z0(x, x0, torch.exp(log_size_factor), sample=True)  
-            recons_loss_diff = recons_loss_diff.sum(1)
+            recons_loss_diff = self.log_probs_x_z0(x, x0, size_factor, sample=True)  
+            recons_loss_diff = recons_loss_diff.sum(1) / self.in_dim
             
             # Collect concatenated labels
             y = self._featurize_batch_y(batch)  # TODO: For now, we don't implement the conditional version
@@ -222,8 +231,7 @@ class VDM(pl.LightningModule):
                 f"{dataset}/latent_loss": latent_loss.mean(),
                 f"{dataset}/loss_recon_diff": recons_loss_diff.mean(),
                 f"{dataset}/gamma_0": gamma_0.item(),
-                f"{dataset}/gamma_1": gamma_1.item(),
-                 f"{dataset}/batch_size": x.shape[0],
+                f"{dataset}/gamma_1": gamma_1.item()
             }
             self.log_dict(metrics, prog_bar=True)
          
@@ -232,7 +240,7 @@ class VDM(pl.LightningModule):
             
         self.log(f"{dataset}/loss", loss.mean())
         return loss.mean()
-
+        
     # Private methods
     def _featurize_batch_y(self, batch):
         """
@@ -364,10 +372,8 @@ class VDM(pl.LightningModule):
         size_factor = torch.exp(log_size_factor)
         # Decode to parameterize negative binomial
         z = self._decode(z, size_factor)
-        if self.encoder_type != "learnt":
-            distr = NegativeBinomial(mu=z, theta=torch.exp(self.theta))
-        else:
-            distr = NegativeBinomial(mu=size_factor * z, theta=torch.exp(self.theta))
+        distr = NegativeBinomial(mu=z, theta=torch.exp(self.theta))
+
         sample = distr.sample()
         return sample
 
@@ -392,12 +398,9 @@ class VDM(pl.LightningModule):
             z0_rescaled = self._decode(x_0, size_factor)
             theta = self.theta
 
-        if self.encoder_type == "learnt":
-            distr = NegativeBinomial(mu=size_factor * z0_rescaled, theta=torch.exp(theta))
-        else:
-            distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(theta))
+        distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(theta))
 
-        recon_loss = -distr.log_prob(x)
+        recon_loss = - distr.log_prob(x)
         return recon_loss
 
     def _decode(self, z, size_factor):
@@ -405,7 +408,7 @@ class VDM(pl.LightningModule):
         if self.encoder_type != "learnt":
             z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
         else:
-            z = F.softmax(z, dim=1)
+            z = F.softmax(z, dim=1) * size_factor
         return z
 
     def configure_optimizers(self):
@@ -434,7 +437,7 @@ class VDM(pl.LightningModule):
             torch.Tensor: Scaled data.
         """
         if self.scaling_method == "log_normalization":
-            x_scaled = torch.log(1 + x)  # scale input 
+            x_scaled = torch.log1p(x)  # scale input 
         elif self.scaling_method == "z_score_normalization":
             x_scaled = self._z_score_normalize(x)
         elif self.scaling_method == "minmax_normalization":

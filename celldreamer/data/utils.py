@@ -8,8 +8,9 @@ class Scaler:
             target_min (int): Minimum value for scaling.
             target_max (int): Maximum value for scaling.
         """
-        self.target_min = target_min
-        self.target_max = target_max
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.target_min = torch.tensor([target_min]).to(self.device)
+        self.target_max = torch.tensor([target_max]).to(self.device)
     
     def fit(self, X):
         """Fit the scaler to the data.
@@ -17,7 +18,8 @@ class Scaler:
         Args:
             X (torch.Tensor): Input data for fitting the scaler.
         """
-        self.data_min, self.data_max = torch.min(X), torch.max(X)
+        self.data_min = torch.min(X, dim=0, keepdim=True).values.to(self.device)
+        self.data_max = torch.max(X, dim=0, keepdim=True).values.to(self.device)
         
     def scale(self, X, reverse=False):
         """Scale the input data.
@@ -41,7 +43,7 @@ class Scaler:
         X_scaled = (X - min_val) / (max_val - min_val) * (new_max - new_min) + new_min
         # Clip to the lower end
         if reverse:
-            X_scaled = torch.clamp(X_scaled, min=torch.tensor([new_min]).to(X_scaled))
+            X_scaled = torch.clamp(X_scaled, min=new_min.to(X_scaled), max=new_max.to(X_scaled))
         return X_scaled
 
 def normalize_expression(X, size_factor, encoder_type):

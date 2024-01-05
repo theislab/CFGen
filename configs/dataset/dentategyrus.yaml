@@ -3,7 +3,7 @@ layer_key: X_counts
 covariate_keys: [clusters]
 sampling_covariate: clusters
 subsample_frac: 1
-encoder_type: "proportions"
+encoder_type: "learnt"
 target_max: 1
 target_min: -1
 n_dimensions: Null

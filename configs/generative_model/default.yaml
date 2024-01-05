@@ -1,15 +1,15 @@
-learning_rate: 0.0001 
-weight_decay: 0.00001 
-noise_schedule: learnt_linear 
-gamma_min: -5.0
-gamma_max: 3.0
+learning_rate: 0.001 
+weight_decay: 0.000001 
+noise_schedule: learnt_linear
+gamma_min: -13.0
+gamma_max: 5.0
 antithetic_time_sampling: True 
 scaling_method: log_normalization
 x0_from_x_kwargs:
   dims: [512, 512]
-  batch_norm:  True
+  batch_norm:  False
   dropout: False 
   dropout_p: 0.0
 pretrain_encoder: True
-pretraining_encoder_epochs: 100
+pretraining_encoder_epochs: 150
 use_tanh_encoder: False

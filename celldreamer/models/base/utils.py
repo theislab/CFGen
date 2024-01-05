@@ -34,7 +34,7 @@ class MLP(torch.nn.Module):
                  batch_norm: bool, 
                  dropout: bool, 
                  dropout_p: float, 
-                 activation: Optional[Callable] = torch.nn.SELU, 
+                 activation: Optional[Callable] = torch.nn.ELU, 
                  final_activation: Optional[str] = None):
         """
         Multi-Layer Perceptron (MLP) model.
@@ -56,7 +56,7 @@ class MLP(torch.nn.Module):
 
         # MLP 
         layers = []
-        for i in range(len(self.dims[:-1])):
+        for i in range(len(self.dims[:-2])):
             block = []
             block.append(torch.nn.Linear(self.dims[i], self.dims[i+1]))
             if batch_norm: 
@@ -65,6 +65,10 @@ class MLP(torch.nn.Module):
             if dropout:
                 block.append(torch.nn.Dropout(dropout_p))
             layers.append(torch.nn.Sequential(*block))
+        
+        # Last layer without activation 
+        layers.append(torch.nn.Linear(self.dims[-2], self.dims[-1]))
+        # Compile the neural net
         self.net = torch.nn.Sequential(*layers)
         
         if final_activation == "tanh":
