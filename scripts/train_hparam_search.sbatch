@@ -30,3 +30,6 @@ python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising
 python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_freeze
 python ../celldreamer/train.py --multirun hparams_search=optuna_reduced denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_reduced
 python ../celldreamer/train.py --multirun hparams_search=optuna_trained denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_trained
+
+python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_learnt denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_learnt
+python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_loggexp denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_loggexp

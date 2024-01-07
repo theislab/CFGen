@@ -79,7 +79,7 @@ class VDM(pl.LightningModule):
         self.model_type = model_type
         self.use_tanh_encoder = use_tanh_encoder
         self.sampling_covariate = sampling_covariate
-        
+                
         # Used to collect test outputs
         self.testing_outputs = []  
         
@@ -136,7 +136,6 @@ class VDM(pl.LightningModule):
         """
         return self._step(batch, dataset='valid')
 
-    
     def _step(self, batch, dataset: Literal['train', 'valid']):
         """
         Common step for training and validation.
@@ -150,8 +149,6 @@ class VDM(pl.LightningModule):
         """
         # Collect observation
         x = batch["X"].to(self.device)
-        
-        self.log("batch_size", x.shape[0])
         
         # Scale batch to reasonable range 
         if self.encoder_type == "learnt":
@@ -172,7 +169,7 @@ class VDM(pl.LightningModule):
         if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
             print("Training encoder")
             recons_loss_enc = self.log_probs_x_z0(x, x0, size_factor, sample=False)  
-            recons_loss_enc = recons_loss_enc.sum(1) / self.in_dim
+            recons_loss_enc = recons_loss_enc.sum(1)
             self.log(f"{dataset}/recons_loss_enc", recons_loss_enc.mean())
             
         # Freeze the encoder if the pretraining phase is done 
@@ -185,7 +182,7 @@ class VDM(pl.LightningModule):
             print("Train diff")
             # Sample to generate x0 from z0
             recons_loss_diff = self.log_probs_x_z0(x, x0, size_factor, sample=True)  
-            recons_loss_diff = recons_loss_diff.sum(1) / self.in_dim
+            recons_loss_diff = recons_loss_diff.sum(1) 
             
             # Collect concatenated labels
             y = self._featurize_batch_y(batch)  # TODO: For now, we don't implement the conditional version
@@ -227,6 +224,7 @@ class VDM(pl.LightningModule):
             
             # Save results
             metrics = {
+                "batch_size": x.shape[0],
                 f"{dataset}/diff_loss": diffusion_loss.mean(),
                 f"{dataset}/latent_loss": latent_loss.mean(),
                 f"{dataset}/loss_recon_diff": recons_loss_diff.mean(),
@@ -237,7 +235,8 @@ class VDM(pl.LightningModule):
          
         else:
             loss = recons_loss_enc
-            
+        
+        # Log the final loss
         self.log(f"{dataset}/loss", loss.mean())
         return loss.mean()
         
@@ -391,14 +390,14 @@ class VDM(pl.LightningModule):
         """
         if sample:  
             gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
-            z0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
-            z0_rescaled = self._decode(z0_rescaled, size_factor)
+            x0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
+            x0_rescaled = self._decode(x0_rescaled, size_factor)
             theta = self.theta.detach()
         else:
-            z0_rescaled = self._decode(x_0, size_factor)
+            x0_rescaled = self._decode(x_0, size_factor)
             theta = self.theta
 
-        distr = NegativeBinomial(mu=z0_rescaled, theta=torch.exp(theta))
+        distr = NegativeBinomial(mu=x0_rescaled, theta=torch.exp(theta))
 
         recon_loss = - distr.log_prob(x)
         return recon_loss

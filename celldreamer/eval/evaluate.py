@@ -30,9 +30,11 @@ def plot_and_save_umap(adata, plotting_folder, real_and_fake_dataset=False):
     # Set the plotting directory
     sc.settings.figdir = str(plotting_folder)
     if not real_and_fake_dataset:
+        sc.pl.pca(adata, show=False, save="generated_pca.png")
         sc.pl.umap(adata, show=False, save="generated_umap.png")
     else:
-        sc.pl.umap(adata, color="dataset_type", show=False, save="generated_umap_real_fake.png")
+        sc.pl.pca(adata, color="dataset_type", show=False, save="generated_pca_real_fake.png")
+        sc.pl.umap(adata, color="dataset_type", show=False, save="generated_umap_real_fake.png") 
 
 def compute_umap_and_wasserstein(model, 
                                     batch_size, 

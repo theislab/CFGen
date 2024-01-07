@@ -18,8 +18,8 @@ class Scaler:
         Args:
             X (torch.Tensor): Input data for fitting the scaler.
         """
-        self.data_min = torch.min(X, dim=0, keepdim=True).values.to(self.device)
-        self.data_max = torch.max(X, dim=0, keepdim=True).values.to(self.device)
+        self.data_min = torch.min(X, dim=0, keepdim=True).values.to(self.device)  # 1 x G
+        self.data_max = torch.max(X, dim=0, keepdim=True).values.to(self.device)  # 1 x G
         
     def scale(self, X, reverse=False):
         """Scale the input data.

@@ -66,6 +66,7 @@ class CellDreamerEstimator:
         # Initialize the data loaders 
         self.train_data, self.test_data, self.valid_data = random_split(self.dataset,
                                                                         lengths=self.args.dataset.split_rates)   
+        
         self.train_dataloader = torch.utils.data.DataLoader(self.train_data,
                                                             batch_size=self.args.training_config.batch_size,
                                                             shuffle=True,
@@ -75,7 +76,8 @@ class CellDreamerEstimator:
         self.valid_dataloader = torch.utils.data.DataLoader(self.valid_data,
                                                             batch_size=self.args.training_config.batch_size,
                                                             shuffle=False,
-                                                            num_workers=4)
+                                                            num_workers=4, 
+                                                            drop_last=True)
         
         self.test_dataloader = torch.utils.data.DataLoader(self.test_data,
                                                             batch_size=self.args.training_config.batch_size,
@@ -94,18 +96,21 @@ class CellDreamerEstimator:
         # Callbacks for saving checkpoints 
         checkpoint_callback = ModelCheckpoint(dirpath=self.training_dir / "checkpoints", 
                                               **self.args.checkpoints)
+        callbacks = [checkpoint_callback]
         
         # Early stopping checkpoints 
-        early_stopping_callbacks = EarlyStopping(**self.args.early_stopping)
+        if self.args.training_config.use_early_stopping:
+            early_stopping_callbacks = EarlyStopping(**self.args.early_stopping)
+            callbacks.append(early_stopping_callbacks)
         
         # Logger settings 
-        logger = WandbLogger(save_dir=self.training_dir,
+        self.logger = WandbLogger(save_dir=self.training_dir,
                              name=self.unique_id, 
                              **self.args.logger)
-            
-        self.trainer_generative = Trainer(callbacks=[checkpoint_callback, early_stopping_callbacks], 
+        
+        self.trainer_generative = Trainer(callbacks=callbacks, 
                                           default_root_dir=self.training_dir, 
-                                          logger=logger, 
+                                          logger=self.logger, 
                                           **self.args.trainer)
             
     def init_feature_embeddings(self):
@@ -133,19 +138,21 @@ class CellDreamerEstimator:
             denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
                                                 out_dim=self.args.denoising_module.out_dim,
                                                 w=self.args.denoising_module.w,
-                                                model_type=self.args.denoising_module.model_type,
-                                                time_varying=True)
+                                                model_type=self.args.denoising_module.model_type)
         else:
             denoising_model = MLPTimeStep(in_dim=self.in_dim, 
-                                                time_varying=True, 
-                                                gamma_min=self.args.generative_model.gamma_min, 
-                                                gamma_max=self.args.generative_model.gamma_max,
-                                                hidden_dim=self.args.denoising_module.hidden_dim,
-                                                dropout_prob=self.args.denoising_module.dropout_prob,
-                                                n_blocks=self.args.denoising_module.n_blocks, 
-                                                model_type=self.args.denoising_module.model_type, 
-                                                embedding_dim=self.args.denoising_module.embedding_dim,
-                                                normalization=self.args.denoising_module.normalization).to(self.device)
+                                            hidden_dim=self.args.denoising_module.hidden_dim,
+                                            dropout_prob=self.args.denoising_module.dropout_prob,
+                                            n_blocks=self.args.denoising_module.n_blocks, 
+                                            model_type=self.args.denoising_module.model_type, 
+                                            gamma_min=self.args.generative_model.gamma_min, 
+                                            gamma_max=self.args.generative_model.gamma_max,
+                                            embed_gamma=self.args.denoising_module.embed_gamma,
+                                            size_factor_min=self.dataset.min_size_factor, 
+                                            size_factor_max=self.dataset.max_size_factor,
+                                            embed_size_factor=self.args.denoising_module.embed_size_factor, 
+                                            embedding_dim=self.args.denoising_module.embedding_dim,
+                                            normalization=self.args.denoising_module.normalization).to(self.device)
         
         size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                   "sd": self.dataset.log_size_factor_sd}

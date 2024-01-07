@@ -3,5 +3,7 @@ hidden_dim: 128
 dropout_prob: 0
 n_blocks: 2
 model_type: conditional_latent # conditional_latent, factorized_latent, learnt_size_factor
+embed_gamma: True
+embed_size_factor: False
 embedding_dim: 128
-normalization: layer
+normalization: batch
