@@ -3,7 +3,7 @@ layer_key: X_counts
 covariate_keys: [celltype]
 sampling_covariate: celltype
 subsample_frac: 1
-encoder_type: "log_gexp"
+encoder_type: "learnt"
 target_max: 1
 target_min: -1
 one_hot_encode_features: True

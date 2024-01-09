@@ -81,6 +81,7 @@ class MLPTimeStep(pl.LightningModule):
         # The network downsizes the input multiple times 
         self.hidden_dim = hidden_dim * (2**n_blocks)
         
+        # Initialize attributes 
         self.model_type = model_type
         self.gamma_min = gamma_min
         self.gamma_max = gamma_max
@@ -144,6 +145,15 @@ class MLPTimeStep(pl.LightningModule):
         
         # Set up blocks
         self.down_blocks = nn.ModuleList(self.down_blocks)
+        self.middle_block = ResnetBlock(in_dim=self.hidden_dim,
+                                            out_dim=self.hidden_dim,
+                                            added_dimensions=added_dimensions,
+                                            dropout_prob=dropout_prob,
+                                            model_type=model_type, 
+                                            embedding_dim=embedding_dim * 4, 
+                                            normalization=normalization, 
+                                            embed_gamma=embed_gamma,
+                                            embed_size_factor=embed_size_factor)
         self.up_blocks = nn.ModuleList(self.up_blocks)
 
         self.net_out = nn.Sequential(
@@ -179,6 +189,9 @@ class MLPTimeStep(pl.LightningModule):
         h = self.net_in(x)  
         for down_block in self.down_blocks:  # n_locks times
             h = down_block(h, t, l)
+            
+        h = self.middle_block(h, t, l)
+        
         for up_block in self.up_blocks:  
             h = up_block(h, t, l)
             

@@ -152,7 +152,7 @@ class VDM(pl.LightningModule):
         
         # Scale batch to reasonable range 
         if self.encoder_type == "learnt":
-            x_scaled = self._scale_batch(x)
+            x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
             x0 = self.x0_from_x(x_scaled)
         else:
             x0 = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
@@ -177,7 +177,10 @@ class VDM(pl.LightningModule):
             print("Freeze encoder")
             for param in self.x0_from_x.parameters():
                 param.requires_grad = False
-    
+            self.optimizers().param_groups[0]['lr'] = self.learning_rate
+            self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
+            
+
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
             print("Train diff")
             # Sample to generate x0 from z0
@@ -330,7 +333,7 @@ class VDM(pl.LightningModule):
         return mean + scale * torch.randn_like(z) 
 
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, clip_samples, covariate):
+    def sample(self, batch_size, n_sample_steps, clip_samples, covariate, log_size_factor=None):
         """
         Sample from the model.
 
@@ -345,15 +348,16 @@ class VDM(pl.LightningModule):
         # Sample random vector
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
-        # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
-        if self.model_type == "conditional_latent" or self.model_type == "factorized_latent":
-            mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
-            random_indices = torch.randint(0, len(mean_size_factor), (batch_size,))
-            mean_size_factor, sd_size_factor = mean_size_factor[random_indices], sd_size_factor[random_indices]
-            size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
-            log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
-        else:
-            log_size_factor = None 
+        if log_size_factor==None:
+            # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
+            if self.model_type == "conditional_latent" or self.model_type == "factorized_latent":
+                mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
+                random_indices = torch.randint(0, len(mean_size_factor), (batch_size,))
+                mean_size_factor, sd_size_factor = mean_size_factor[random_indices], sd_size_factor[random_indices]
+                size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
+                log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
+            else:
+                log_size_factor = None 
 
         # Generate samples
         steps = linspace(1.0, 0.0, n_sample_steps + 1, device=self.device)
@@ -363,12 +367,13 @@ class VDM(pl.LightningModule):
         # Sample x0 from z0  
         gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))   
         z = z / sqrt(sigmoid(-gamma_0))
-        
+                
         # Derive size factor
         if self.model_type == "learnt_size_factor":
             log_size_factor = self.size_factor_enc(z)
             
         size_factor = torch.exp(log_size_factor)
+
         # Decode to parameterize negative binomial
         z = self._decode(z, size_factor)
         distr = NegativeBinomial(mu=z, theta=torch.exp(self.theta))
@@ -417,13 +422,17 @@ class VDM(pl.LightningModule):
         Returns:
             dict: Optimizer configuration.
         """
-        optimizer_config = {'optimizer': torch.optim.AdamW(self.parameters(), 
-                                                        self.learning_rate, 
-                                                        betas=(0.9, 0.99), 
-                                                        weight_decay=self.weight_decay, 
-                                                        eps=1e-8)}
+        if self.encoder_type == "learnt":
+            optimizer = torch.optim.Adam(self.parameters(), 
+                                            lr=0.001, 
+                                            weight_decay=0.1)
+        
+        else:
+            optimizer = torch.optim.Adam(self.parameters(), 
+                                            self.learning_rate, 
+                                            weight_decay=self.weight_decay)
 
-        return optimizer_config
+        return optimizer
 
     def _scale_batch(self, x):
         """

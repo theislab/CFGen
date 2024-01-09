@@ -1,9 +1,9 @@
 denoising_net: resnet
-hidden_dim: 128
+hidden_dim: 256
 dropout_prob: 0
 n_blocks: 2
 model_type: conditional_latent # conditional_latent, factorized_latent, learnt_size_factor
 embed_gamma: True
-embed_size_factor: False
+embed_size_factor: True
 embedding_dim: 128
 normalization: batch

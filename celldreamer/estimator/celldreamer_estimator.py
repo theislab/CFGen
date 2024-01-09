@@ -157,10 +157,7 @@ class CellDreamerEstimator:
         size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                   "sd": self.dataset.log_size_factor_sd}
         
-        if self.args.dataset.encoder_type!="learnt":
-            scaler = self.dataset.get_scaler()
-        else:
-            scaler = None
+        scaler = self.dataset.get_scaler()
         
         self.generative_model = VDM(
             denoising_model=denoising_model,
