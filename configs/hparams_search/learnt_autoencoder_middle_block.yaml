@@ -1,0 +1,41 @@
+# @package _global_
+
+defaults:
+  - override /hydra/sweeper/sampler: random 
+  - override /hydra/sweeper: optuna 
+  
+optimized_metric: wasserstein_distance
+
+hydra:
+
+  sweeper:
+    _target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
+
+    direction: minimize
+
+    n_jobs: 40
+    
+    n_trials: 40
+
+    sampler: 
+      _target_: optuna.samplers.RandomSampler
+
+    # define hyperparameter search space
+    params:
+      denoising_module.hidden_dim: choice(256, 512)
+      denoising_module.embedding_dim: choice(128, 256)
+      denoising_module.embed_gamma: choice(True)
+      denoising_module.embed_size_factor: choice(True)
+      denoising_module.normalization: choice(layer, batch, none) 
+
+      generative_model.learning_rate: choice(0.0001, 0.001) 
+      generative_model.weight_decay: choice(0.000001, 0.00001) 
+      generative_model.noise_schedule: choice(learnt_linear)
+      generative_model.gamma_min: range(-15., -13., step=1)
+      generative_model.gamma_max: range(5., 7., step=1)
+      generative_model.antithetic_time_sampling: choice(True, False)
+      generative_model.pretraining_encoder_epochs: choice(150, 200)
+
+      training_config.batch_size: choice(64, 128, 256)
+
+      dataset.encoder_type: choice(learnt_autoencoder)

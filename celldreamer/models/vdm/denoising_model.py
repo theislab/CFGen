@@ -79,7 +79,7 @@ class MLPTimeStep(pl.LightningModule):
         self.in_dim = in_dim
         
         # The network downsizes the input multiple times 
-        self.hidden_dim = hidden_dim * (2**n_blocks)
+        self.hidden_dim = hidden_dim 
         
         # Initialize attributes 
         self.model_type = model_type
@@ -119,47 +119,31 @@ class MLPTimeStep(pl.LightningModule):
         self.net_in = Linear(in_dim, self.hidden_dim)
 
         # Down path: n_blocks blocks with a resnet block and maybe attention.
-        self.down_blocks = []
-        self.up_blocks = []
-        for _ in range(n_blocks):
-            self.down_blocks.append(ResnetBlock(in_dim=self.hidden_dim,
-                                                     out_dim=self.hidden_dim // 2,
-                                                     added_dimensions=added_dimensions,
-                                                     dropout_prob=dropout_prob,
-                                                     model_type=model_type, 
-                                                     embedding_dim=embedding_dim * 4, 
-                                                     normalization=normalization, 
-                                                     embed_gamma=embed_gamma,
-                                                     embed_size_factor=embed_size_factor))
+        self.blocks = []
 
-            self.up_blocks.insert(-1, ResnetBlock(in_dim=self.hidden_dim // 2,
-                                                        out_dim=self.hidden_dim,
-                                                        added_dimensions=added_dimensions,
-                                                        dropout_prob=dropout_prob,
-                                                        model_type=model_type, 
-                                                        embedding_dim=embedding_dim * 4, 
-                                                        normalization=normalization, 
-                                                        embed_gamma=embed_gamma,
-                                                        embed_size_factor=embed_size_factor))
-            self.hidden_dim = self.hidden_dim // 2
+        for _ in range(n_blocks):
+            self.blocks.append(ResnetBlock(in_dim=self.hidden_dim,
+                                                out_dim=self.hidden_dim,
+                                                added_dimensions=added_dimensions,
+                                                dropout_prob=dropout_prob,
+                                                model_type=model_type, 
+                                                embedding_dim=embedding_dim * 4, 
+                                                normalization=normalization, 
+                                                embed_gamma=embed_gamma,
+                                                embed_size_factor=embed_size_factor))
         
         # Set up blocks
-        self.down_blocks = nn.ModuleList(self.down_blocks)
-        self.middle_block = ResnetBlock(in_dim=self.hidden_dim,
-                                            out_dim=self.hidden_dim,
-                                            added_dimensions=added_dimensions,
-                                            dropout_prob=dropout_prob,
-                                            model_type=model_type, 
-                                            embedding_dim=embedding_dim * 4, 
-                                            normalization=normalization, 
-                                            embed_gamma=embed_gamma,
-                                            embed_size_factor=embed_size_factor)
-        self.up_blocks = nn.ModuleList(self.up_blocks)
-
-        self.net_out = nn.Sequential(
-            nn.LayerNorm(hidden_dim * (2**n_blocks)) if normalization=="layer" else nn.BatchNorm1d(num_features=hidden_dim * (2**n_blocks)),
-            nn.SiLU(),
-            zero_init(Linear(hidden_dim * (2**n_blocks), in_dim)))
+        self.blocks = nn.ModuleList(self.blocks)
+        
+        if normalization not in ["layer", "batch"]:
+            self.net_out = nn.Sequential(
+                nn.SiLU(),
+                zero_init(Linear(self.hidden_dim, in_dim)))
+        else:
+            self.net_out = nn.Sequential(
+                nn.LayerNorm(self.hidden_dim) if normalization=="layer" else nn.BatchNorm1d(num_features=self.hidden_dim),
+                nn.SiLU(),
+                zero_init(Linear(self.hidden_dim, in_dim)))    
 
     def forward(self, x, g_t, l):
         # If time is unique (e.g during sampling) for all batch observations, repeat over batch dimension
@@ -187,14 +171,9 @@ class MLPTimeStep(pl.LightningModule):
 
         # Embed x
         h = self.net_in(x)  
-        for down_block in self.down_blocks:  # n_locks times
-            h = down_block(h, t, l)
-            
-        h = self.middle_block(h, t, l)
+        for block in self.blocks:  # n_locks times
+            h = block(h, t, l)
         
-        for up_block in self.up_blocks:  
-            h = up_block(h, t, l)
-            
         pred = self.net_out(h)
         return pred + x
 
@@ -235,10 +214,15 @@ class ResnetBlock(nn.Module):
         self.out_dim = out_dim
 
         # First linear block with LayerNorm and SiLU activation
-        self.net1 = nn.Sequential(
-            nn.LayerNorm(in_dim) if normalization=="layer" else nn.BatchNorm1d(num_features=in_dim),
-            nn.SiLU(),
-            Linear(in_dim, out_dim))
+        if normalization not in ["layer", "batch"]:
+            self.net1 = nn.Sequential(
+                nn.SiLU(),
+                Linear(in_dim, out_dim))          
+        else:
+            self.net1 = nn.Sequential(
+                nn.LayerNorm(in_dim) if normalization=="layer" else nn.BatchNorm1d(num_features=in_dim),
+                nn.SiLU(),
+                Linear(in_dim, out_dim))
         
         # Projections for conditions 
         if embed_gamma:
@@ -247,11 +231,17 @@ class ResnetBlock(nn.Module):
             self.cond_proj_size_factor = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
 
         # Second linear block with LayerNorm, SiLU activation, and optional dropout
-        self.net2 = nn.Sequential(
-            nn.LayerNorm(out_dim + added_dimensions) if normalization=="layer" else nn.BatchNorm1d(num_features=out_dim + added_dimensions),
-            nn.SiLU(),
-            *([nn.Dropout(dropout_prob)] * (dropout_prob > 0.0)),
-            zero_init(Linear(out_dim + added_dimensions, out_dim)))
+        if normalization not in ["layer", "batch"]:
+            self.net2 = nn.Sequential(
+                nn.SiLU(),
+                *([nn.Dropout(dropout_prob)] * (dropout_prob > 0.0)),
+                zero_init(Linear(out_dim + added_dimensions, out_dim)))
+        else:
+            self.net2 = nn.Sequential(
+                nn.LayerNorm(out_dim + added_dimensions) if normalization=="layer" else nn.BatchNorm1d(num_features=out_dim + added_dimensions),
+                nn.SiLU(),
+                *([nn.Dropout(dropout_prob)] * (dropout_prob > 0.0)),
+                zero_init(Linear(out_dim + added_dimensions, out_dim)))
 
         # Linear projection for skip connection if input_dim and output_dim differ
         if in_dim != out_dim:

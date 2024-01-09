@@ -84,9 +84,14 @@ class VDM(pl.LightningModule):
         self.testing_outputs = []  
         
         # If the encoder is fixed, we just need an inverting decoder. If learnt, the decoding is simply the softmax operation 
-        if encoder_type == "learnt":
+        if encoder_type == "learnt_encoder":
             x0_from_x_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], self.in_dim]
             self.x0_from_x = MLP(**x0_from_x_kwargs, final_activation="tanh" if use_tanh_encoder else None)
+        elif encoder_type == "learnt_autoencoder":
+            x0_from_x_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"]]  # Encoder params
+            self.x0_from_x =  MLP(**x0_from_x_kwargs)
+            x0_from_x_kwargs["dims"] = x0_from_x_kwargs["dims"][::-1] # Decoder params
+            self.x_from_x0 = MLP(**x0_from_x_kwargs)
         else:
             self.cell_decoder = CellDecoder(self.encoder_type)
             
@@ -151,11 +156,11 @@ class VDM(pl.LightningModule):
         x = batch["X"].to(self.device)
         
         # Scale batch to reasonable range 
-        if self.encoder_type == "learnt":
-            x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
+        x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
+        if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             x0 = self.x0_from_x(x_scaled)
         else:
-            x0 = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
+            x0 = x_scaled
         
         # Quantify size factor 
         if self.model_type != "learnt_size_factor":
@@ -164,7 +169,7 @@ class VDM(pl.LightningModule):
         else:
             log_size_factor = self.size_factor_enc(x0)
             size_factor = torch.exp(log_size_factor)
-
+            
         # Compute log p(x | x_0) to train theta
         if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
             print("Training encoder")
@@ -173,14 +178,17 @@ class VDM(pl.LightningModule):
             self.log(f"{dataset}/recons_loss_enc", recons_loss_enc.mean())
             
         # Freeze the encoder if the pretraining phase is done 
-        if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type=="learnt"):
+        if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]):
             print("Freeze encoder")
             for param in self.x0_from_x.parameters():
                 param.requires_grad = False
+            if self.encoder_type=="learnt_autoencoder":
+                for param in self.x_from_x0.parameters():
+                    param.requires_grad = False
+            # Reinstate the optimizer and weight_decay to selected values
             self.optimizers().param_groups[0]['lr'] = self.learning_rate
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
-            
-
+        
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
             print("Train diff")
             # Sample to generate x0 from z0
@@ -396,22 +404,24 @@ class VDM(pl.LightningModule):
         if sample:  
             gamma_0 = self.gamma(torch.tensor([0.0], device=self.device))
             x0_rescaled = x_0 + torch.exp(0.5 * gamma_0) * torch.randn_like(x_0)  # (B, C, H, W)
-            x0_rescaled = self._decode(x0_rescaled, size_factor)
+            x0 = self._decode(x0_rescaled, size_factor)
             theta = self.theta.detach()
         else:
-            x0_rescaled = self._decode(x_0, size_factor)
+            x0 = self._decode(x_0, size_factor)
             theta = self.theta
 
-        distr = NegativeBinomial(mu=x0_rescaled, theta=torch.exp(theta))
+        distr = NegativeBinomial(mu=x0, theta=torch.exp(theta))
 
         recon_loss = - distr.log_prob(x)
         return recon_loss
 
     def _decode(self, z, size_factor):
         # Decode the rescaled z
-        if self.encoder_type != "learnt":
+        if self.encoder_type not in ["learnt_autoencoder", "learnt_encoder"]:
             z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
         else:
+            if self.encoder_type=="learnt_autoencoder":
+                z = self.x_from_x0(z)
             z = F.softmax(z, dim=1) * size_factor
         return z
 
@@ -422,10 +432,10 @@ class VDM(pl.LightningModule):
         Returns:
             dict: Optimizer configuration.
         """
-        if self.encoder_type == "learnt":
+        if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             optimizer = torch.optim.Adam(self.parameters(), 
                                             lr=0.001, 
-                                            weight_decay=0.1)
+                                            weight_decay=0.01)
         
         else:
             optimizer = torch.optim.Adam(self.parameters(), 
@@ -433,68 +443,6 @@ class VDM(pl.LightningModule):
                                             weight_decay=self.weight_decay)
 
         return optimizer
-
-    def _scale_batch(self, x):
-        """
-        Scale input batch.
-
-        Args:
-            x: Input data.
-
-        Returns:
-            torch.Tensor: Scaled data.
-        """
-        if self.scaling_method == "log_normalization":
-            x_scaled = torch.log1p(x)  # scale input 
-        elif self.scaling_method == "z_score_normalization":
-            x_scaled = self._z_score_normalize(x)
-        elif self.scaling_method == "minmax_normalization":
-            x_scaled = self._min_max_scale(x)
-        elif self.scaling_method == "unnormalized":
-            x_scaled = x
-        else:
-            raise ValueError(f"Unknown normalization {self.scaling_method}")
-        return x_scaled
-
-    def _z_score_normalize(self, data, epsilon=1e-8):
-        """
-        Z-score normalize data.
-
-        Args:
-            data: Input data.
-            epsilon (float, optional): Small constant. Defaults to 1e-8.
-
-        Returns:
-            torch.Tensor: Normalized data.
-        """
-        mean = torch.mean(data, dim=0)
-        std = torch.std(data, dim=0)
-
-        # Handle zero variance by adding epsilon to the standard deviation
-        std += epsilon
-
-        normalized_data = (data - mean) / std
-        return normalized_data
-
-    def _min_max_scale(self, data, epsilon=1e-8):
-        """
-        Min-max scale data.
-
-        Args:
-            data: Input data.
-            epsilon (float, optional): Small constant. Defaults to 1e-8.
-
-        Returns:
-            torch.Tensor: Scaled data.
-        """
-        min_val = torch.min(data, dim=0)[0]
-        max_val = torch.max(data, dim=0)[0]
-
-        # Handle zero variance by setting a small constant value for the range
-        range_val = max_val - min_val + epsilon
-
-        scaled_data = (data - min_val) / range_val * 2 - 1
-        return scaled_data
 
     def test_step(self, batch, batch_idx):
         """

@@ -26,7 +26,9 @@ class RNAseqLoader:
             target_max (float, optional): Maximum value for scaling gene expression. Defaults to 1.
             target_min (float, optional): Minimum value for scaling gene expression. Defaults to 1.
         """
+        # Initialize encoder type
         self.encoder_type = encoder_type
+        
         # Read adata
         adata = sc.read(data_path)
         # Subsample if required

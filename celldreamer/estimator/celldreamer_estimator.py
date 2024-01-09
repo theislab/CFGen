@@ -140,7 +140,7 @@ class CellDreamerEstimator:
                                                 w=self.args.denoising_module.w,
                                                 model_type=self.args.denoising_module.model_type)
         else:
-            denoising_model = MLPTimeStep(in_dim=self.in_dim, 
+            denoising_model = MLPTimeStep(in_dim=self.in_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.generative_model.x0_from_x_kwargs["dims"][-1], 
                                             hidden_dim=self.args.denoising_module.hidden_dim,
                                             dropout_prob=self.args.denoising_module.dropout_prob,
                                             n_blocks=self.args.denoising_module.n_blocks, 
@@ -171,14 +171,8 @@ class CellDreamerEstimator:
             model_type=denoising_model.model_type, 
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
         )
-
-    def _check_is_initialized(self):
-        if not self.generative_model:
-            raise RuntimeError('You need to call self.init_model before calling self.train')
-        if not self.datamodule:
-            raise RuntimeError('You need to call self.init_datamodule before calling self.train')
-        if not self.trainer_generative:
-            raise RuntimeError('You need to call self.init_trainer before calling self.train')
+        
+        print(self.generative_model)
 
     def train(self):
         """
