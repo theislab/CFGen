@@ -22,11 +22,11 @@ hydra:
 
     # define hyperparameter search space
     params:
-      denoising_module.hidden_dim: choice(128, 256)
-      denoising_module.embedding_dim: choice(128, 256)
+      denoising_module.hidden_dim: choice(256, 512)
+      denoising_module.embedding_dim: choice(256, 128)
       denoising_module.embed_gamma: choice(True)
       denoising_module.embed_size_factor: choice(True)
-      denoising_module.normalization: choice(layer, batch)
+      denoising_module.normalization: choice(layer, batch, non)
 
       generative_model.learning_rate: choice(0.0001, 0.001) 
       generative_model.weight_decay: choice(0.000001, 0.00001) 
