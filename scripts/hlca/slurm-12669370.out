@@ -1,0 +1,127 @@
+Start training script...
+Namespace(exp='hlca', version='', deterministic=True)
+Create the training folders in /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca...
+Initialise data module...
+Initialise model...
+Initialise Diffusion Model in 1D...
+Initialise trainer...
+wandb: WARNING `resume` will be ignored since W&B syncing is set to `offline`. Starting a new run with run id b3k3vsft.
+wandb: Tracking run with wandb version 0.15.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python train.py --exp hlca ...
+  rank_zero_warn(
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+Initialise feature embeddings...
+[rank: 0] Global seed set to 42
+Start training...
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python train.py --exp hlca ...
+  rank_zero_warn(
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/configuration_validator.py:70: UserWarning: You passed in a `val_dataloader` but have no `validation_step`. Skipping val loop.
+  rank_zero_warn("You passed in a `val_dataloader` but have no `validation_step`. Skipping val loop.")
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:612: UserWarning: Checkpoint directory /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca/checkpoints exists and is not empty.
+  rank_zero_warn(f"Checkpoint directory {dirpath} exists and is not empty.")
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/core/optimizer.py:174: UserWarning: `LightningModule.configure_optimizers` returned `None`, this fit will run with no optimizer
+  rank_zero_warn(
+
+  | Name  | Type                | Params
+----------------------------------------------
+0 | model | GaussianDiffusion1D | 14.9 M
+1 | ema   | EMA                 | 29.7 M
+----------------------------------------------
+14.9 M    Trainable params
+14.9 M    Non-trainable params
+29.7 M    Total params
+118.893   Total estimated model params size (MB)
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/utils/data/dataloader.py:560: UserWarning: This DataLoader will create 64 worker processes in total. Our suggested max number of worker in current system is 6, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+Training: 0it [00:00, ?it/s]Training:   0%|          | 0/914 [00:00<?, ?it/s]Epoch 0:   0%|          | 0/914 [00:00<?, ?it/s] Traceback (most recent call last):
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 76, in <module>
+    train()
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 71, in train
+    estimator.train()
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/estimator/celldreamer_estimator.py", line 387, in train
+    self.trainer_generative.fit(
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 520, in fit
+    call._call_and_handle_interrupt(
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/call.py", line 44, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 559, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 935, in _run
+    results = self._run_stage()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 978, in _run_stage
+    self.fit_loop.run()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/fit_loop.py", line 201, in run
+    self.advance()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/fit_loop.py", line 354, in advance
+    self.epoch_loop.run(self._data_fetcher)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 133, in run
+    self.advance(data_fetcher)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 218, in advance
+    batch_output = self.automatic_optimization.run(trainer.optimizers[0], kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 185, in run
+    self._optimizer_step(kwargs.get("batch_idx", 0), closure)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 261, in _optimizer_step
+    call._call_lightning_module_hook(
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/call.py", line 142, in _call_lightning_module_hook
+    output = fn(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/core/module.py", line 1265, in optimizer_step
+    optimizer.step(closure=optimizer_closure)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/core/optimizer.py", line 158, in step
+    step_output = self._strategy.optimizer_step(self._optimizer, closure, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/strategies/strategy.py", line 224, in optimizer_step
+    return self.precision_plugin.optimizer_step(optimizer, model=model, closure=closure, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/plugins/precision/precision_plugin.py", line 114, in optimizer_step
+    return optimizer.step(closure=closure, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/optim/optimizer.py", line 280, in wrapper
+    out = func(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/core/optimizer.py", line 383, in step
+    closure()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/plugins/precision/precision_plugin.py", line 101, in _wrap_closure
+    closure_result = closure()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 140, in __call__
+    self._result = self.closure(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 126, in closure
+    step_output = self._step_fn()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 308, in _training_step
+    training_step_output = call._call_strategy_hook(trainer, "training_step", *kwargs.values())
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/call.py", line 288, in _call_strategy_hook
+    output = fn(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/strategies/strategy.py", line 366, in training_step
+    return self.model.training_step(*args, **kwargs)
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/models/lightning_modules/trainer.py", line 298, in training_step
+    loss = self.model(x)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/models/diffusion/one_dim.py", line 740, in forward
+    return self.p_losses(img, t, *args, **kwargs)
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/models/diffusion/one_dim.py", line 716, in p_losses
+    model_out = self.model(x, t, x_self_cond)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/models/diffusion/one_dim.py", line 395, in forward
+    x = block2(x, t)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/models/diffusion/one_dim.py", line 212, in forward
+    h = self.block2(h)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/models/diffusion/one_dim.py", line 181, in forward
+    x = self.norm(x)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/modules/normalization.py", line 273, in forward
+    return F.group_norm(
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/nn/functional.py", line 2530, in group_norm
+    return torch.group_norm(input, num_groups, weight, bias, eps, torch.backends.cudnn.enabled)
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 250.00 MiB (GPU 0; 31.74 GiB total capacity; 31.27 GiB already allocated; 3.88 MiB free; 31.35 GiB reserved in total by PyTorch) If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+wandb: Waiting for W&B process to finish... (failed 1).
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca/wandb/offline-run-20230731_182536-b3k3vsft
+wandb: Find logs at: /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca/wandb/offline-run-20230731_182536-b3k3vsft/logs

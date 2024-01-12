@@ -1,0 +1,89 @@
+Start training script...
+Namespace(exp='hlca', version='', deterministic=True)
+Create the training folders in /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca...
+Initialise data module...
+Initialise model...
+Initialise Diffusion Model in 1D...
+Initialise trainer...
+wandb: WARNING `resume` will be ignored since W&B syncing is set to `offline`. Starting a new run with run id a5855hry.
+wandb: Tracking run with wandb version 0.15.5
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python train.py --exp hlca ...
+  rank_zero_warn(
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+Initialise feature embeddings...
+[rank: 0] Global seed set to 42
+Start training...
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python train.py --exp hlca ...
+  rank_zero_warn(
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/configuration_validator.py:70: UserWarning: You passed in a `val_dataloader` but have no `validation_step`. Skipping val loop.
+  rank_zero_warn("You passed in a `val_dataloader` but have no `validation_step`. Skipping val loop.")
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:612: UserWarning: Checkpoint directory /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca/checkpoints exists and is not empty.
+  rank_zero_warn(f"Checkpoint directory {dirpath} exists and is not empty.")
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/core/optimizer.py:174: UserWarning: `LightningModule.configure_optimizers` returned `None`, this fit will run with no optimizer
+  rank_zero_warn(
+
+  | Name  | Type                | Params
+----------------------------------------------
+0 | model | GaussianDiffusion1D | 14.9 M
+1 | ema   | EMA                 | 29.7 M
+----------------------------------------------
+14.9 M    Trainable params
+14.9 M    Non-trainable params
+29.7 M    Total params
+118.893   Total estimated model params size (MB)
+/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/utils/data/dataloader.py:560: UserWarning: This DataLoader will create 64 worker processes in total. Our suggested max number of worker in current system is 6, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+Training: 0it [00:00, ?it/s]Training:   0%|          | 0/3656 [00:00<?, ?it/s]Epoch 0:   0%|          | 0/3656 [00:00<?, ?it/s] /home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/optimization/automatic.py:129: UserWarning: `training_step` returned `None`. If this was on purpose, ignore this warning...
+  self.warning_cache.warn("`training_step` returned `None`. If this was on purpose, ignore this warning...")
+Epoch 0:   0%|          | 1/3656 [02:22<144:59:48, 142.81s/it]Epoch 0:   0%|          | 1/3656 [02:22<144:59:51, 142.82s/it, v_num=5hry, train_loss=0.672]Epoch 0:   0%|          | 2/3656 [02:23<72:43:07, 71.64s/it, v_num=5hry, train_loss=0.672]  Epoch 0:   0%|          | 2/3656 [02:23<72:43:08, 71.64s/it, v_num=5hry, train_loss=1.880]Epoch 0:   0%|          | 3/3656 [02:23<48:37:39, 47.92s/it, v_num=5hry, train_loss=1.880]Epoch 0:   0%|          | 3/3656 [02:23<48:37:40, 47.92s/it, v_num=5hry, train_loss=0.578]Epoch 0:   0%|          | 4/3656 [02:24<36:34:56, 36.06s/it, v_num=5hry, train_loss=0.578]Epoch 0:   0%|          | 4/3656 [02:24<36:34:56, 36.06s/it, v_num=5hry, train_loss=1.120]Epoch 0:   0%|          | 5/3656 [02:24<29:21:06, 28.94s/it, v_num=5hry, train_loss=1.120]Epoch 0:   0%|          | 5/3656 [02:24<29:21:06, 28.94s/it, v_num=5hry, train_loss=0.450]Epoch 0:   0%|          | 6/3656 [02:25<24:31:56, 24.20s/it, v_num=5hry, train_loss=0.450]Epoch 0:   0%|          | 6/3656 [02:25<24:31:56, 24.20s/it, v_num=5hry, train_loss=0.817]Epoch 0:   0%|          | 7/3656 [02:25<21:05:24, 20.81s/it, v_num=5hry, train_loss=0.817]Epoch 0:   0%|          | 7/3656 [02:25<21:05:25, 20.81s/it, v_num=5hry, train_loss=0.462]Epoch 0:   0%|          | 8/3656 [02:26<18:30:30, 18.26s/it, v_num=5hry, train_loss=0.462]Epoch 0:   0%|          | 8/3656 [02:26<18:30:30, 18.26s/it, v_num=5hry, train_loss=0.499]Epoch 0:   0%|          | 9/3656 [02:26<16:29:59, 16.29s/it, v_num=5hry, train_loss=0.499]Epoch 0:   0%|          | 9/3656 [02:26<16:29:59, 16.29s/it, v_num=5hry, train_loss=0.380]Epoch 0:   0%|          | 10/3656 [02:27<14:53:34, 14.71s/it, v_num=5hry, train_loss=0.380]Epoch 0:   0%|          | 10/3656 [02:27<14:53:34, 14.71s/it, v_num=5hry, train_loss=0.362]Epoch 0:   0%|          | 11/3656 [02:27<13:34:43, 13.41s/it, v_num=5hry, train_loss=0.362]Epoch 0:   0%|          | 11/3656 [02:27<13:34:43, 13.41s/it, v_num=5hry, train_loss=0.345]Epoch 0:   0%|          | 12/3656 [02:27<12:29:00, 12.33s/it, v_num=5hry, train_loss=0.345]Epoch 0:   0%|          | 12/3656 [02:27<12:29:01, 12.33s/it, v_num=5hry, train_loss=0.264]Epoch 0:   0%|          | 13/3656 [02:28<11:33:27, 11.42s/it, v_num=5hry, train_loss=0.264]Epoch 0:   0%|          | 13/3656 [02:28<11:33:27, 11.42s/it, v_num=5hry, train_loss=0.299]Epoch 0:   0%|          | 14/3656 [02:28<10:45:47, 10.64s/it, v_num=5hry, train_loss=0.299]Epoch 0:   0%|          | 14/3656 [02:28<10:45:47, 10.64s/it, v_num=5hry, train_loss=0.283]Epoch 0:   0%|          | 15/3656 [02:29<10:04:28,  9.96s/it, v_num=5hry, train_loss=0.283]Epoch 0:   0%|          | 15/3656 [02:29<10:04:28,  9.96s/it, v_num=5hry, train_loss=0.265]Epoch 0:   0%|          | 16/3656 [02:29<9:28:19,  9.37s/it, v_num=5hry, train_loss=0.265] Epoch 0:   0%|          | 16/3656 [02:29<9:28:19,  9.37s/it, v_num=5hry, train_loss=0.225]Epoch 0:   0%|          | 17/3656 [02:30<8:56:29,  8.85s/it, v_num=5hry, train_loss=0.225]Epoch 0:   0%|          | 17/3656 [02:30<8:56:29,  8.85s/it, v_num=5hry, train_loss=0.243]Epoch 0:   0%|          | 18/3656 [02:30<8:28:08,  8.38s/it, v_num=5hry, train_loss=0.243]Epoch 0:   0%|          | 18/3656 [02:30<8:28:08,  8.38s/it, v_num=5hry, train_loss=0.264]Epoch 0:   1%|          | 19/3656 [02:31<8:02:46,  7.96s/it, v_num=5hry, train_loss=0.264]Epoch 0:   1%|          | 19/3656 [02:31<8:02:46,  7.96s/it, v_num=5hry, train_loss=0.202]Epoch 0:   1%|          | 20/3656 [02:31<7:39:55,  7.59s/it, v_num=5hry, train_loss=0.202]Epoch 0:   1%|          | 20/3656 [02:31<7:39:55,  7.59s/it, v_num=5hry, train_loss=0.209]Epoch 0:   1%|          | 21/3656 [02:32<7:19:15,  7.25s/it, v_num=5hry, train_loss=0.209]Epoch 0:   1%|          | 21/3656 [02:32<7:19:15,  7.25s/it, v_num=5hry, train_loss=0.205]Epoch 0:   1%|          | 22/3656 [02:32<7:00:28,  6.94s/it, v_num=5hry, train_loss=0.205]Epoch 0:   1%|          | 22/3656 [02:32<7:00:28,  6.94s/it, v_num=5hry, train_loss=0.209]Epoch 0:   1%|          | 23/3656 [02:33<6:43:18,  6.66s/it, v_num=5hry, train_loss=0.209]Epoch 0:   1%|          | 23/3656 [02:33<6:43:18,  6.66s/it, v_num=5hry, train_loss=0.189]Epoch 0:   1%|          | 24/3656 [02:33<6:27:35,  6.40s/it, v_num=5hry, train_loss=0.189]Epoch 0:   1%|          | 24/3656 [02:33<6:27:35,  6.40s/it, v_num=5hry, train_loss=0.186]Epoch 0:   1%|          | 25/3656 [02:34<6:13:07,  6.17s/it, v_num=5hry, train_loss=0.186]Epoch 0:   1%|          | 25/3656 [02:34<6:13:07,  6.17s/it, v_num=5hry, train_loss=0.167]Epoch 0:   1%|          | 26/3656 [02:34<5:59:46,  5.95s/it, v_num=5hry, train_loss=0.167]Epoch 0:   1%|          | 26/3656 [02:34<5:59:46,  5.95s/it, v_num=5hry, train_loss=0.153]Epoch 0:   1%|          | 27/3656 [02:35<5:47:24,  5.74s/it, v_num=5hry, train_loss=0.153]Epoch 0:   1%|          | 27/3656 [02:35<5:47:24,  5.74s/it, v_num=5hry, train_loss=0.179]Epoch 0:   1%|          | 28/3656 [02:35<5:35:56,  5.56s/it, v_num=5hry, train_loss=0.179]Epoch 0:   1%|          | 28/3656 [02:35<5:35:57,  5.56s/it, v_num=5hry, train_loss=0.161]Epoch 0:   1%|          | 29/3656 [02:36<5:25:15,  5.38s/it, v_num=5hry, train_loss=0.161]Epoch 0:   1%|          | 29/3656 [02:36<5:25:15,  5.38s/it, v_num=5hry, train_loss=0.150]Epoch 0:   1%|          | 30/3656 [02:36<5:15:16,  5.22s/it, v_num=5hry, train_loss=0.150]Epoch 0:   1%|          | 30/3656 [02:36<5:15:16,  5.22s/it, v_num=5hry, train_loss=0.150]Epoch 0:   1%|          | 31/3656 [02:36<5:05:57,  5.06s/it, v_num=5hry, train_loss=0.150]Epoch 0:   1%|          | 31/3656 [02:36<5:05:57,  5.06s/it, v_num=5hry, train_loss=0.151]Epoch 0:   1%|          | 32/3656 [02:37<4:57:11,  4.92s/it, v_num=5hry, train_loss=0.151]Epoch 0:   1%|          | 32/3656 [02:37<4:57:12,  4.92s/it, v_num=5hry, train_loss=0.133]Epoch 0:   1%|          | 33/3656 [02:37<4:48:58,  4.79s/it, v_num=5hry, train_loss=0.133]Epoch 0:   1%|          | 33/3656 [02:37<4:48:59,  4.79s/it, v_num=5hry, train_loss=0.127]Epoch 0:   1%|          | 34/3656 [02:38<4:41:14,  4.66s/it, v_num=5hry, train_loss=0.127]Epoch 0:   1%|          | 34/3656 [02:38<4:41:14,  4.66s/it, v_num=5hry, train_loss=0.126]Epoch 0:   1%|          | 35/3656 [02:38<4:33:58,  4.54s/it, v_num=5hry, train_loss=0.126]Epoch 0:   1%|          | 35/3656 [02:38<4:33:58,  4.54s/it, v_num=5hry, train_loss=0.116]Epoch 0:   1%|          | 36/3656 [02:39<4:27:06,  4.43s/it, v_num=5hry, train_loss=0.116]Epoch 0:   1%|          | 36/3656 [02:39<4:27:06,  4.43s/it, v_num=5hry, train_loss=0.139]Epoch 0:   1%|          | 37/3656 [02:39<4:20:36,  4.32s/it, v_num=5hry, train_loss=0.139]Epoch 0:   1%|          | 37/3656 [02:39<4:20:36,  4.32s/it, v_num=5hry, train_loss=0.110]Epoch 0:   1%|          | 38/3656 [02:40<4:14:26,  4.22s/it, v_num=5hry, train_loss=0.110]Epoch 0:   1%|          | 38/3656 [02:40<4:14:26,  4.22s/it, v_num=5hry, train_loss=0.119]Epoch 0:   1%|          | 39/3656 [02:40<4:08:36,  4.12s/it, v_num=5hry, train_loss=0.119]Epoch 0:   1%|          | 39/3656 [02:40<4:08:36,  4.12s/it, v_num=5hry, train_loss=0.116]Epoch 0:   1%|          | 40/3656 [02:41<4:03:03,  4.03s/it, v_num=5hry, train_loss=0.116]Epoch 0:   1%|          | 40/3656 [02:41<4:03:03,  4.03s/it, v_num=5hry, train_loss=0.125]Epoch 0:   1%|          | 41/3656 [02:41<3:57:46,  3.95s/it, v_num=5hry, train_loss=0.125]Epoch 0:   1%|          | 41/3656 [02:41<3:57:46,  3.95s/it, v_num=5hry, train_loss=0.118]Epoch 0:   1%|          | 42/3656 [02:42<3:52:44,  3.86s/it, v_num=5hry, train_loss=0.118]Epoch 0:   1%|          | 42/3656 [02:42<3:52:44,  3.86s/it, v_num=5hry, train_loss=0.120]Epoch 0:   1%|          | 43/3656 [02:42<3:47:56,  3.79s/it, v_num=5hry, train_loss=0.120]Epoch 0:   1%|          | 43/3656 [02:42<3:47:56,  3.79s/it, v_num=5hry, train_loss=0.118]Epoch 0:   1%|          | 44/3656 [02:43<3:43:21,  3.71s/it, v_num=5hry, train_loss=0.118]Epoch 0:   1%|          | 44/3656 [02:43<3:43:21,  3.71s/it, v_num=5hry, train_loss=0.109]Epoch 0:   1%|          | 45/3656 [02:43<3:38:58,  3.64s/it, v_num=5hry, train_loss=0.109]Epoch 0:   1%|          | 45/3656 [02:43<3:38:58,  3.64s/it, v_num=5hry, train_loss=0.106]Epoch 0:   1%|▏         | 46/3656 [02:44<3:34:49,  3.57s/it, v_num=5hry, train_loss=0.106]Epoch 0:   1%|▏         | 46/3656 [02:44<3:34:49,  3.57s/it, v_num=5hry, train_loss=0.116]Epoch 0:   1%|▏         | 47/3656 [02:44<3:30:49,  3.51s/it, v_num=5hry, train_loss=0.116]Epoch 0:   1%|▏         | 47/3656 [02:44<3:30:49,  3.51s/it, v_num=5hry, train_loss=0.107]Epoch 0:   1%|▏         | 48/3656 [02:45<3:27:00,  3.44s/it, v_num=5hry, train_loss=0.107]Epoch 0:   1%|▏         | 48/3656 [02:45<3:27:00,  3.44s/it, v_num=5hry, train_loss=0.132]Epoch 0:   1%|▏         | 49/3656 [02:45<3:23:19,  3.38s/it, v_num=5hry, train_loss=0.132]Epoch 0:   1%|▏         | 49/3656 [02:45<3:23:19,  3.38s/it, v_num=5hry, train_loss=0.115]Epoch 0:   1%|▏         | 50/3656 [02:46<3:19:46,  3.32s/it, v_num=5hry, train_loss=0.115]Epoch 0:   1%|▏         | 50/3656 [02:46<3:19:47,  3.32s/it, v_num=5hry, train_loss=0.114]Epoch 0:   1%|▏         | 51/3656 [02:46<3:16:23,  3.27s/it, v_num=5hry, train_loss=0.114]Epoch 0:   1%|▏         | 51/3656 [02:46<3:16:23,  3.27s/it, v_num=5hry, train_loss=0.115]Epoch 0:   1%|▏         | 52/3656 [02:47<3:13:07,  3.22s/it, v_num=5hry, train_loss=0.115]Epoch 0:   1%|▏         | 52/3656 [02:47<3:13:07,  3.22s/it, v_num=5hry, train_loss=0.117]Epoch 0:   1%|▏         | 53/3656 [02:47<3:09:58,  3.16s/it, v_num=5hry, train_loss=0.117]Epoch 0:   1%|▏         | 53/3656 [02:47<3:09:58,  3.16s/it, v_num=5hry, train_loss=0.0984]Epoch 0:   1%|▏         | 54/3656 [02:48<3:06:57,  3.11s/it, v_num=5hry, train_loss=0.0984]Epoch 0:   1%|▏         | 54/3656 [02:48<3:06:57,  3.11s/it, v_num=5hry, train_loss=0.115] Traceback (most recent call last):
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 76, in <module>
+    train()
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 71, in train
+    estimator.train()
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/estimator/celldreamer_estimator.py", line 387, in train
+    self.trainer_generative.fit(
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 520, in fit
+    call._call_and_handle_interrupt(
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/call.py", line 44, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 559, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 935, in _run
+    results = self._run_stage()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/trainer/trainer.py", line 978, in _run_stage
+    self.fit_loop.run()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/fit_loop.py", line 201, in run
+    self.advance()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/fit_loop.py", line 354, in advance
+    self.epoch_loop.run(self._data_fetcher)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 133, in run
+    self.advance(data_fetcher)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 189, in advance
+    batch = next(data_fetcher)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/fetchers.py", line 136, in __next__
+    self._fetch_next_batch(self.dataloader_iter)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/loops/fetchers.py", line 150, in _fetch_next_batch
+    batch = next(iterator)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/utilities/combined_loader.py", line 276, in __next__
+    out = next(self._iterator)
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/lightning/pytorch/utilities/combined_loader.py", line 64, in __next__
+    out[i] = next(self.iterators[i])
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 633, in __next__
+    data = self._next_data()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1328, in _next_data
+    idx, data = self._get_data()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1294, in _get_data
+    success, data = self._try_get_data()
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1159, in _try_get_data
+    raise RuntimeError(
+RuntimeError: Too many open files. Communication with the workers is no longer possible. Please increase the limit using `ulimit -n` in the shell or change the sharing strategy by calling `torch.multiprocessing.set_sharing_strategy('file_system')` at the beginning of your code
+wandb: Waiting for W&B process to finish... (failed 1).
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca/wandb/offline-run-20230803_160901-a5855hry
+wandb: Find logs at: /home/icb/till.richter/git/celldreamer/project_dir/try_experiment_hlca/wandb/offline-run-20230803_160901-a5855hry/logs

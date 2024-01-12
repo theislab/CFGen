@@ -1,0 +1,11 @@
+Start training...
+Traceback (most recent call last):
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 84, in <module>
+    train()
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 63, in train
+    args = parse_args()
+  File "/home/icb/till.richter/git/celldreamer/celldreamer/trainer/train.py", line 21, in parse_args
+    parser.add_argument('--exp', type=str, default='hlca',
+  File "/home/icb/till.richter/anaconda3/envs/celldreamer/lib/python3.10/argparse.py", line 1430, in add_argument
+    action = action_class(**kwargs)
+TypeError: _StoreAction.__init__() got an unexpected keyword argument 'options'
