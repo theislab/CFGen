@@ -162,3 +162,8 @@ dist/
 
 # symlink folder
 project_folder
+
+# Jupyter notebook checkpoints
+notebooks/tb_logs/
+project_dir/
+*.out
