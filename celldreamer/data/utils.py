@@ -1,5 +1,26 @@
 import torch 
 
+def normalize_expression(X, size_factor, encoder_type):
+    """Normalize gene expression data based on the specified encoder type.
+
+    Args:
+        X (torch.Tensor): Input gene expression matrix.
+        size_factor (torch.Tensor): Size factors for normalization.
+        encoder_type (str): Type of encoder for normalization.
+
+    Returns:
+        torch.Tensor: Normalized gene expression data.
+    """
+    if encoder_type == "proportions":
+        X = X / size_factor
+    elif encoder_type == "log_gexp" or encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
+        X = torch.log1p(X)
+    elif encoder_type == "log_gexp_scaled":
+        X = torch.log1p(X / size_factor)
+    else:
+        raise NotImplementedError    
+    return X
+
 class Scaler:
     def __init__(self, target_min: int=-1, target_max: int=1):
         """Initialization function.
@@ -45,27 +66,6 @@ class Scaler:
         if reverse:
             X_scaled = torch.clamp(X_scaled, min=new_min.to(X_scaled), max=new_max.to(X_scaled))
         return X_scaled
-
-def normalize_expression(X, size_factor, encoder_type):
-    """Normalize gene expression data based on the specified encoder type.
-
-    Args:
-        X (torch.Tensor): Input gene expression matrix.
-        size_factor (torch.Tensor): Size factors for normalization.
-        encoder_type (str): Type of encoder for normalization.
-
-    Returns:
-        torch.Tensor: Normalized gene expression data.
-    """
-    if encoder_type == "proportions":
-        X = X / size_factor
-    elif encoder_type == "log_gexp" or encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
-        X = torch.log1p(X)
-    elif encoder_type == "log_gexp_scaled":
-        X = torch.log1p(X / size_factor)
-    else:
-        raise NotImplementedError    
-    return X
 
 def compute_size_factor_lognorm(adata, layer, id2cov):
     """Compute the mean and variance of the log size factors.

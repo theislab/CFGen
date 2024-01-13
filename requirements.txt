@@ -17,3 +17,4 @@ hydra-core
 hydra-optuna-sweeper
 hydra-submitit-launcher
 pot
+torchdyn

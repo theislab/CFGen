@@ -8,9 +8,10 @@ from pytorch_lightning.loggers import WandbLogger
 from celldreamer.paths import TRAINING_FOLDER
 from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
-from celldreamer.models.vdm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
-from celldreamer.models.vdm.vdm import VDM
+from celldreamer.models.fm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
+from celldreamer.models.fm.fm import FM
 
+torch.autograd.set_detect_anomaly(True)
 
 class CellDreamerEstimator:
     """Class for training and using the CellDreamer model."""
@@ -105,12 +106,12 @@ class CellDreamerEstimator:
         
         # Logger settings 
         self.logger = WandbLogger(save_dir=self.training_dir,
-                             name=self.unique_id, 
-                             **self.args.logger)
+                                    name=self.unique_id, 
+                                    **self.args.logger)
         
         self.trainer_generative = Trainer(callbacks=callbacks, 
                                           default_root_dir=self.training_dir, 
-                                          logger=self.logger, 
+                                          logger=self.logger,
                                           **self.args.trainer)
             
     def init_feature_embeddings(self):
@@ -134,32 +135,34 @@ class CellDreamerEstimator:
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
+        in_dim = self.in_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.generative_model.x0_from_x_kwargs["dims"][-1]
         if self.args.denoising_module.denoising_net == "simple_mlp":
-            denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
+            denoising_model = SimpleMLPTimeStep(in_dim=in_dim, 
                                                 out_dim=self.args.denoising_module.out_dim,
                                                 w=self.args.denoising_module.w,
                                                 model_type=self.args.denoising_module.model_type)
         else:
-            denoising_model = MLPTimeStep(in_dim=self.in_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.generative_model.x0_from_x_kwargs["dims"][-1], 
+            denoising_model = MLPTimeStep(in_dim=in_dim, 
                                             hidden_dim=self.args.denoising_module.hidden_dim,
                                             dropout_prob=self.args.denoising_module.dropout_prob,
                                             n_blocks=self.args.denoising_module.n_blocks, 
                                             model_type=self.args.denoising_module.model_type, 
-                                            gamma_min=self.args.generative_model.gamma_min, 
-                                            gamma_max=self.args.generative_model.gamma_max,
-                                            embed_gamma=self.args.denoising_module.embed_gamma,
+                                            embed_time=self.args.denoising_module.embed_time,
                                             size_factor_min=self.dataset.min_size_factor, 
                                             size_factor_max=self.dataset.max_size_factor,
                                             embed_size_factor=self.args.denoising_module.embed_size_factor, 
                                             embedding_dim=self.args.denoising_module.embedding_dim,
                                             normalization=self.args.denoising_module.normalization).to(self.device)
         
+        print("Denoising model")
+        print(denoising_model)
+        
         size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                   "sd": self.dataset.log_size_factor_sd}
         
         scaler = self.dataset.get_scaler()
         
-        self.generative_model = VDM(
+        self.generative_model = FM(
             denoising_model=denoising_model,
             feature_embeddings=self.feature_embeddings,
             plotting_folder=self.plotting_dir,
@@ -171,8 +174,6 @@ class CellDreamerEstimator:
             model_type=denoising_model.model_type, 
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
         )
-        
-        print(self.generative_model)
 
     def train(self):
         """

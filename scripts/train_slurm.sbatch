@@ -22,6 +22,6 @@
 
 conda activate celldreamer
 
-python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb generative_model.pretraining_encoder_epochs=1
+python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb 
 # python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb dataset.encoder_type=learnt
 # python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb dataset.encoder_type=learnt generative_model.pretraining_encoder_epochs=100 trainer.max_epochs=100 generative_model.learning_rate=0.001

@@ -44,7 +44,7 @@ class RNAseqLoader:
         self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
     
         # Initialize scaler object 
-        self.scaler = Scaler(target_max=target_max, target_min=target_min)
+        self.scaler = Scaler(target_min=target_min, target_max=target_max)
         self.scaler.fit(self.X_norm)
         
         # Covariate to index

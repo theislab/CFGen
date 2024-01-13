@@ -39,7 +39,6 @@ def plot_and_save_umap(adata, plotting_folder, real_and_fake_dataset=False):
 def compute_umap_and_wasserstein(model, 
                                     batch_size, 
                                     n_sample_steps, 
-                                    clip_samples, 
                                     plotting_folder, 
                                     X_real, 
                                     sampling_covariate):
@@ -50,7 +49,6 @@ def compute_umap_and_wasserstein(model,
         model: The generative model.
         batch_size (int): Number of samples to generate.
         n_sample_steps (int): Number of steps for sampling.
-        clip_samples (bool): Whether to clip generated samples.
         library_size (float): Size of the generated library.
         plotting_folder (str): Path to the folder where the UMAP plot should be saved.
         X_real (torch.Tensor): tensor containing concatenated test data. 
@@ -59,7 +57,7 @@ def compute_umap_and_wasserstein(model,
         AnnData: Annotated Data object containing the generated samples with UMAP coordinates.
     """
     # Generate data and compute Wasserstein distance from test data
-    X_generated = model.sample(batch_size, n_sample_steps, clip_samples, covariate=sampling_covariate)
+    X_generated = model.sample(batch_size, n_sample_steps, covariate=sampling_covariate)
     wd = wasserstein(X_real, X_generated)
     # Compute and plot UMAP of generated data
     X_generated = X_generated.cpu().numpy()

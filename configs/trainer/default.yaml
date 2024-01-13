@@ -1,7 +1,7 @@
-max_epochs: 1000
+max_epochs: 3
 accelerator: gpu 
 devices: 1
 check_val_every_n_epoch: 1
 log_every_n_steps: 1
-detect_anomaly: False
+detect_anomaly: True
 deterministic: False

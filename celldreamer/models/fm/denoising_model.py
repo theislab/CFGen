@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 
-from celldreamer.models.vdm.layer_utils import Linear
+from celldreamer.models.fm.layer_utils import Linear
 from celldreamer.models.base.utils import unsqueeze_right
 
 # Util functions
@@ -28,7 +28,7 @@ def get_timestep_embedding(
     dtype=torch.float32,
     max_timescale=10_000,
     min_timescale=1,
-):
+    ):
     """
     Generates a sinusoidal embedding for a sequence of timesteps.
 
@@ -64,13 +64,11 @@ class MLPTimeStep(pl.LightningModule):
                  dropout_prob: int,
                  n_blocks: int, 
                  model_type: str,
-                 gamma_min: float, 
-                 gamma_max: float,
-                 embed_gamma: bool,
+                 embed_time: bool,
                  size_factor_min: float, 
                  size_factor_max: float,
                  embed_size_factor: bool,
-                 embedding_dim=None, 
+                 embedding_dim=128, 
                  normalization="layer"):
         
         super().__init__()
@@ -83,9 +81,7 @@ class MLPTimeStep(pl.LightningModule):
         
         # Initialize attributes 
         self.model_type = model_type
-        self.gamma_min = gamma_min
-        self.gamma_max = gamma_max
-        self.embed_gamma = embed_gamma
+        self.embed_time = embed_time
         self.size_factor_min = size_factor_min
         self.size_factor_max = size_factor_max
         self.embed_size_factor = embed_size_factor 
@@ -93,7 +89,7 @@ class MLPTimeStep(pl.LightningModule):
         
         # Time embedding network
         added_dimensions = 0
-        if embed_gamma:
+        if embed_time:
             self.embed_time = nn.Sequential(
                 Linear(embedding_dim, embedding_dim * 4),  # Upsample embedding
                 nn.SiLU(),
@@ -129,7 +125,7 @@ class MLPTimeStep(pl.LightningModule):
                                                 model_type=model_type, 
                                                 embedding_dim=embedding_dim * 4, 
                                                 normalization=normalization, 
-                                                embed_gamma=embed_gamma,
+                                                embed_time=embed_time,
                                                 embed_size_factor=embed_size_factor))
         
         # Set up blocks
@@ -145,13 +141,16 @@ class MLPTimeStep(pl.LightningModule):
                 nn.SiLU(),
                 zero_init(Linear(self.hidden_dim, in_dim)))    
 
-    def forward(self, x, g_t, l):
-        # If time is unique (e.g during sampling) for all batch observations, repeat over batch dimension
-        if g_t.shape[0] == 1:
-            g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
+    def forward(self, x, t, l):
+        # If time is unique (e.g., during sampling) for all batch observations, repeat over the batch dimension
+        if t.shape[0] == 1:
+            t = t.repeat((x.shape[0],) + (1,) * (t.ndim-1))
+        
+        # Make a copy of time for using in time embeddings
+        t_for_embeddings = t.clone().detach()
         
         # Size factor 
-        if self.model_type=="conditional_latent":
+        if self.model_type == "conditional_latent":
             if self.embed_size_factor:
                 l = l.squeeze()
                 l = (l - self.size_factor_min) / (self.size_factor_max - self.size_factor_min)
@@ -160,19 +159,18 @@ class MLPTimeStep(pl.LightningModule):
                 if l.ndim != x.ndim:
                     l = unsqueeze_right(l, x.ndim-l.ndim)  
                 
-        # Get gamma to shape (B, ).
-        t = (g_t - self.gamma_min) / (self.gamma_max - self.gamma_min)
-        if self.embed_gamma:
-            t = t.squeeze()
-            t = self.embed_time(get_timestep_embedding(t, self.embedding_dim))
+        # Get time to shape (B, ).
+        if self.embed_time:
+            t_for_embeddings = t_for_embeddings.squeeze()
+            t_for_embeddings = self.embed_time(get_timestep_embedding(t_for_embeddings, self.embedding_dim))
         else:
-            if t.ndim != x.ndim:
-                t = unsqueeze_right(t, x.ndim-t.ndim)
+            if t_for_embeddings.ndim != x.ndim:
+                t_for_embeddings = unsqueeze_right(t_for_embeddings, x.ndim - t_for_embeddings.ndim)
 
         # Embed x
         h = self.net_in(x)  
-        for block in self.blocks:  # n_locks times
-            h = block(h, t, l)
+        for block in self.blocks:  # n_blocks times
+            h = block(h, t_for_embeddings, l)
         
         pred = self.net_out(h)
         return pred + x
@@ -197,14 +195,14 @@ class ResnetBlock(nn.Module):
         model_type="conditional_latent", 
         embedding_dim=None, 
         normalization="layer", 
-        embed_gamma=True,
+        embed_time=True,
         embed_size_factor=True):
         
         super().__init__()
         
         self.model_type = model_type
         
-        self.embed_gamma = embed_gamma
+        self.embed_time = embed_time
         self.embed_size_factor = embed_size_factor
         self.embedding_dim = embedding_dim
 
@@ -225,8 +223,8 @@ class ResnetBlock(nn.Module):
                 Linear(in_dim, out_dim))
         
         # Projections for conditions 
-        if embed_gamma:
-            self.cond_proj_gamma = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
+        if embed_time:
+            self.cond_proj_time = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
         if embed_size_factor:
             self.cond_proj_size_factor = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
 
@@ -247,7 +245,7 @@ class ResnetBlock(nn.Module):
         if in_dim != out_dim:
             self.skip_proj = Linear(in_dim, out_dim)
 
-    def forward(self, x, t, l=None):
+    def forward(self, x, t, l=None, **args):
         """
         Forward pass of the MLP block.
 
@@ -262,8 +260,8 @@ class ResnetBlock(nn.Module):
         h = self.net1(x)
 
         # Condition time and library size 
-        if self.embed_gamma:
-            t = self.cond_proj_gamma(t)
+        if self.embed_time:
+            t = self.cond_proj_time(t)
             h = h + t
             
         if self.model_type=="conditional_latent":
@@ -271,7 +269,7 @@ class ResnetBlock(nn.Module):
                 l = self.cond_proj_size_factor(l)
                 h = h + l
 
-        if not self.embed_gamma:
+        if not self.embed_time:
             h = torch.cat([h, t], dim=1)
             
         if self.model_type=="conditional_latent" and not self.embed_size_factor:
@@ -322,7 +320,7 @@ class SimpleMLPTimeStep(pl.LightningModule):
         )
         self.save_hyperparameters()
 
-    def forward(self, x, g_t=None, l=None):
+    def forward(self, x, t, l, **args):
         """
         Forward pass of the SimpleMLPTimeStep.
 
@@ -334,17 +332,17 @@ class SimpleMLPTimeStep(pl.LightningModule):
         Returns:
             torch.Tensor: Output tensor.
         """
-        # If g_t is not across all batch, repeat over the batch
-        if g_t.shape[0] == 1:
-            g_t = g_t.repeat((x.shape[0],) + (1,) * (g_t.ndim-1))
-        if g_t.ndim != x.ndim:
-            g_t = unsqueeze_right(g_t, x.ndim-g_t.ndim)
+        # If g_t is not across all batch, repeat over the batch\
+        if t.shape[0] == 1:
+            t = t.repeat((x.shape[0],) + (1,) * (t.ndim-1))
+        if t.ndim != x.ndim:
+            t = unsqueeze_right(t, x.ndim-t.ndim)
         
         if self.model_type=="conditional_latent":
             if l.ndim != x.ndim:
                 l = unsqueeze_right(l, x.ndim-l.ndim)    
         
-        x = torch.cat([x, g_t], dim=1)
+        x = torch.cat([x, t], dim=1)
         if self.model_type=="conditional_latent":
             x = torch.cat([x, l], dim=1)
-        return self.net(x) + x
+        return self.net(x) 
