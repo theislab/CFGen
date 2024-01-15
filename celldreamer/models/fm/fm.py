@@ -38,7 +38,7 @@ class FM(pl.LightningModule):
                  scaling_method: str = "log_normalization",  # Change int to str
                  pretrain_encoder: bool = False,  # Change float to bool
                  pretraining_encoder_epochs: int = 0, 
-                 sigma: float = 0.2):
+                 sigma: float = 0.1):
         """
         Variational Diffusion Model (VDM).
 
@@ -55,6 +55,7 @@ class FM(pl.LightningModule):
             scaling_method (str, optional): Scaling method for input data. Defaults to "log_normalization".
             pretrain_encoder (bool, optional): Pretrain the likelihood encoder.
             pretraining_encoder_epochs (int, optional): How many epochs used for the pretraining.
+            sigma (float, optional): variance around straight path for flow matching objective.
         """
         super().__init__()
         
@@ -342,7 +343,7 @@ class FM(pl.LightningModule):
         ut = self.compute_conditional_flow(x0, x1, t, xt)
         return t, xt, ut
 
-    def sample_xt(self, x0, x1, t, epsilon):
+    def ßsample_xt(self, x0, x1, t, epsilon):
         """
         Draw a sample from the probability path N(t * x1 + (1 - t) * x0, sigma), see (Eq.14) [1].
 

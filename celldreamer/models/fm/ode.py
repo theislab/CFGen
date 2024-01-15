@@ -5,8 +5,8 @@ class torch_wrapper(torch.nn.Module):
 
     def __init__(self, model, l):
         super().__init__()
-        self.model = model
-        self.l = l
+        self.model = model  # Model class
+        self.l = l  # log library size 
 
     def forward(self, t, x, *args, **kwargs):
         t = t.repeat(x.shape[0])[:, None]

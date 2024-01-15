@@ -23,15 +23,17 @@
 source $HOME/.bashrc
 conda activate celldreamer
 
-python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search
-python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search logger.project=celldreamer_search2
-python ../celldreamer/train.py --multirun hparams_search=optuna_resnet denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_resnet
-python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_freeze
-python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_freeze
-python ../celldreamer/train.py --multirun hparams_search=optuna_reduced denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_reduced
-python ../celldreamer/train.py --multirun hparams_search=optuna_trained denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_trained
+# python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search
+# python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search logger.project=celldreamer_search2
+# python ../celldreamer/train.py --multirun hparams_search=optuna_resnet denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_resnet
+# python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_freeze
+# python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_freeze
+# python ../celldreamer/train.py --multirun hparams_search=optuna_reduced denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_reduced
+# python ../celldreamer/train.py --multirun hparams_search=optuna_trained denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_trained
 
-python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_learnt denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_learnt
-python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_loggexp denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_loggexp
-python ../celldreamer/train.py --multirun hparams_search=loggexp_middle_block denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=loggexp_middle_block
-python ../celldreamer/train.py --multirun hparams_search=learnt_autoencoder_middle_block denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=learnt_autoencoder_middle_block
+# python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_learnt denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_learnt
+# python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_loggexp denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_loggexp
+# python ../celldreamer/train.py --multirun hparams_search=loggexp_middle_block denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=loggexp_middle_block
+# python ../celldreamer/train.py --multirun hparams_search=learnt_autoencoder_middle_block denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=learnt_autoencoder_middle_block
+python ../celldreamer/train.py --multirun hparams_search=fm_resnet_encoder denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=fm_resnet_autoencoder
+python ../celldreamer/train.py --multirun hparams_search=fm_mlp_encoder denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder

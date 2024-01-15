@@ -31,12 +31,15 @@ class RNAseqLoader:
         
         # Read adata
         adata = sc.read(data_path)
+        
         # Subsample if required
         if subsample_frac < 1:
             sc.pp.subsample(adata, fraction=subsample_frac)
+        
         # Transform genes to tensors
         if layer_key not in adata.layers:
             adata.layers[layer_key] = adata.X.copy()
+        
         # Transform X into a tensor
         self.X = torch.Tensor(adata.layers[layer_key].todense())
         
@@ -60,7 +63,7 @@ class RNAseqLoader:
         # Compute mean and logvar of size factor
         self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata, layer_key, self.id2cov)
         log_size_factors = torch.log(self.X.sum(1))
-        self.max_size_factor, self.min_size_factor = log_size_factors.max(),log_size_factors.min()
+        self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
     
     def get_scaler(self):
         """Return the scaler object

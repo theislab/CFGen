@@ -88,7 +88,8 @@ class CellDreamerEstimator:
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
         """
-        self.in_dim = self.dataset.X.shape[1]  # perform diffusion in gene dimension 
+        self.gene_dim = self.dataset.X.shape[1] 
+        self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.generative_model.x0_from_x_kwargs["dims"][-1]
 
     def init_trainer(self):
         """
@@ -135,14 +136,13 @@ class CellDreamerEstimator:
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
-        in_dim = self.in_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.generative_model.x0_from_x_kwargs["dims"][-1]
         if self.args.denoising_module.denoising_net == "simple_mlp":
-            denoising_model = SimpleMLPTimeStep(in_dim=in_dim, 
+            denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
                                                 out_dim=self.args.denoising_module.out_dim,
                                                 w=self.args.denoising_module.w,
                                                 model_type=self.args.denoising_module.model_type)
         else:
-            denoising_model = MLPTimeStep(in_dim=in_dim, 
+            denoising_model = MLPTimeStep(in_dim=self.in_dim, 
                                             hidden_dim=self.args.denoising_module.hidden_dim,
                                             dropout_prob=self.args.denoising_module.dropout_prob,
                                             n_blocks=self.args.denoising_module.n_blocks, 
