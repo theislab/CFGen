@@ -13,7 +13,7 @@ def normalize_expression(X, size_factor, encoder_type):
     """
     if encoder_type == "proportions":
         X = X / size_factor
-    elif encoder_type == "log_gexp" or encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
+    elif encoder_type in ["log_gexp", "learnt_encoder", "learnt_autoencoder"]:
         X = torch.log1p(X)
     elif encoder_type == "log_gexp_scaled":
         X = torch.log1p(X / size_factor)

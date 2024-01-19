@@ -10,3 +10,4 @@ scaling_method: log_normalization
 pretrain_encoder: True
 pretraining_encoder_epochs: 1
 sigma: 0.3
+covariate_specific_theta: False

@@ -1,7 +1,7 @@
 dataset_path: ../datasets/processed/lung_atlas.h5ad
 layer_key: X_counts
 covariate_keys: [cell_type]
-sampling_covariate: cell_type
+conditioning_covariate: cell_type
 subsample_frac: 1
 encoder_type: "learnt_autoencoder"
 target_max: 1

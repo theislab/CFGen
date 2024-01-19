@@ -13,9 +13,9 @@ hydra:
 
     direction: minimize
 
-    n_jobs: 40
+    n_jobs: 20
     
-    n_trials: 40
+    n_trials: 20
 
     sampler: 
       _target_: optuna.samplers.RandomSampler
@@ -24,7 +24,7 @@ hydra:
     params:
       denoising_module.w: choice(512, 1000)
 
-      generative_model.learning_rate: choice(0.0001, 0.001) 
+      generative_model.learning_rate: choice(0.0001) 
       generative_model.weight_decay: choice(0.00001, 0.000001) 
       generative_model.antithetic_time_sampling: choice(True, False)
       generative_model.pretraining_encoder_epochs: choice(150, 200)

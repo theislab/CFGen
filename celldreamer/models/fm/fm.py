@@ -16,7 +16,6 @@ from celldreamer.eval.evaluate import compute_umap_and_wasserstein
 from celldreamer.models.base.utils import pad_t_like_x
 from celldreamer.models.fm.ode import torch_wrapper
 from celldreamer.models.fm.ot_sampler import OTPlanSampler
-from functools import partial
 
 from torchdyn.core import NeuralODE
 
@@ -29,7 +28,7 @@ class FM(pl.LightningModule):
                  in_dim: int,
                  size_factor_statistics: dict,
                  scaler, 
-                 sampling_covariate: str, 
+                 conditioning_covariate: str, 
                  model_type: str,
                  encoder_type: str = "fixed", 
                  learning_rate: float = 0.001, 
@@ -38,7 +37,8 @@ class FM(pl.LightningModule):
                  scaling_method: str = "log_normalization",  # Change int to str
                  pretrain_encoder: bool = False,  # Change float to bool
                  pretraining_encoder_epochs: int = 0, 
-                 sigma: float = 0.1):
+                 sigma: float = 0.1, 
+                 covariate_specific_theta: float = False):
         """
         Variational Diffusion Model (VDM).
 
@@ -48,7 +48,7 @@ class FM(pl.LightningModule):
             x0_from_x_kwargs (dict): Arguments for the x0_from_x MLP.
             plotting_folder (Path): Folder for saving plots.
             in_dim (int): Number of genes.
-            sampling_covariate (str): Covariate controlling the size factor sampling.
+            conditioning_covariate (str): Covariate controlling the size factor sampling.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
             weight_decay (float, optional): Weight decay. Defaults to 0.0001.
             antithetic_time_sampling (bool, optional): Use antithetic time sampling. Defaults to True.
@@ -73,8 +73,9 @@ class FM(pl.LightningModule):
         self.pretrain_encoder = pretrain_encoder
         self.pretraining_encoder_epochs = pretraining_encoder_epochs
         self.model_type = model_type
-        self.sampling_covariate = sampling_covariate
+        self.conditioning_covariate = conditioning_covariate
         self.sigma = sigma
+        self.covariate_specific_theta = covariate_specific_theta
         
         self.criterion = torch.nn.MSELoss()
                 
@@ -94,7 +95,11 @@ class FM(pl.LightningModule):
             self.cell_decoder = CellDecoder(self.encoder_type)
         
         # Define the (log) inverse dispersion parameter (negative binomial)
-        self.theta = torch.nn.Parameter(torch.randn(self.in_dim), requires_grad=True)
+        if not covariate_specific_theta:
+            self.theta = torch.nn.Parameter(torch.randn(self.in_dim), requires_grad=True)
+        else:
+            n_cat = self.feature_embeddings[conditioning_covariate].n_cat
+            self.theta = torch.nn.Parameter(n_cat, torch.randn(self.in_dim), requires_grad=True)
         
         # save hyper-parameters to self.hparams (auto-logged by W&B)
         self.save_hyperparameters()
@@ -142,6 +147,10 @@ class FM(pl.LightningModule):
         # Collect observation
         x = batch["X"].to(self.device)
         
+        # Collect labels 
+        y = batch["y"]
+        y_fea = self.feature_embeddings[self.conditioning_covariate](y[self.conditioning_covariate])
+        
         # Scale batch to reasonable range 
         x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
@@ -157,7 +166,7 @@ class FM(pl.LightningModule):
         # Compute log p(x | x_0) to train theta
         if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
             print("Training encoder")
-            recons_loss_enc = self.log_probs_x_z0(x, x0, size_factor)  
+            recons_loss_enc = self.log_probs_x_z0(x, x0, y[self.conditioning_covariate], size_factor)  
             recons_loss_enc = recons_loss_enc.sum(1)
             self.log(f"{dataset}/recons_loss_enc", recons_loss_enc.mean())
             
@@ -170,13 +179,11 @@ class FM(pl.LightningModule):
                 for param in self.x_from_x0.parameters():
                     param.requires_grad = False
             # Reinstate the optimizer and weight_decay to selected values
-            self.optimizers().param_groups[0]['lr'] = self.learning_rate
+            self.optimizers().param_groups[0]['lr'] = 0.00001
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
         
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
             print("Train diff")
-            # Collect concatenated labels
-            y = self._featurize_batch_y(batch)  # TODO: For now, we don't implement the conditional version
             
             # Sample time 
             t = self._sample_times(x0.shape[0])  # B
@@ -188,7 +195,7 @@ class FM(pl.LightningModule):
             t, x_t, u_t = self.sample_location_and_conditional_flow(z, x0, t)
                         
             # Forward through the model 
-            v_t = self.denoising_model(x_t, t, log_size_factor)
+            v_t = self.denoising_model(x_t, t, log_size_factor, y_fea)
             loss = self.criterion(u_t, v_t)  # (B, )
             
             # Save results
@@ -243,17 +250,20 @@ class FM(pl.LightningModule):
     def sample(self, batch_size, n_sample_steps, covariate, log_size_factor=None):
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
+        random_indices = torch.randint(0, self.feature_embeddings[self.conditioning_covariate].n_cat, 
+                                       (batch_size,))
         if log_size_factor==None:
             # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
             mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
-            random_indices = torch.randint(0, len(mean_size_factor), (batch_size,))
             mean_size_factor, sd_size_factor = mean_size_factor[random_indices], sd_size_factor[random_indices]
             size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
             log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
+            
+        y = self.feature_embeddings[self.conditioning_covariate](random_indices.cuda())
 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
         
-        denoising_model_ode = torch_wrapper(self.denoising_model, log_size_factor)
+        denoising_model_ode = torch_wrapper(self.denoising_model, log_size_factor, y)
         self.node = NeuralODE(denoising_model_ode,
                                 solver="dopri5", 
                                 sensitivity="adjoint", 
@@ -265,12 +275,16 @@ class FM(pl.LightningModule):
         size_factor = torch.exp(log_size_factor)
         # Decode to parameterize negative binomial
         x = self._decode(x0, size_factor)
-        distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta))
+        
+        if not self.covariate_specific_theta:
+            distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta))
+        else:
+            distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta[random_indices]))
 
         sample = distr.sample()
         return sample
 
-    def log_probs_x_z0(self, x, x_0, size_factor):
+    def log_probs_x_z0(self, x, x_0, y, size_factor):
         """
         Compute log p(x | z_0) for all possible values of each pixel in x.
 
@@ -284,7 +298,10 @@ class FM(pl.LightningModule):
         """
         x_hat = self._decode(x_0, size_factor)
         
-        distr = NegativeBinomial(mu=x_hat, theta=torch.exp(self.theta))
+        if not self.covariate_specific_theta:
+            distr = NegativeBinomial(mu=x_hat, theta=torch.exp(self.theta))
+        else:
+            distr = NegativeBinomial(mu=x_hat, theta=torch.exp(self.theta[y]))
 
         recon_loss = - distr.log_prob(x)
         return recon_loss
@@ -343,7 +360,7 @@ class FM(pl.LightningModule):
         ut = self.compute_conditional_flow(x0, x1, t, xt)
         return t, xt, ut
 
-    def ßsample_xt(self, x0, x1, t, epsilon):
+    def sample_xt(self, x0, x1, t, epsilon):
         """
         Draw a sample from the probability path N(t * x1 + (1 - t) * x0, sigma), see (Eq.14) [1].
 
@@ -465,7 +482,7 @@ class FM(pl.LightningModule):
         """
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             optimizer = torch.optim.Adam(self.parameters(), 
-                                            lr=0.001, 
+                                            lr=0.0001, 
                                             weight_decay=0.01)
         
         else:
@@ -506,7 +523,7 @@ class FM(pl.LightningModule):
                                             n_sample_steps=1000, 
                                             plotting_folder=self.plotting_folder, 
                                             X_real=testing_outputs, 
-                                            sampling_covariate=self.sampling_covariate)
+                                            conditioning_covariate=self.conditioning_covariate)
         self.testing_outputs = []
 
         # Compute Wasserstein distance between real test set and generated data 

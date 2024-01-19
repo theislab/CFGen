@@ -81,7 +81,7 @@ class RNAseqLoader:
             dict: Dictionary containing X (gene expression) and y (covariates).
         """
         X = self.X[i]
-        y = {"y_" + cov: self.Y_cov[cov][i] for cov in self.Y_cov}
+        y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
         X_norm = self.X_norm[i]
         return dict(X=X, X_norm=X_norm, y=y)
 

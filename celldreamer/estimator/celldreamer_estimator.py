@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import uuid
 import torch
@@ -11,6 +12,7 @@ from celldreamer.models.featurizers.category_featurizer import CategoricalFeatur
 from celldreamer.models.fm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
 from celldreamer.models.fm.fm import FM
 
+os.environ["WANDB__SERVICE_WAIT"] = "300"
 torch.autograd.set_detect_anomaly(True)
 
 class CellDreamerEstimator:
@@ -83,7 +85,8 @@ class CellDreamerEstimator:
         self.test_dataloader = torch.utils.data.DataLoader(self.test_data,
                                                             batch_size=self.args.training_config.batch_size,
                                                             shuffle=False,
-                                                            num_workers=4)
+                                                            num_workers=4, 
+                                                            drop_last=True)
     
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
@@ -97,7 +100,7 @@ class CellDreamerEstimator:
         """
         # Callbacks for saving checkpoints 
         checkpoint_callback = ModelCheckpoint(dirpath=self.training_dir / "checkpoints", 
-                                              **self.args.checkpoints)
+                                                **self.args.checkpoints)
         callbacks = [checkpoint_callback]
         
         # Early stopping checkpoints 
@@ -124,23 +127,26 @@ class CellDreamerEstimator:
         self.num_classes = {}
                 
         for cov, cov_names in self.dataset.id2cov.items():
-            self.feature_embeddings["y_"+cov] = CategoricalFeaturizer(len(cov_names), 
-                                                                      self.args.dataset.one_hot_encode_features, 
-                                                                      self.device, 
-                                                                      embedding_dimensions=self.args.dataset.cov_embedding_dimensions)
+            self.feature_embeddings[cov] = CategoricalFeaturizer(len(cov_names), 
+                                                                    self.args.dataset.one_hot_encode_features, 
+                                                                    self.device, 
+                                                                    embedding_dimensions=self.args.dataset.cov_embedding_dimensions)
             if self.args.dataset.one_hot_encode_features:
-                self.num_classes["y_"+cov] = len(cov_names)
+                self.num_classes[cov] = len(cov_names)
             else:
-                self.num_classes["y_"+cov] = self.args.dataset.cov_embedding_dimensions
+                self.num_classes[cov] = self.args.dataset.cov_embedding_dimensions
 
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
+        conditioning_cov = self.args.dataset.conditioning_covariate
         if self.args.denoising_module.denoising_net == "simple_mlp":
             denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
                                                 out_dim=self.args.denoising_module.out_dim,
                                                 w=self.args.denoising_module.w,
-                                                model_type=self.args.denoising_module.model_type)
+                                                model_type=self.args.denoising_module.model_type, 
+                                                conditional=self.args.denoising_module.conditional, 
+                                                n_cond=self.num_classes[conditioning_cov])
         else:
             denoising_model = MLPTimeStep(in_dim=self.in_dim, 
                                             hidden_dim=self.args.denoising_module.hidden_dim,
@@ -166,11 +172,11 @@ class CellDreamerEstimator:
             denoising_model=denoising_model,
             feature_embeddings=self.feature_embeddings,
             plotting_folder=self.plotting_dir,
-            in_dim=self.in_dim,
+            in_dim=self.gene_dim,
             size_factor_statistics=size_factor_statistics,
             scaler=scaler,
             encoder_type=self.args.dataset.encoder_type,
-            sampling_covariate=self.args.dataset.sampling_covariate,
+            conditioning_covariate=conditioning_cov,
             model_type=denoising_model.model_type, 
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
         )

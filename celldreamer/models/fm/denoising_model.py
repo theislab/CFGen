@@ -293,7 +293,9 @@ class SimpleMLPTimeStep(pl.LightningModule):
                  in_dim, 
                  out_dim=None, 
                  w=64, 
-                 model_type="conditional_latent"):
+                 model_type="conditional_latent", 
+                 conditional=False, 
+                 n_cond=None):
         """
         Simple Multi-Layer Perceptron (MLP) with optional time variation.
 
@@ -305,12 +307,13 @@ class SimpleMLPTimeStep(pl.LightningModule):
         super().__init__()
         self.in_dim = in_dim
         self.model_type = model_type
+        self.conditional = conditional
         
         if out_dim is None:
             out_dim = in_dim
             
         self.net = torch.nn.Sequential(
-            Linear(in_dim + 1 + (1 if self.model_type=="conditional_latent" else 0), w),
+            Linear(in_dim + 1 + (1 if self.model_type=="conditional_latent" else 0) + (n_cond if conditional else 0), w),
             nn.SELU(),
             Linear(w, w),
             torch.nn.SELU(),
@@ -320,7 +323,7 @@ class SimpleMLPTimeStep(pl.LightningModule):
         )
         self.save_hyperparameters()
 
-    def forward(self, x, t, l, **args):
+    def forward(self, x, t, l, y, **args):
         """
         Forward pass of the SimpleMLPTimeStep.
 
@@ -345,4 +348,6 @@ class SimpleMLPTimeStep(pl.LightningModule):
         x = torch.cat([x, t], dim=1)
         if self.model_type=="conditional_latent":
             x = torch.cat([x, l], dim=1)
+        if self.conditional:
+            x = torch.cat([x, y], dim=1)
         return self.net(x) 
