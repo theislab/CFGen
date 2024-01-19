@@ -141,6 +141,7 @@ dmypy.json
 build/
 logs/
 notebooks/cache/
+notebooks/test_model
 
 dist/
 *.egg-info/
