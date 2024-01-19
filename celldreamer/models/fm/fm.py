@@ -179,7 +179,7 @@ class FM(pl.LightningModule):
                 for param in self.x_from_x0.parameters():
                     param.requires_grad = False
             # Reinstate the optimizer and weight_decay to selected values
-            self.optimizers().param_groups[0]['lr'] = 0.00001
+            self.optimizers().param_groups[0]['lr'] = self.learning_rate
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
         
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
@@ -250,7 +250,8 @@ class FM(pl.LightningModule):
     def sample(self, batch_size, n_sample_steps, covariate, log_size_factor=None):
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
-        random_indices = torch.randint(0, self.feature_embeddings[self.conditioning_covariate].n_cat, 
+        # Sample random classes from the sampling covariate 
+        random_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, 
                                        (batch_size,))
         if log_size_factor==None:
             # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
@@ -259,7 +260,7 @@ class FM(pl.LightningModule):
             size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
             log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
             
-        y = self.feature_embeddings[self.conditioning_covariate](random_indices.cuda())
+        y = self.feature_embeddings[covariate](random_indices.cuda())
 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
         

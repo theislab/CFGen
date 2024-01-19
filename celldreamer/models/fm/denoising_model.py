@@ -292,7 +292,7 @@ class SimpleMLPTimeStep(pl.LightningModule):
     def __init__(self,
                  in_dim, 
                  out_dim=None, 
-                 w=64, 
+                 w=512, 
                  model_type="conditional_latent", 
                  conditional=False, 
                  n_cond=None):
@@ -316,7 +316,7 @@ class SimpleMLPTimeStep(pl.LightningModule):
             Linear(in_dim + 1 + (1 if self.model_type=="conditional_latent" else 0) + (n_cond if conditional else 0), w),
             nn.SELU(),
             Linear(w, w),
-            torch.nn.SELU(),
+            nn.SELU(),
             Linear(w, w),
             nn.SELU(),
             Linear(w, out_dim),
@@ -335,7 +335,7 @@ class SimpleMLPTimeStep(pl.LightningModule):
         Returns:
             torch.Tensor: Output tensor.
         """
-        # If g_t is not across all batch, repeat over the batch\
+        # If t is not repeated for all elements in the batch 
         if t.shape[0] == 1:
             t = t.repeat((x.shape[0],) + (1,) * (t.ndim-1))
         if t.ndim != x.ndim:
