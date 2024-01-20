@@ -3,7 +3,7 @@ layer_key: X_counts
 covariate_keys: [celltype]
 conditioning_covariate: celltype
 subsample_frac: 1
-encoder_type: "learnt_autoencoder"
+encoder_type: "learnt_encoder"
 target_max: 1
 target_min: -1
 one_hot_encode_features: True

@@ -12,6 +12,7 @@ from celldreamer.models.featurizers.category_featurizer import CategoricalFeatur
 from celldreamer.models.fm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
 from celldreamer.models.fm.fm import FM
 
+# Some general settings for the run
 os.environ["WANDB__SERVICE_WAIT"] = "300"
 torch.autograd.set_detect_anomaly(True)
 

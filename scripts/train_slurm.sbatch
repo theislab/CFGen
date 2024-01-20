@@ -23,6 +23,7 @@
 conda activate celldreamer
 
 
+python ../celldreamer/train.py denoising_module=default launcher=slurm_icb generative_model.pretraining_encoder_epochs=200 trainer.max_epochs=1500 dataset=dentategyrus dataset.encoder_type=learnt_encoder denoising_module.conditional=True training_config.batch_size=256 logger.project=fm_mlp_encoder_cond
 # python ../celldreamer/train.py denoising_module=default launcher=slurm_icb generative_model.pretraining_encoder_epochs=5 trainer.max_epochs=7 dataset=dentategyrus dataset.encoder_type=learnt_encoder denoising_module.conditional=True training_config.batch_size=256 logger.offline=True
 # python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb dataset.encoder_type=learnt
 # python ../celldreamer/train.py denoising_module=resnet launcher=slurm_icb dataset.encoder_type=learnt generative_model.pretraining_encoder_epochs=100 trainer.max_epochs=100 generative_model.learning_rate=0.001

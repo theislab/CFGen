@@ -40,4 +40,4 @@ conda activate celldreamer
 
 python ../celldreamer/train.py --multirun hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond hydra.launcher.array_parallelism=3
 python ../celldreamer/train.py --multirun dataset=lung_atlas hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond_lung hydra.launcher.array_parallelism=2
-python ../celldreamer/train.py --multirun dataset=pbmc68k hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond_pbmc hydra.launcher.array_parallelism=2
+python ../celldreamer/train.py --multirun dataset=pbmc68k hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond_pbmc 

@@ -161,18 +161,16 @@ class FM(pl.LightningModule):
         # Quantify size factor 
         size_factor = x.sum(1).unsqueeze(1)
         log_size_factor = torch.log(size_factor)
-
+        
         ## Change the function cause you are not training a time embedding anymore 
         # Compute log p(x | x_0) to train theta
         if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
-            print("Training encoder")
             recons_loss_enc = self.log_probs_x_z0(x, x0, y[self.conditioning_covariate], size_factor)  
             recons_loss_enc = recons_loss_enc.sum(1)
             self.log(f"{dataset}/recons_loss_enc", recons_loss_enc.mean())
             
         # Freeze the encoder if the pretraining phase is done 
         if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]):
-            print("Freeze encoder")
             for param in self.x0_from_x.parameters():
                 param.requires_grad = False
             if self.encoder_type=="learnt_autoencoder":
@@ -183,7 +181,6 @@ class FM(pl.LightningModule):
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
         
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
-            print("Train diff")
             
             # Sample time 
             t = self._sample_times(x0.shape[0])  # B
@@ -208,7 +205,7 @@ class FM(pl.LightningModule):
             loss = recons_loss_enc
         
         # Log the final loss
-        self.log(f"{dataset}/loss", loss.mean())
+        self.log(f"{dataset}/loss", loss.mean(), prog_bar=True)
         return loss.mean()
         
     # Private methods
@@ -483,8 +480,7 @@ class FM(pl.LightningModule):
         """
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             optimizer = torch.optim.Adam(self.parameters(), 
-                                            lr=0.0001, 
-                                            weight_decay=0.01)
+                                            lr=0.001)
         
         else:
             optimizer = torch.optim.Adam(self.parameters(), 
