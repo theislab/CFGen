@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ./logs/train_slurm.out
+#SBATCH -o ./logs/train_slurm_hp2.out
 
-#SBATCH -e ./logs/train_slurm.err
+#SBATCH -e ./logs/train_slurm_hp2.err
 
-#SBATCH -J train_slurm
+#SBATCH -J train_slurm_hp
 
 #SBATCH -p gpu_p
 
@@ -23,21 +23,8 @@
 source $HOME/.bashrc
 conda activate celldreamer
 
-# python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search
-# python ../celldreamer/train.py --multirun hparams_search=optuna.yaml launcher=slurm_tum logger=hparam_search logger.project=celldreamer_search2
-# python ../celldreamer/train.py --multirun hparams_search=optuna_resnet denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_resnet
-# python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_tum logger=hparam_search logger.project=celldreamer_freeze
-# python ../celldreamer/train.py --multirun hparams_search=optuna_freeze denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_freeze
-# python ../celldreamer/train.py --multirun hparams_search=optuna_reduced denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_reduced
-# python ../celldreamer/train.py --multirun hparams_search=optuna_trained denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=celldreamer_trained
+# python ../celldreamer/train.py --multirun dataset=dentategyrus hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond_dentate hydra.launcher.array_parallelism=3 
+python ../celldreamer/train.py --multirun dataset=dentategyrus hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_autoencoder_cond_dentate_small hydra.launcher.array_parallelism=2 dataset.encoder_type=learnt_autoencoder 
+python ../celldreamer/train.py --multirun dataset=lung_atlas hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_autoencoder_cond_lung_small hydra.launcher.array_parallelism=2 dataset.encoder_type=learnt_autoencoder 
 
-# python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_learnt denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_learnt
-# python ../celldreamer/train.py --multirun hparams_search=optuna_new_architecture_loggexp denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=new_architecture_loggexp
-# python ../celldreamer/train.py --multirun hparams_search=loggexp_middle_block denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=loggexp_middle_block
-# python ../celldreamer/train.py --multirun hparams_search=learnt_autoencoder_middle_block denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=learnt_autoencoder_middle_block
-# python ../celldreamer/train.py --multirun hparams_search=fm_resnet_encoder denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=fm_resnet_autoencoder
-# python ../celldreamer/train.py --multirun hparams_search=fm_mlp_encoder denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder
-
-python ../celldreamer/train.py --multirun hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond hydra.launcher.array_parallelism=3
-python ../celldreamer/train.py --multirun dataset=lung_atlas hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond_lung hydra.launcher.array_parallelism=2
-python ../celldreamer/train.py --multirun dataset=pbmc68k hparams_search=fm_mlp_encoder_cond denoising_module=default launcher=slurm_icb logger=hparam_search logger.project=fm_mlp_encoder_cond_pbmc 
+python ../celldreamer/train.py --multirun dataset=dentategyrus hparams_search=fm_resnet_encoder_cond dataset.one_hot_encode_features=False denoising_module=resnet launcher=slurm_icb logger=hparam_search logger.project=fm_resnet_encoder_cond_dentate hydra.launcher.array_parallelism=3 hydra.launcher.qos=gpu_long

@@ -6,4 +6,6 @@ model_type: conditional_latent # conditional_latent, factorized_latent, learnt_s
 embed_time: True
 embed_size_factor: True
 embedding_dim: 256
-normalization: layer
+normalization: Null
+conditional: True
+embed_condition: True

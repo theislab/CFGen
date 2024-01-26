@@ -38,7 +38,8 @@ class FM(pl.LightningModule):
                  pretrain_encoder: bool = False,  # Change float to bool
                  pretraining_encoder_epochs: int = 0, 
                  sigma: float = 0.1, 
-                 covariate_specific_theta: float = False):
+                 covariate_specific_theta: float = False, 
+                 plot_and_eval_every=100):
         """
         Variational Diffusion Model (VDM).
 
@@ -76,7 +77,9 @@ class FM(pl.LightningModule):
         self.conditioning_covariate = conditioning_covariate
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
+        self.plot_and_eval_every = plot_and_eval_every
         
+        # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
                 
         # Used to collect test outputs
@@ -120,19 +123,6 @@ class FM(pl.LightningModule):
         """
         return self._step(batch, dataset='train')
 
-    def validation_step(self, batch, batch_idx):
-        """
-        Validation step for VDM.
-
-        Args:
-            batch: Batch data.
-            batch_idx: Batch index.
-
-        Returns:
-            torch.Tensor: Loss value.
-        """
-        return self._step(batch, dataset='valid')
-
     def _step(self, batch, dataset: Literal['train', 'valid']):
         """
         Common step for training and validation.
@@ -150,14 +140,14 @@ class FM(pl.LightningModule):
         # Collect labels 
         y = batch["y"]
         y_fea = self.feature_embeddings[self.conditioning_covariate](y[self.conditioning_covariate])
-        
+
         # Scale batch to reasonable range 
         x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             x0 = self.x0_from_x(x_scaled)
         else:
             x0 = x_scaled
-        
+
         # Quantify size factor 
         size_factor = x.sum(1).unsqueeze(1)
         log_size_factor = torch.log(size_factor)
@@ -181,7 +171,6 @@ class FM(pl.LightningModule):
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
         
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
-            
             # Sample time 
             t = self._sample_times(x0.shape[0])  # B
             
@@ -190,7 +179,7 @@ class FM(pl.LightningModule):
             
             # Get objective and 
             t, x_t, u_t = self.sample_location_and_conditional_flow(z, x0, t)
-                        
+
             # Forward through the model 
             v_t = self.denoising_model(x_t, t, log_size_factor, y_fea)
             loss = self.criterion(u_t, v_t)  # (B, )
@@ -206,8 +195,9 @@ class FM(pl.LightningModule):
         
         # Log the final loss
         self.log(f"{dataset}/loss", loss.mean(), prog_bar=True)
-        return loss.mean()
         
+        return loss.mean()
+    
     # Private methods
     def _featurize_batch_y(self, batch):
         """
@@ -244,24 +234,26 @@ class FM(pl.LightningModule):
         return times
 
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, covariate, log_size_factor=None):
+    def sample(self, batch_size, n_sample_steps, covariate, covariate_indices=None, log_size_factor=None):
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
         # Sample random classes from the sampling covariate 
-        random_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, 
-                                       (batch_size,))
+        if covariate_indices==None:
+            covariate_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, 
+                                        (batch_size,))
         if log_size_factor==None:
             # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
             mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
-            mean_size_factor, sd_size_factor = mean_size_factor[random_indices], sd_size_factor[random_indices]
+            mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices], sd_size_factor[covariate_indices]
             size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
             log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
             
-        y = self.feature_embeddings[covariate](random_indices.cuda())
+        y = self.feature_embeddings[covariate](covariate_indices.cuda())
 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
         
-        denoising_model_ode = torch_wrapper(self.denoising_model, log_size_factor, y)
+        denoising_model_ode = torch_wrapper(self.denoising_model, log_size_factor, y)    
+        
         self.node = NeuralODE(denoising_model_ode,
                                 solver="dopri5", 
                                 sensitivity="adjoint", 
@@ -273,14 +265,25 @@ class FM(pl.LightningModule):
         size_factor = torch.exp(log_size_factor)
         # Decode to parameterize negative binomial
         x = self._decode(x0, size_factor)
+        del x0
         
         if not self.covariate_specific_theta:
             distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta))
         else:
-            distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta[random_indices]))
+            distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta[covariate_indices]))
 
         sample = distr.sample()
         return sample
+
+    @torch.no_grad()
+    def batched_sample(self, batch_size, repetitions, n_sample_steps, covariate, covariate_indices=None, log_size_factor=None):
+        total_samples = []
+        for i in range(repetitions):
+            covariate_indices_batch = covariate_indices[(i*batch_size):((i+1)*batch_size)] if covariate_indices != None else None
+            log_size_factor_batch = log_size_factor[(i*batch_size):((i+1)*batch_size)] if log_size_factor != None else None
+            X_samples = self.sample(batch_size, n_sample_steps, covariate, covariate_indices_batch, log_size_factor_batch)
+            total_samples.append(X_samples.cpu())
+        return torch.cat(total_samples, dim=0)
 
     def log_probs_x_z0(self, x, x_0, y, size_factor):
         """
@@ -478,17 +481,37 @@ class FM(pl.LightningModule):
         Returns:
             dict: Optimizer configuration.
         """
+        params = list(self.parameters())
+        
+        if not self.feature_embeddings[self.conditioning_covariate].one_hot_encode_features:
+            print("evviva!")
+            for cov in self.feature_embeddings:
+                params += list(self.feature_embeddings[cov].parameters())
+        
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
-            optimizer = torch.optim.Adam(self.parameters(), 
+            optimizer = torch.optim.Adam(params, 
                                             lr=0.001)
         
         else:
-            optimizer = torch.optim.Adam(self.parameters(), 
-                                            self.learning_rate, 
-                                            weight_decay=self.weight_decay)
+            optimizer = torch.optim.Adam(params, 
+                                        self.learning_rate, 
+                                        weight_decay=self.weight_decay)
 
         return optimizer
 
+    def validation_step(self, batch, batch_idx):
+        """
+        Validation step for VDM.
+
+        Args:
+            batch: Batch data.
+            batch_idx: Batch index.
+
+        Returns:
+            torch.Tensor: Loss value.
+        """
+        return self._step(batch, dataset='valid')
+    
     def test_step(self, batch, batch_idx):
         """
         Training step for VDM.
@@ -500,9 +523,14 @@ class FM(pl.LightningModule):
         Returns:
             torch.Tensor: Loss value.
         """
-        self.testing_outputs.append(batch["X"])
+        self.testing_outputs.append(batch["X"].cpu())
 
     def on_test_epoch_end(self, *arg, **kwargs):
+        self.compute_metrics_and_plots(dataset_type="test")
+        self.testing_outputs = []
+
+    @torch.no_grad()
+    def compute_metrics_and_plots(self, dataset_type, *arg, **kwargs):
         """
         Concatenates all observations from the test data loader in a single dataset.
 
@@ -514,16 +542,21 @@ class FM(pl.LightningModule):
         """
         # Concatenate all test observations
         testing_outputs = torch.cat(self.testing_outputs, dim=0)
+        
         # Plot UMAP of generated cells and real test cells
         wd = compute_umap_and_wasserstein(model=self, 
                                             batch_size=1000, 
-                                            n_sample_steps=1000, 
+                                            n_sample_steps=100, 
                                             plotting_folder=self.plotting_folder, 
                                             X_real=testing_outputs, 
+                                            epoch=self.current_epoch,
                                             conditioning_covariate=self.conditioning_covariate)
-        self.testing_outputs = []
+        del testing_outputs
+        metric_dict = {}
+        for key in wd:
+            metric_dict[f"{dataset_type}_{key}"] = wd[key]
 
         # Compute Wasserstein distance between real test set and generated data 
-        self.log("wasserstein_distance", wd)
+        self.log_dict(wd)
         return wd
     

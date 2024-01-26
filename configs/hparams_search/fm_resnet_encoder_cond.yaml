@@ -13,16 +13,20 @@ hydra:
 
     direction: minimize
 
-    n_jobs: 4
+    n_jobs: 2
     
-    n_trials: 4
+    n_trials: 2
 
     sampler: 
       _target_: optuna.samplers.RandomSampler
 
     # define hyperparameter search space
     params:
-      denoising_module.w: choice(512)
+      dataset.cov_embedding_dimensions: choice(32, 64, 128)
+
+      denoising_module.hidden_dim: choice(128, 256)
+      denoising_module.embedding_dim: choice(64, 128, 256)
+      denoising_module.normalization: choice(batch, none)
 
       generative_model.learning_rate: choice(0.0001, 0.001) 
       generative_model.weight_decay: choice(0.00001, 0.000001) 

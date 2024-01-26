@@ -159,7 +159,10 @@ class CellDreamerEstimator:
                                             size_factor_max=self.dataset.max_size_factor,
                                             embed_size_factor=self.args.denoising_module.embed_size_factor, 
                                             embedding_dim=self.args.denoising_module.embedding_dim,
-                                            normalization=self.args.denoising_module.normalization).to(self.device)
+                                            normalization=self.args.denoising_module.normalization,
+                                            conditional=self.args.denoising_module.conditional, 
+                                            embed_condition=self.args.denoising_module.embed_condition,
+                                            n_cond=self.num_classes[conditioning_cov]).to(self.device)
         
         print("Denoising model")
         print(denoising_model)
