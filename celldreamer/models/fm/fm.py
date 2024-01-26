@@ -195,7 +195,6 @@ class FM(pl.LightningModule):
         
         # Log the final loss
         self.log(f"{dataset}/loss", loss.mean(), prog_bar=True)
-        
         return loss.mean()
     
     # Private methods
@@ -484,7 +483,6 @@ class FM(pl.LightningModule):
         params = list(self.parameters())
         
         if not self.feature_embeddings[self.conditioning_covariate].one_hot_encode_features:
-            print("evviva!")
             for cov in self.feature_embeddings:
                 params += list(self.feature_embeddings[cov].parameters())
         
