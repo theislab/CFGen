@@ -92,15 +92,14 @@ class MLPTimeStep(pl.LightningModule):
         self.conditional = conditional
         self.embed_condition = embed_condition
         
+        added_dimensions = 0  # Incremented if not embedding conditioning variables 
+        
         # Time embedding network
-        added_dimensions = 0
         if embed_time:
             self.time_embedder = nn.Sequential(
                 Linear(embedding_dim, embedding_dim * 4),  # Upsample embedding
                 nn.SiLU(),
-                Linear(embedding_dim * 4, embedding_dim * 4),
-                nn.SiLU(),
-            )
+                Linear(embedding_dim * 4, embedding_dim * 4))
         else:
             added_dimensions += 1
             
@@ -110,9 +109,7 @@ class MLPTimeStep(pl.LightningModule):
                 self.size_factor_embedder = nn.Sequential(
                     Linear(embedding_dim, embedding_dim * 4),  # Upsample embedding
                     nn.SiLU(),
-                    Linear(embedding_dim * 4, embedding_dim * 4),
-                    nn.SiLU(),
-                )
+                    Linear(embedding_dim * 4, embedding_dim * 4))
             else:
                 added_dimensions += 1
         
@@ -122,9 +119,7 @@ class MLPTimeStep(pl.LightningModule):
                 self.condition_embedder = nn.Sequential(
                     Linear(n_cond, embedding_dim * 4),  # Upsample embedding
                     nn.SiLU(),
-                    Linear(embedding_dim * 4, embedding_dim * 4),
-                    nn.SiLU(),
-                )
+                    Linear(embedding_dim * 4, embedding_dim * 4))
             else:
                 added_dimensions += 1
         
@@ -196,7 +191,6 @@ class MLPTimeStep(pl.LightningModule):
         h = self.net_in(x)  
         for block in self.blocks:  # n_blocks times
             h = block(h, t_for_embeddings, l, y)
-        
         pred = self.net_out(h)
         return pred 
 
@@ -219,11 +213,11 @@ class ResnetBlock(nn.Module):
         dropout_prob=0.0,
         model_type="conditional_latent", 
         embedding_dim=None, 
-        normalization="layer", 
+        normalization="batch", 
         embed_time=True,
         embed_size_factor=True, 
-        conditional=False,
-        embed_condition=False):
+        conditional=True,
+        embed_condition=True):
         
         super().__init__()
         
@@ -254,12 +248,12 @@ class ResnetBlock(nn.Module):
         
         # Projections for conditions 
         if embed_time:
-            self.cond_proj_time = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
+            self.cond_proj_time = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
         if embed_size_factor:
-            self.cond_proj_size_factor = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
+            self.cond_proj_size_factor = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
         if embed_condition:
-            self.cond_proj_covariate = zero_init(Linear(self.embedding_dim, out_dim, bias=False))
-
+            self.cond_proj_covariate = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
+            
         # Second linear block with LayerNorm, SiLU activation, and optional dropout
         if normalization not in ["layer", "batch"]:
             self.net2 = nn.Sequential(

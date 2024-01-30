@@ -12,3 +12,4 @@ pretraining_encoder_epochs: 200
 sigma: 0.3
 covariate_specific_theta: False
 plot_and_eval_every: 100
+scaling_factor: 0.10

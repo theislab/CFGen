@@ -13,9 +13,9 @@ hydra:
 
     direction: minimize
 
-    n_jobs: 4
+    n_jobs: 7
     
-    n_trials: 4
+    n_trials: 7
 
     sampler: 
       _target_: optuna.samplers.RandomSampler

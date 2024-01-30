@@ -39,7 +39,8 @@ class FM(pl.LightningModule):
                  pretraining_encoder_epochs: int = 0, 
                  sigma: float = 0.1, 
                  covariate_specific_theta: float = False, 
-                 plot_and_eval_every=100):
+                 plot_and_eval_every=100, 
+                 scaling_factor=0.10):
         """
         Variational Diffusion Model (VDM).
 
@@ -78,6 +79,7 @@ class FM(pl.LightningModule):
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
+        self.scaling_factor = scaling_factor
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
@@ -102,7 +104,7 @@ class FM(pl.LightningModule):
             self.theta = torch.nn.Parameter(torch.randn(self.in_dim), requires_grad=True)
         else:
             n_cat = self.feature_embeddings[conditioning_covariate].n_cat
-            self.theta = torch.nn.Parameter(n_cat, torch.randn(self.in_dim), requires_grad=True)
+            self.theta = torch.nn.Parameter(torch.randn(n_cat, self.in_dim), requires_grad=True)
         
         # save hyper-parameters to self.hparams (auto-logged by W&B)
         self.save_hyperparameters()
@@ -162,22 +164,28 @@ class FM(pl.LightningModule):
         # Freeze the encoder if the pretraining phase is done 
         if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]):
             for param in self.x0_from_x.parameters():
+                # self.x0_from_x = self.x0_from_x.eval()
                 param.requires_grad = False
             if self.encoder_type=="learnt_autoencoder":
+                # self.x_from_x0 = self.x_from_x0.eval()
                 for param in self.x_from_x0.parameters():
                     param.requires_grad = False
+                
             # Reinstate the optimizer and weight_decay to selected values
             self.optimizers().param_groups[0]['lr'] = self.learning_rate
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
         
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
+            # # Scale down x0 
+            # x0 = x0 * self.scaling_factor
+            
             # Sample time 
             t = self._sample_times(x0.shape[0])  # B
             
             # Sample noise 
             z = self.sample_noise_like(x0)  # B x G
             
-            # Get objective and 
+            # Get objective and perturbed observation
             t, x_t, u_t = self.sample_location_and_conditional_flow(z, x0, t)
 
             # Forward through the model 
@@ -238,8 +246,8 @@ class FM(pl.LightningModule):
 
         # Sample random classes from the sampling covariate 
         if covariate_indices==None:
-            covariate_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, 
-                                        (batch_size,))
+            covariate_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, (batch_size,))
+             
         if log_size_factor==None:
             # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
             mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
@@ -454,24 +462,6 @@ class FM(pl.LightningModule):
         """
         del t, xt
         return x1 - x0
-    
-    def compute_lambda(self, t):
-        """Compute the lambda function, see Eq.(23) [3].
-
-        Parameters
-        ----------
-        t : FloatTensor, shape (bs)
-
-        Returns
-        -------
-        lambda : score weighting function
-
-        References
-        ----------
-        [4] Simulation-free Schrodinger bridges via score and flow matching, Preprint, Tong et al.
-        """
-        sigma_t = self.compute_sigma_t(t)
-        return 2 * sigma_t / (self.sigma**2 + 1e-8)
 
     def configure_optimizers(self):
         """
@@ -544,7 +534,7 @@ class FM(pl.LightningModule):
         # Plot UMAP of generated cells and real test cells
         wd = compute_umap_and_wasserstein(model=self, 
                                             batch_size=1000, 
-                                            n_sample_steps=100, 
+                                            n_sample_steps=2, 
                                             plotting_folder=self.plotting_folder, 
                                             X_real=testing_outputs, 
                                             epoch=self.current_epoch,

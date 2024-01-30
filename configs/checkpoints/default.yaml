@@ -1,6 +1,6 @@
 filename: epoch_{epoch:01d}
 monitor: valid/loss
 mode: min               
-every_n_epochs: 1
+every_n_epochs: 50
 save_last: True
 auto_insert_metric_name: False
