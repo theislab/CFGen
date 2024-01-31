@@ -9,7 +9,6 @@ antithetic_time_sampling: True
 scaling_method: log_normalization
 pretrain_encoder: True
 pretraining_encoder_epochs: 200
-sigma: 0.3
+sigma: 0.0001
 covariate_specific_theta: False
 plot_and_eval_every: 100
-scaling_factor: 0.10

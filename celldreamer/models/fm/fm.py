@@ -39,8 +39,7 @@ class FM(pl.LightningModule):
                  pretraining_encoder_epochs: int = 0, 
                  sigma: float = 0.1, 
                  covariate_specific_theta: float = False, 
-                 plot_and_eval_every=100, 
-                 scaling_factor=0.10):
+                 plot_and_eval_every=100):
         """
         Variational Diffusion Model (VDM).
 
@@ -79,7 +78,6 @@ class FM(pl.LightningModule):
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
-        self.scaling_factor = scaling_factor
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
@@ -176,9 +174,6 @@ class FM(pl.LightningModule):
             self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
         
         if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
-            # # Scale down x0 
-            # x0 = x0 * self.scaling_factor
-            
             # Sample time 
             t = self._sample_times(x0.shape[0])  # B
             

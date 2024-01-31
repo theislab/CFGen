@@ -183,9 +183,8 @@ class MLPTimeStep(pl.LightningModule):
                 t_for_embeddings = unsqueeze_right(t_for_embeddings, x.ndim - t_for_embeddings.ndim)
                 
         # Embed condition
-        if self.conditional:
-            if self.embed_condition:
-                y = self.condition_embedder(y)
+        if self.conditional and self.embed_condition:
+            y = self.condition_embedder(y)
 
         # Embed x
         h = self.net_in(x)  
@@ -249,9 +248,9 @@ class ResnetBlock(nn.Module):
         # Projections for conditions 
         if embed_time:
             self.cond_proj_time = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
-        if embed_size_factor:
+        if embed_size_factor and self.model_type=="conditional_latent":
             self.cond_proj_size_factor = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
-        if embed_condition:
+        if embed_condition and self.conditional:
             self.cond_proj_covariate = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
             
         # Second linear block with LayerNorm, SiLU activation, and optional dropout
@@ -295,7 +294,7 @@ class ResnetBlock(nn.Module):
                 l = self.cond_proj_size_factor(l)
                 h = h + l
 
-        if self.embed_condition:
+        if self.embed_condition and self.conditional:
             y = self.cond_proj_covariate(y)
             h = h + y
 
@@ -306,7 +305,7 @@ class ResnetBlock(nn.Module):
         if self.model_type=="conditional_latent" and not self.embed_size_factor:
             h = torch.cat([h, l], dim=1)
             
-        if not self.embed_condition:
+        if not self.embed_condition and self.conditional:
             h = torch.cat([h, y], dim=1)
                 
         # Forward pass through the second linear block
