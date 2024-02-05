@@ -21,9 +21,9 @@ from torchdyn.core import NeuralODE
 
 class FM(pl.LightningModule):
     def __init__(self,
+                 encoder_model: nn.Module,
                  denoising_model: nn.Module,
                  feature_embeddings: dict, 
-                 x0_from_x_kwargs: dict,
                  plotting_folder: Path,
                  in_dim: int,
                  size_factor_statistics: dict,
@@ -39,7 +39,8 @@ class FM(pl.LightningModule):
                  pretraining_encoder_epochs: int = 0, 
                  sigma: float = 0.1, 
                  covariate_specific_theta: float = False, 
-                 plot_and_eval_every=100):
+                 plot_and_eval_every=100, 
+                 scaling_factor=1):
         """
         Variational Diffusion Model (VDM).
 
@@ -60,6 +61,7 @@ class FM(pl.LightningModule):
         """
         super().__init__()
         
+        self.encoder_model = encoder_model
         self.denoising_model = denoising_model.to(self.device)
         self.feature_embeddings = feature_embeddings
         self.learning_rate = learning_rate
@@ -78,6 +80,7 @@ class FM(pl.LightningModule):
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
+        self.scaling_factor = scaling_factor
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
@@ -86,23 +89,8 @@ class FM(pl.LightningModule):
         self.testing_outputs = []  
         
         # If the encoder is fixed, we just need an inverting decoder. If learnt, the decoding is simply the softmax operation 
-        if encoder_type == "learnt_encoder":
-            x0_from_x_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"], self.in_dim]
-            self.x0_from_x = MLP(**x0_from_x_kwargs)
-        elif encoder_type == "learnt_autoencoder":
-            x0_from_x_kwargs["dims"] = [self.in_dim, *x0_from_x_kwargs["dims"]]  # Encoder params
-            self.x0_from_x =  MLP(**x0_from_x_kwargs)
-            x0_from_x_kwargs["dims"] = x0_from_x_kwargs["dims"][::-1] # Decoder params
-            self.x_from_x0 = MLP(**x0_from_x_kwargs)
-        else:
+        if encoder_type not in ["learnt_encoder", "learnt_autoencoder"]:
             self.cell_decoder = CellDecoder(self.encoder_type)
-        
-        # Define the (log) inverse dispersion parameter (negative binomial)
-        if not covariate_specific_theta:
-            self.theta = torch.nn.Parameter(torch.randn(self.in_dim), requires_grad=True)
-        else:
-            n_cat = self.feature_embeddings[conditioning_covariate].n_cat
-            self.theta = torch.nn.Parameter(torch.randn(n_cat, self.in_dim), requires_grad=True)
         
         # save hyper-parameters to self.hparams (auto-logged by W&B)
         self.save_hyperparameters()
@@ -141,63 +129,38 @@ class FM(pl.LightningModule):
         y = batch["y"]
         y_fea = self.feature_embeddings[self.conditioning_covariate](y[self.conditioning_covariate])
 
-        # Scale batch to reasonable range 
-        x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
-            x0 = self.x0_from_x(x_scaled)
+            with torch.no_grad():
+                x0 = self.encoder_model.encode(batch)
+                if self.scaling_factor!=None:
+                    x0 = x0 * self.scaling_factor
         else:
+            x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
             x0 = x_scaled
 
         # Quantify size factor 
         size_factor = x.sum(1).unsqueeze(1)
         log_size_factor = torch.log(size_factor)
         
-        ## Change the function cause you are not training a time embedding anymore 
-        # Compute log p(x | x_0) to train theta
-        if self.current_epoch < self.pretraining_encoder_epochs and self.pretrain_encoder:
-            recons_loss_enc = self.log_probs_x_z0(x, x0, y[self.conditioning_covariate], size_factor)  
-            recons_loss_enc = recons_loss_enc.sum(1)
-            self.log(f"{dataset}/recons_loss_enc", recons_loss_enc.mean())
-            
-        # Freeze the encoder if the pretraining phase is done 
-        if (self.current_epoch == self.pretraining_encoder_epochs and self.pretrain_encoder and self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]):
-            for param in self.x0_from_x.parameters():
-                # self.x0_from_x = self.x0_from_x.eval()
-                param.requires_grad = False
-            if self.encoder_type=="learnt_autoencoder":
-                # self.x_from_x0 = self.x_from_x0.eval()
-                for param in self.x_from_x0.parameters():
-                    param.requires_grad = False
-                
-            # Reinstate the optimizer and weight_decay to selected values
-            self.optimizers().param_groups[0]['lr'] = self.learning_rate
-            self.optimizers().param_groups[0]['weight_decay'] = self.weight_decay
+        # Sample time 
+        t = self._sample_times(x0.shape[0])  # B
         
-        if (self.current_epoch >= self.pretraining_encoder_epochs and self.pretrain_encoder) or not self.pretrain_encoder:
-            # Sample time 
-            t = self._sample_times(x0.shape[0])  # B
-            
-            # Sample noise 
-            z = self.sample_noise_like(x0)  # B x G
-            
-            # Get objective and perturbed observation
-            t, x_t, u_t = self.sample_location_and_conditional_flow(z, x0, t)
+        # Sample noise 
+        z = self.sample_noise_like(x0)  # B x G
+        
+        # Get objective and perturbed observation
+        t, x_t, u_t = self.sample_location_and_conditional_flow(z, x0, t)
 
-            # Forward through the model 
-            v_t = self.denoising_model(x_t, t, log_size_factor, y_fea)
-            loss = self.criterion(u_t, v_t)  # (B, )
-            
-            # Save results
-            metrics = {
-                "batch_size": x.shape[0],
-                f"{dataset}/fm_loss": loss.mean()}
-            self.log_dict(metrics, prog_bar=True)
-         
-        else:
-            loss = recons_loss_enc
+        # Forward through the model 
+        v_t = self.denoising_model(x_t, t, log_size_factor, y_fea)
+        loss = self.criterion(u_t, v_t)  # (B, )
         
-        # Log the final loss
-        self.log(f"{dataset}/loss", loss.mean(), prog_bar=True)
+        # Save results
+        metrics = {
+            "batch_size": x.shape[0],
+            f"{dataset}/loss": loss.mean()}
+        self.log_dict(metrics, prog_bar=True)
+        
         return loss.mean()
     
     # Private methods
@@ -263,6 +226,8 @@ class FM(pl.LightningModule):
                                 rtol=1e-4)        
         
         x0 = self.node.trajectory(z, t_span=t)[-1]
+        if self.scaling_factor != None:
+            x0 = x0 / self.scaling_factor
         
         size_factor = torch.exp(log_size_factor)
         # Decode to parameterize negative binomial
@@ -287,36 +252,12 @@ class FM(pl.LightningModule):
             total_samples.append(X_samples.cpu())
         return torch.cat(total_samples, dim=0)
 
-    def log_probs_x_z0(self, x, x_0, y, size_factor):
-        """
-        Compute log p(x | z_0) for all possible values of each pixel in x.
-
-        Args:
-            x: Input data.
-            z_0: Latent variable.
-            size_factor (float): size factor.
-
-        Returns:
-            torch.Tensor: Log probabilities.
-        """
-        x_hat = self._decode(x_0, size_factor)
-        
-        if not self.covariate_specific_theta:
-            distr = NegativeBinomial(mu=x_hat, theta=torch.exp(self.theta))
-        else:
-            distr = NegativeBinomial(mu=x_hat, theta=torch.exp(self.theta[y]))
-
-        recon_loss = - distr.log_prob(x)
-        return recon_loss
-
     def _decode(self, z, size_factor):
         # Decode the rescaled z
         if self.encoder_type not in ["learnt_autoencoder", "learnt_encoder"]:
             z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
         else:
-            if self.encoder_type=="learnt_autoencoder":
-                z = self.x_from_x0(z)
-            z = F.softmax(z, dim=1) * size_factor
+            z = self.encoder_model.decode(z, size_factor)
         return z
     
     def sample_noise_like(self, x):
@@ -470,16 +411,10 @@ class FM(pl.LightningModule):
         if not self.feature_embeddings[self.conditioning_covariate].one_hot_encode_features:
             for cov in self.feature_embeddings:
                 params += list(self.feature_embeddings[cov].parameters())
-        
-        if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
-            optimizer = torch.optim.Adam(params, 
-                                            lr=0.001)
-        
-        else:
-            optimizer = torch.optim.Adam(params, 
-                                        self.learning_rate, 
-                                        weight_decay=self.weight_decay)
-
+                 
+        optimizer = torch.optim.AdamW(params, 
+                                    self.learning_rate, 
+                                    weight_decay=self.weight_decay)
         return optimizer
 
     def validation_step(self, batch, batch_idx):

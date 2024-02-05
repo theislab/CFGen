@@ -14,7 +14,7 @@ def scanpy_pipeline(adata):
     Returns:
         AnnData: Processed AnnData object.
     """
-    sc.pp.log1p(adata)
+    # sc.pp.log1p(adata)
     sc.tl.pca(adata)
     sc.pp.neighbors(adata)
     sc.tl.umap(adata)

@@ -11,6 +11,7 @@ from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
 from celldreamer.models.fm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
 from celldreamer.models.fm.fm import FM
+from celldreamer.models.base.encoder_model import EncoderModel
 
 # Some general settings for the run
 os.environ["WANDB__SERVICE_WAIT"] = "300"
@@ -93,7 +94,7 @@ class CellDreamerEstimator:
         """Set the model parameters extracted from the data loader object
         """
         self.gene_dim = self.dataset.X.shape[1] 
-        self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.generative_model.x0_from_x_kwargs["dims"][-1]
+        self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.x0_from_x_kwargs["dims"][-1]
 
     def init_trainer(self):
         """
@@ -140,7 +141,12 @@ class CellDreamerEstimator:
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
         """
+        # Initialize denoising model 
         conditioning_cov = self.args.dataset.conditioning_covariate
+        size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
+                                  "sd": self.dataset.log_size_factor_sd}
+        scaler = self.dataset.get_scaler()
+        
         if self.args.denoising_module.denoising_net == "simple_mlp":
             denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
                                                 out_dim=self.args.denoising_module.out_dim,
@@ -164,15 +170,29 @@ class CellDreamerEstimator:
                                             embed_condition=self.args.denoising_module.embed_condition,
                                             n_cond=self.num_classes[conditioning_cov]).to(self.device)
         
-        print("Denoising model")
-        print(denoising_model)
+        print("Denoising model", denoising_model)
         
-        size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
-                                  "sd": self.dataset.log_size_factor_sd}
-        
-        scaler = self.dataset.get_scaler()
-        
+        # Initialize encoder
+        self.encoder_model = EncoderModel(in_dim=self.gene_dim,
+                                          scaler=scaler, 
+                                          n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
+                                          conditioning_covariate=self.args.dataset.conditioning_covariate, 
+                                          encoder_type=self.args.dataset.encoder_type,
+                                          **self.args.encoder)
+        print("Encoder architecture", self.encoder_model)
+    
+        if self.args.training_config.encoder_ckpt != None:
+            # Load weights 
+            print(f"Load checkpoints from {self.args.training_config.encoder_ckpt}")
+            self.encoder_model.load_state_dict(torch.load(self.args.training_config.encoder_ckpt)["state_dict"])
+            # Freeze encoder 
+            for param in self.encoder_model.parameters():
+                param.requires_grad = False
+        self.encoder_model.eval()
+            
+        # Flow matching model
         self.generative_model = FM(
+            encoder_model=self.encoder_model,
             denoising_model=denoising_model,
             feature_embeddings=self.feature_embeddings,
             plotting_folder=self.plotting_dir,
@@ -183,7 +203,7 @@ class CellDreamerEstimator:
             conditioning_covariate=conditioning_cov,
             model_type=denoising_model.model_type, 
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
-        )
+            )
 
     def train(self):
         """

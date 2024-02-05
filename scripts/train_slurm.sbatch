@@ -22,7 +22,7 @@
 
 conda activate celldreamer
 
-python ../celldreamer/train.py denoising_module=default launcher=slurm_icb generative_model.pretraining_encoder_epochs=1 trainer.max_epochs=6 dataset=dentategyrus dataset.encoder_type=learnt_encoder denoising_module=resnet denoising_module.conditional=True dataset.one_hot_encode_features=False dataset.cov_embedding_dimensions=16 logger.project=fm_mlp_encoder_cond_resnet
+python ../celldreamer/train_sccfm.py dataset=dentategyrus dataset.one_hot_encode_features=False denoising_module=resnet launcher=slurm_icb logger.project=fm_resnet_autoencoder_dentate hydra.launcher.qos=gpu_normal dataset.encoder_type=learnt_autoencoder training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_dentategyrus/0c0a45f8-ff08-4d26-a92d-7d34f52f649f/checkpoints/last.ckpt
 
 # python ../celldreamer/train.py denoising_module=default launcher=slurm_icb generative_model.pretraining_encoder_epochs=200 trainer.max_epochs=1500 dataset=dentategyrus dataset.encoder_type=learnt_encoder denoising_module.conditional=True training_config.batch_size=256 logger.project=fm_mlp_encoder_cond
 # python ../celldreamer/train.py denoising_module=default launcher=slurm_icb generative_model.pretraining_encoder_epochs=5 trainer.max_epochs=7 dataset=dentategyrus dataset.encoder_type=learnt_encoder denoising_module.conditional=True training_config.batch_size=256 logger.offline=True
