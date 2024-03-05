@@ -81,7 +81,7 @@ class EncoderModel(pl.LightningModule):
                                 weight_decay=self.weight_decay)
     
     def encode(self, batch):
-        X_scaled = self.scaler.scale(batch["X_norm"].to(self.device))
+        X_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
         return self.x0_from_x(X_scaled)
     
     def decode(self, x, size_factor):

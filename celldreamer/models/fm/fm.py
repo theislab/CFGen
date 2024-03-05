@@ -35,12 +35,9 @@ class FM(pl.LightningModule):
                  weight_decay: float = 0.0001, 
                  antithetic_time_sampling: bool = True, 
                  scaling_method: str = "log_normalization",  # Change int to str
-                 pretrain_encoder: bool = False,  # Change float to bool
-                 pretraining_encoder_epochs: int = 0, 
                  sigma: float = 0.1, 
                  covariate_specific_theta: float = False, 
-                 plot_and_eval_every=100, 
-                 scaling_factor=1):
+                 plot_and_eval_every=100):
         """
         Variational Diffusion Model (VDM).
 
@@ -55,8 +52,6 @@ class FM(pl.LightningModule):
             weight_decay (float, optional): Weight decay. Defaults to 0.0001.
             antithetic_time_sampling (bool, optional): Use antithetic time sampling. Defaults to True.
             scaling_method (str, optional): Scaling method for input data. Defaults to "log_normalization".
-            pretrain_encoder (bool, optional): Pretrain the likelihood encoder.
-            pretraining_encoder_epochs (int, optional): How many epochs used for the pretraining.
             sigma (float, optional): variance around straight path for flow matching objective.
         """
         super().__init__()
@@ -73,14 +68,11 @@ class FM(pl.LightningModule):
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
         self.plotting_folder = plotting_folder
-        self.pretrain_encoder = pretrain_encoder
-        self.pretraining_encoder_epochs = pretraining_encoder_epochs
         self.model_type = model_type
         self.conditioning_covariate = conditioning_covariate
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
-        self.scaling_factor = scaling_factor
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
@@ -132,8 +124,6 @@ class FM(pl.LightningModule):
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             with torch.no_grad():
                 x0 = self.encoder_model.encode(batch)
-                if self.scaling_factor!=None:
-                    x0 = x0 * self.scaling_factor
         else:
             x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
             x0 = x_scaled
@@ -222,22 +212,19 @@ class FM(pl.LightningModule):
         self.node = NeuralODE(denoising_model_ode,
                                 solver="dopri5", 
                                 sensitivity="adjoint", 
-                                atol=1e-4, 
-                                rtol=1e-4)        
+                                atol=1e-5, 
+                                rtol=1e-5)        
         
         x0 = self.node.trajectory(z, t_span=t)[-1]
-        if self.scaling_factor != None:
-            x0 = x0 / self.scaling_factor
         
         size_factor = torch.exp(log_size_factor)
         # Decode to parameterize negative binomial
         x = self._decode(x0, size_factor)
-        del x0
         
         if not self.covariate_specific_theta:
-            distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta))
+            distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta))
         else:
-            distr = NegativeBinomial(mu=x, theta=torch.exp(self.theta[covariate_indices]))
+            distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta[covariate_indices]))
 
         sample = distr.sample()
         return sample

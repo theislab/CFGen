@@ -1,5 +1,4 @@
 learning_rate: 0.0001 
-weight_decay: 0.00001 
+weight_decay: 0.000001 
 antithetic_time_sampling: True 
 sigma: 0.0001
-scaling_factor: Null

@@ -25,9 +25,9 @@ hydra:
       dataset.cov_embedding_dimensions: choice(128, 256)
 
       denoising_module.embedding_dim: choice(128, 256)
-      denoising_module.n_blocks: choice(2, 3, 4)
+      denoising_module.No: choice(2, 3, 4)
 
-      generative_model.learning_rate: choice(0.0001, 0.001) 
+      generative_model.learning_rate: choice(0.0001) 
       generative_model.weight_decay: choice(0.00001, 0.000001) 
       generative_model.antithetic_time_sampling: choice(True, False)
       generative_model.sigma: choice(0, 0.0001, 0.001, 0.01, 0.1)

@@ -11,6 +11,7 @@ def normalize_expression(X, size_factor, encoder_type):
     Returns:
         torch.Tensor: Normalized gene expression data.
     """
+    print(encoder_type)
     if encoder_type == "proportions":
         X = X / size_factor
     elif encoder_type in ["log_gexp", "learnt_encoder", "learnt_autoencoder"]:
