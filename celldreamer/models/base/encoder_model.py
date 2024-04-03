@@ -77,8 +77,8 @@ class EncoderModel(pl.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), 
-                                lr=self.learning_rate,
-                                weight_decay=self.weight_decay)
+                                    lr=self.learning_rate,
+                                    weight_decay=self.weight_decay)
     
     def encode(self, batch):
         X_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
