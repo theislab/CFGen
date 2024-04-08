@@ -1,6 +1,5 @@
 x0_from_x_kwargs:
-  # dims: [512, 256, 50]
-  dims: [500, 300, 200]
+  dims: [512, 256, 50]
   batch_norm: True
   dropout: False 
   dropout_p: 0.0

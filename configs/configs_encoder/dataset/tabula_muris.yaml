@@ -1,7 +1,7 @@
-dataset_path: ../datasets/processed/lung_atlas.h5ad
+dataset_path: ../datasets/processed/tabula_muris.h5ad
 layer_key: X_counts
-covariate_keys: [cell_type, batch]
-conditioning_covariate: cell_type
+covariate_keys: [tissue]
+conditioning_covariate: tissue
 subsample_frac: 1
 encoder_type: "learnt_encoder"
 target_max: 1

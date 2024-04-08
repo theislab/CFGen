@@ -37,7 +37,8 @@ class FM(pl.LightningModule):
                  scaling_method: str = "log_normalization",  # Change int to str
                  sigma: float = 0.1, 
                  covariate_specific_theta: float = False, 
-                 plot_and_eval_every=100):
+                 plot_and_eval_every=100, 
+                 use_ot=True):
         """
         Variational Diffusion Model (VDM).
 
@@ -73,6 +74,7 @@ class FM(pl.LightningModule):
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
+        self.use_ot = use_ot
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
@@ -279,7 +281,8 @@ class FM(pl.LightningModule):
         [1] Improving and Generalizing Flow-Based Generative Models with minibatch optimal transport, Preprint, Tong et al.
         """
         # Resample from OT coupling 
-        x0, x1 = self.ot_sampler.sample_plan(x0, x1)
+        if self.use_ot:
+            x0, x1 = self.ot_sampler.sample_plan(x0, x1)
         # Sample time 
         if t is None:
             t = torch.rand(x0.shape[0]).type_as(x0)
@@ -338,8 +341,11 @@ class FM(pl.LightningModule):
         ----------
         [1] Improving and Generalizing Flow-Based Generative Models with minibatch optimal transport, Preprint, Tong et al.
         """
-        t = pad_t_like_x(t, x0)
-        mu_t = t * x1 + (1 - t) * x0
+        t = pad_t_like_x(t, x1)
+        if self.use_ot:
+            mu_t = t * x1 + (1 - t) * x0
+        else:
+            mu_t = t * x1
         return mu_t
     
     def compute_sigma_t(self, t):
@@ -358,8 +364,10 @@ class FM(pl.LightningModule):
         ----------
         [1] Improving and Generalizing Flow-Based Generative Models with minibatch optimal transport, Preprint, Tong et al.
         """
-        del t
-        return self.sigma
+        if self.use_ot:
+            return self.sigma
+        else:
+            return 1 - (1 - self.sigma) * t
     
     def compute_conditional_flow(self, x0, x1, t, xt):
         """
@@ -383,8 +391,11 @@ class FM(pl.LightningModule):
         ----------
         [1] Improving and Generalizing Flow-Based Generative Models with minibatch optimal transport, Preprint, Tong et al.
         """
-        del t, xt
-        return x1 - x0
+        if self.use_ot:
+            return x1 - x0
+        else:
+            t = t.unsqueeze(1)
+            return (x1 - (1 - self.sigma) * xt) / (1 - (1 - self.sigma) * t)
 
     def configure_optimizers(self):
         """

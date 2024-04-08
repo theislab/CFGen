@@ -18,3 +18,4 @@ hydra-optuna-sweeper
 hydra-submitit-launcher
 pot
 torchdyn
+muon
