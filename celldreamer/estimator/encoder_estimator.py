@@ -58,7 +58,8 @@ class EncoderEstimator:
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
                                     target_max=self.args.dataset.target_max, 
-                                    target_min=self.args.dataset.target_min)
+                                    target_min=self.args.dataset.target_min,
+                                    multimodal=self.args.dataset.multimodal)
         
         # Number of categories
         if self.args.encoder.covariate_specific_theta:
@@ -85,7 +86,10 @@ class EncoderEstimator:
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
         """
-        self.gene_dim = self.dataset.X.shape[1] 
+        if not self.dataset.multimodal:
+            self.gene_dim = self.dataset.X.shape[1] 
+        else:
+            self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
 
     def init_trainer(self):
         """

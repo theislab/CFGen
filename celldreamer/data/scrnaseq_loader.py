@@ -1,5 +1,6 @@
 import numpy as np
 import scanpy as sc
+import muon as mu
 import torch
 from celldreamer.data.utils import Scaler, normalize_expression, compute_size_factor_lognorm
 
@@ -13,7 +14,8 @@ class RNAseqLoader:
         subsample_frac=1,
         encoder_type="proportions", 
         target_max=1, 
-        target_min=-1):
+        target_min=-1,
+        multimodal=False):
         """
         Initialize the RNAseqLoader.
 
@@ -28,42 +30,81 @@ class RNAseqLoader:
         """
         # Initialize encoder type
         self.encoder_type = encoder_type
+
+        # Whether multimodal dataset 
+        self.multimodal = multimodal
         
         # Read adata
-        adata = sc.read(data_path)
+        if not self.multimodal:
+            adata = sc.read(data_path)
+        else:
+            adata_mu = mu.read(data_path)
+            self.modality_list = list(adata_mu.mod.keys())
+            adata = {}
+            for mod in self.modality_list:
+                adata[mod] = adata_mu.mod[mod]
+            del adata_mu
         
         # Subsample if required
         if subsample_frac < 1:
-            sc.pp.subsample(adata, fraction=subsample_frac)
-        
+            if not self.multimodal:
+                sc.pp.subsample(adata, fraction=subsample_frac)
+            else:
+                for mod in self.modality_list:
+                    sc.pp.subsample(adata[mod], fraction=subsample_frac)
+                
         # Transform genes to tensors
-        if layer_key not in adata.layers:
-            adata.layers[layer_key] = adata.X.copy()
+        if not self.multimodal:
+            if layer_key not in adata.layers:
+                adata.layers[layer_key] = adata.X.copy()
+        else:
+            for mod in self.modality_list:
+                if layer_key not in adata[mod].layers:
+                    adata[mod].layers[layer_key] = adata[mod].X.copy()
         
         # Transform X into a tensor
-        self.X = torch.Tensor(adata.layers[layer_key].todense())
+        if not self.multimodal:
+            self.X = torch.Tensor(adata.layers[layer_key].todense())
+            
+            # Get normalized gene expression 
+            self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
         
-        # Get normalized gene expression 
-        self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
-    
-        # Initialize scaler object 
-        self.scaler = Scaler(target_min=target_min, target_max=target_max)
-        self.scaler.fit(self.X_norm)
+            # Initialize scaler object 
+            self.scaler = Scaler(target_min=target_min, target_max=target_max)
+            self.scaler.fit(self.X_norm)
+        else:
+            self.X = {}
+            self.X_norm = {}
+            self.scaler = {}
+            for mod in self.modality_list:
+                self.X[mod] = torch.Tensor(adata[mod].layers[layer_key].todense())
+                self.X_norm[mod] = normalize_expression(self.X[mod], self.X[mod].sum(1).unsqueeze(1), encoder_type)
+                scaler_mod = Scaler(target_min=target_min, target_max=target_max)
+                scaler_mod.fit(self.X_norm[mod])
+                self.scaler[mod] = scaler_mod
         
         # Covariate to index
         self.id2cov = {}  # cov_name: dict_cov_2_id 
         self.Y_cov = {}   # cov: cov_ids
+        adata_obs = adata.obs if not self.multimodal else adata["rna"].obs
         for cov_name in covariate_keys:
-            cov = np.array(adata.obs[cov_name])
+            cov = np.array(adata_obs[cov_name])
             unique_cov = np.unique(cov)
             zip_cov_cat = dict(zip(unique_cov, np.arange(len(unique_cov))))  
             self.id2cov[cov_name] = zip_cov_cat
             self.Y_cov[cov_name] = torch.tensor([zip_cov_cat[c] for c in cov])
         
         # Compute mean and logvar of size factor
-        self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata, layer_key, self.id2cov)
-        log_size_factors = torch.log(self.X.sum(1))
-        self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
+        if not self.multimodal:
+            self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata, layer_key, self.id2cov)
+            log_size_factors = torch.log(self.X.sum(1))
+            self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
+        else:
+            self.log_size_factor_mu, self.log_size_factor_sd, self.max_size_factor, self.min_size_factor = {},{},{},{}
+            for mod in self.modality_list:
+                self.log_size_factor_mu[mod], self.log_size_factor_sd[mod] = compute_size_factor_lognorm(adata[mod], layer_key, self.id2cov)
+                log_size_factors = torch.log(self.X[mod].sum(1))
+                self.max_size_factor[mod], self.min_size_factor[mod] = log_size_factors.max(), log_size_factors.min()
     
     def get_scaler(self):
         """Return the scaler object
@@ -80,10 +121,19 @@ class RNAseqLoader:
         Returns:
             dict: Dictionary containing X (gene expression) and y (covariates).
         """
-        X = self.X[i]
-        y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
-        X_norm = self.X_norm[i]
-        return dict(X=X, X_norm=X_norm, y=y)
+        if not self.multimodal:
+            X = self.X[i]
+            y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
+            X_norm = self.X_norm[i]
+            return dict(X=X, X_norm=X_norm, y=y)
+        else:
+            X = {}
+            X_norm = {}
+            for mod in self.modality_list:
+                X[mod] = self.X[mod][i]
+                X_norm[mod] = self.X_norm[mod][i]
+            y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
+            return dict(X=X, X_norm=X_norm, y=y)
 
     def __len__(self):
         """
@@ -92,5 +142,5 @@ class RNAseqLoader:
         Returns:
             int: Length of the dataset.
         """
-        return len(self.X)
+        return len(self.X["rna"])
     
