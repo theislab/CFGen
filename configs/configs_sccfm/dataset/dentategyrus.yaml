@@ -1,4 +1,4 @@
-dataset_path: ../datasets/processed/dentategyrus.h5ad
+dataset_path: ../project_folder/datasets/processed/dentategyrus.h5ad
 layer_key: X_counts
 covariate_keys: [clusters]
 conditioning_covariate: clusters

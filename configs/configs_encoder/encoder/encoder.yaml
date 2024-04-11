@@ -6,3 +6,5 @@ x0_from_x_kwargs:
 learning_rate: 0.001
 weight_decay: 0.00001
 covariate_specific_theta: False 
+multimodal: False
+is_binarized: False
