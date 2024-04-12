@@ -72,7 +72,10 @@ class MLPTimeStep(pl.LightningModule):
                  normalization="layer", 
                  conditional=False,
                  embed_condition=False, 
-                 n_cond=None):
+                 n_cond=None,
+                 multimodal=False, 
+                 is_binarized=False, 
+                 modality_list=None):
         
         super().__init__()
         
@@ -91,8 +94,11 @@ class MLPTimeStep(pl.LightningModule):
         self.embedding_dim = embedding_dim
         self.embed_condition = embed_condition
         self.conditional = conditional
+        self.multimodal = multimodal
+        self.is_binarized = is_binarized
+        self.modality_list = modality_list
         
-        added_dimensions = 0  # Incremented if not embedding conditioning variables 
+        added_dimensions = 0  # incremented if not embedding conditioning variables 
         
         # Time embedding network
         if embed_time:
@@ -112,7 +118,7 @@ class MLPTimeStep(pl.LightningModule):
                     Linear(embedding_dim * 4, embedding_dim * 4))
             else:
                 added_dimensions += 1
-        
+            
         # Covariate embedding
         if conditional:
             if embed_condition:
@@ -160,7 +166,7 @@ class MLPTimeStep(pl.LightningModule):
         # Make a copy of time for using in time embeddings
         t_for_embeddings = t.clone().detach()
                 
-        # Get time to shape (B, ).
+        # Embed time
         if self.embed_time:
             t_for_embeddings = t_for_embeddings.squeeze()
             emb = self.time_embedder(get_timestep_embedding(t_for_embeddings, self.embedding_dim))
@@ -176,19 +182,31 @@ class MLPTimeStep(pl.LightningModule):
             else:
                 emb = torch.cat([emb, y], dim=1)
     
-        # Size factor 
+        # Embed size factor
         if self.model_type == "conditional_latent":
-            if self.embed_size_factor:
-                l = l.squeeze()
-                l = (l - self.size_factor_min) / (self.size_factor_max - self.size_factor_min)
-                l = self.size_factor_embedder(get_timestep_embedding(l, self.embedding_dim))
-                emb = emb + l
+            if self.multimodal and not self.is_binarized:
+                for mod in self.modality_list:
+                    if self.embed_size_factor:
+                        l_mod = l[mod].squeeze()
+                        l_mod = (l_mod - self.size_factor_min[mod]) / (self.size_factor_max[mod] - self.size_factor_min[mod])
+                        l_mod = self.size_factor_embedder(get_timestep_embedding(l_mod, self.embedding_dim))
+                        emb = emb + l_mod
+                    else:
+                        if l[mod].ndim != x.ndim:
+                            l = unsqueeze_right(l[mod], x.ndim-l[mod].ndim)  
+                        emb = torch.cat([emb, l[mod]], dim=1)
             else:
-                if l.ndim != x.ndim:
-                    l = unsqueeze_right(l, x.ndim-l.ndim)  
-                emb = torch.cat([emb, l], dim=1)
+                if self.embed_size_factor:
+                    l = l.squeeze()
+                    l = (l - self.size_factor_min) / (self.size_factor_max - self.size_factor_min)
+                    l = self.size_factor_embedder(get_timestep_embedding(l, self.embedding_dim))
+                    emb = emb + l
+                else:
+                    if l.ndim != x.ndim:
+                        l = unsqueeze_right(l, x.ndim-l.ndim)  
+                    emb = torch.cat([emb, l], dim=1)                
 
-        # Embed x
+        # Compute prediction
         h = self.net_in(x)  
         for block in self.blocks:  # n_blocks times
             h = block(h, emb)
@@ -224,7 +242,6 @@ class ResnetBlock(nn.Module):
     
         # Set output_dim to input_dim if not provided
         out_dim = in_dim if out_dim is None else out_dim
-
         self.out_dim = out_dim
 
         # First linear block with LayerNorm and SiLU activation

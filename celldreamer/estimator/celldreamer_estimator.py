@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from pathlib import Path
 import uuid
 import torch
@@ -34,6 +35,8 @@ class CellDreamerEstimator:
         
         # dataset path as Path object 
         self.data_path = Path(self.args.dataset.dataset_path)
+        self.multimodal = self.args.dataset.multimodal
+        self.is_binarized = self.args.encoder.is_binarized
         
         # Initialize training directory         
         self.training_dir = TRAINING_FOLDER / self.args.logger.project / self.unique_id
@@ -66,7 +69,9 @@ class CellDreamerEstimator:
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
                                     target_max=self.args.dataset.target_max, 
-                                    target_min=self.args.dataset.target_min)
+                                    target_min=self.args.dataset.target_min, 
+                                    multimodal=self.multimodal,
+                                    is_binarized=self.is_binarized)
 
         # Initialize the data loaders 
         self.train_data, self.test_data, self.valid_data = random_split(self.dataset,
@@ -93,8 +98,19 @@ class CellDreamerEstimator:
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
         """
-        self.gene_dim = self.dataset.X.shape[1] 
-        self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.x0_from_x_kwargs["dims"][-1]
+        if not self.dataset.multimodal:
+            # If not multimodal, gene dimension and input dimension computed only for RNA
+            self.gene_dim = self.dataset.X.shape[1] 
+            self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.x0_from_x_kwargs["dims"][-1]
+        else:
+            self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
+            self.modality_list = list(self.gene_dim.keys())
+            self.in_dim = {}
+            for mod in self.dataset.X:
+                if self.args.dataset.encoder_type!="learnt_autoencoder":
+                    self.in_dim[mod] = self.gene_dim[mod]
+                else:
+                    self.in_dim[mod] = self.args.encoder.x0_from_x_kwargs[mod]["dims"][-1]
 
     def init_trainer(self):
         """
@@ -142,33 +158,34 @@ class CellDreamerEstimator:
         """Initialize the (optional) autoencoder and generative model 
         """
         # Initialize denoising model 
-        conditioning_cov = self.args.dataset.conditioning_covariate
-        size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
-                                  "sd": self.dataset.log_size_factor_sd}
+        conditioning_cov = self.args.dataset.conditioning_covariate  
+        if not self.dataset.multimodal or (self.dataset.multimodal and self.is_binarized):
+            size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
+                                        "sd": self.dataset.log_size_factor_sd}
+        else:
+            size_factor_statistics = {"mean": {mod: self.dataset.log_size_factor_mu[mod] for mod in self.dataset.log_size_factor_mu}, 
+                                        "sd": {mod: self.dataset.log_size_factor_sd[mod] for mod in self.dataset.log_size_factor_sd}}
+                
         scaler = self.dataset.get_scaler()
         
-        if self.args.denoising_module.denoising_net == "simple_mlp":
-            denoising_model = SimpleMLPTimeStep(in_dim=self.in_dim, 
-                                                out_dim=self.args.denoising_module.out_dim,
-                                                w=self.args.denoising_module.w,
-                                                model_type=self.args.denoising_module.model_type, 
-                                                conditional=self.args.denoising_module.conditional, 
-                                                n_cond=self.num_classes[conditioning_cov])
-        else:
-            denoising_model = MLPTimeStep(in_dim=self.in_dim, 
-                                            hidden_dim=self.args.denoising_module.hidden_dim,
-                                            dropout_prob=self.args.denoising_module.dropout_prob,
-                                            n_blocks=self.args.denoising_module.n_blocks, 
-                                            model_type=self.args.denoising_module.model_type, 
-                                            embed_time=self.args.denoising_module.embed_time,
-                                            size_factor_min=self.dataset.min_size_factor, 
-                                            size_factor_max=self.dataset.max_size_factor,
-                                            embed_size_factor=self.args.denoising_module.embed_size_factor, 
-                                            embedding_dim=self.args.denoising_module.embedding_dim,
-                                            normalization=self.args.denoising_module.normalization,
-                                            conditional=self.args.denoising_module.conditional, 
-                                            embed_condition=self.args.denoising_module.embed_condition,
-                                            n_cond=self.num_classes[conditioning_cov]).to(self.device)
+        # Initialize the deoising model 
+        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()), 
+                                        hidden_dim=self.args.denoising_module.hidden_dim,
+                                        dropout_prob=self.args.denoising_module.dropout_prob,
+                                        n_blocks=self.args.denoising_module.n_blocks, 
+                                        model_type=self.args.denoising_module.model_type, 
+                                        embed_time=self.args.denoising_module.embed_time,
+                                        size_factor_min=self.dataset.min_size_factor, 
+                                        size_factor_max=self.dataset.max_size_factor,
+                                        embed_size_factor=self.args.denoising_module.embed_size_factor, 
+                                        embedding_dim=self.args.denoising_module.embedding_dim,
+                                        normalization=self.args.denoising_module.normalization,
+                                        conditional=self.args.denoising_module.conditional, 
+                                        embed_condition=self.args.denoising_module.embed_condition,
+                                        n_cond=self.num_classes[conditioning_cov], 
+                                        multimodal=self.dataset.multimodal, 
+                                        is_binarized=self.is_binarized, 
+                                        modality_list=self.modality_list).to(self.device)
         
         print("Denoising model", denoising_model)
         
@@ -181,6 +198,7 @@ class CellDreamerEstimator:
                                           **self.args.encoder)
         print("Encoder architecture", self.encoder_model)
     
+        # If model is pre-trained, load weights
         if self.args.training_config.encoder_ckpt != None:
             # Load weights 
             print(f"Load checkpoints from {self.args.training_config.encoder_ckpt}")
@@ -196,12 +214,15 @@ class CellDreamerEstimator:
             denoising_model=denoising_model,
             feature_embeddings=self.feature_embeddings,
             plotting_folder=self.plotting_dir,
-            in_dim=self.gene_dim,
+            in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
             scaler=scaler,
             encoder_type=self.args.dataset.encoder_type,
             conditioning_covariate=conditioning_cov,
             model_type=denoising_model.model_type, 
+            multimodal=self.dataset.multimodal,
+            is_binarized=self.is_binarized,
+            modality_list=self.modality_list,
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
             )
 

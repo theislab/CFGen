@@ -10,3 +10,4 @@ one_hot_encode_features: False
 split_rates: [0.90, 0.10]
 cov_embedding_dimensions: 100
 multimodal: True
+is_binarized: False

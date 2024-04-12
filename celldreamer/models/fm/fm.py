@@ -10,8 +10,8 @@ from torch.distributions import Normal
 import pytorch_lightning as pl
 
 from scvi.distributions import NegativeBinomial
+from torch.distributions import Poisson, Bernoulli
 from celldreamer.models.base.cell_decoder import CellDecoder
-from celldreamer.models.base.utils import MLP
 from celldreamer.eval.evaluate import compute_umap_and_wasserstein
 from celldreamer.models.base.utils import pad_t_like_x
 from celldreamer.models.fm.ode import torch_wrapper
@@ -38,10 +38,13 @@ class FM(pl.LightningModule):
                  sigma: float = 0.1, 
                  covariate_specific_theta: float = False, 
                  plot_and_eval_every=100, 
-                 use_ot=True):
+                 use_ot=True, 
+                 multimodal=False, 
+                 is_binarized=False, 
+                 modality_list=None):
         """
-        Variational Diffusion Model (VDM).
-
+        Flow matching for single-cell model. 
+        
         Args:
             denoising_model (nn.Module): Denoising model.
             feature_embeddings (dict): Feature embeddings for covariates.
@@ -75,12 +78,18 @@ class FM(pl.LightningModule):
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
         self.use_ot = use_ot
+        self.multimodal = multimodal
+        self.is_binarized = is_binarized
+        self.modality_list = modality_list
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
                 
-        # Used to collect test outputs
-        self.testing_outputs = []  
+        # Collection of testing observations for evaluation 
+        if not self.multimodal:
+            self.testing_outputs = []  
+        else:
+            self.testing_outputs = {mod: [] for mod in self.modality_list}
         
         # If the encoder is fixed, we just need an inverting decoder. If learnt, the decoding is simply the softmax operation 
         if encoder_type not in ["learnt_encoder", "learnt_autoencoder"]:
@@ -116,23 +125,41 @@ class FM(pl.LightningModule):
         Returns:
             torch.Tensor: Loss value.
         """
-        # Collect observation
-        x = batch["X"].to(self.device)
+        # Collect observation and put onto device 
+        x = batch["X"]
+        if self.multimodal:
+            x = {mod: x[mod].to(self.device) for mod in x}
+        else:
+            x = x.to(self.device)
         
         # Collect labels 
         y = batch["y"]
         y_fea = self.feature_embeddings[self.conditioning_covariate](y[self.conditioning_covariate])
 
+        # Encode observations into the latent space
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             with torch.no_grad():
                 x0 = self.encoder_model.encode(batch)
+                if self.multimodal:
+                    x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)
         else:
             x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
             x0 = x_scaled
+            if self.multimodal:
+                raise NotImplementedError
 
         # Quantify size factor 
-        size_factor = x.sum(1).unsqueeze(1)
-        log_size_factor = torch.log(size_factor)
+        if not self.multimodal:
+            size_factor = x.sum(1).unsqueeze(1)
+            log_size_factor = torch.log(size_factor)
+        else: 
+            if self.is_binarized:
+                # If binarized, the size factor is not required for atac 
+                size_factor = x["rna"].sum(1).unsqueeze(1)
+                log_size_factor = torch.log(size_factor)            
+            else:
+                size_factor = {mod: x[mod].sum(1).unsqueeze(1) for mod in self.modality_list}
+                log_size_factor = {mod: torch.log(size_factor[mod]) for mod in self.modality_list}
         
         # Sample time 
         t = self._sample_times(x0.shape[0])  # B
@@ -149,7 +176,7 @@ class FM(pl.LightningModule):
         
         # Save results
         metrics = {
-            "batch_size": x.shape[0],
+            "batch_size": z.shape[0],
             f"{dataset}/loss": loss.mean()}
         self.log_dict(metrics, prog_bar=True)
         
@@ -192,23 +219,36 @@ class FM(pl.LightningModule):
 
     @torch.no_grad()
     def sample(self, batch_size, n_sample_steps, covariate, covariate_indices=None, log_size_factor=None):
+        # Sample random noise 
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
         # Sample random classes from the sampling covariate 
         if covariate_indices==None:
             covariate_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, (batch_size,))
              
+        # Sample size factor from the associated distribution
         if log_size_factor==None:
             # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
-            mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
-            mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices], sd_size_factor[covariate_indices]
-            size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
-            log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
-            
+            if self.multimodal and not self.is_binarized:
+                log_size_factor = {}
+                for mod in self.modality_list:
+                    mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][mod][covariate], self.size_factor_statistics["sd"][mod][covariate]
+                    mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices], sd_size_factor[covariate_indices]
+                    size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
+                    log_size_factor_mod = size_factor_dist.sample().to(self.device).view(-1, 1)
+                    log_size_factor[mod] = log_size_factor_mod
+            else:
+                mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
+                mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices], sd_size_factor[covariate_indices]
+                size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
+                log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
+        
+        # Featurize the covariate
         y = self.feature_embeddings[covariate](covariate_indices.cuda())
 
+        # Generate 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
-        
+                
         denoising_model_ode = torch_wrapper(self.denoising_model, log_size_factor, y)    
         
         self.node = NeuralODE(denoising_model_ode,
@@ -218,34 +258,88 @@ class FM(pl.LightningModule):
                                 rtol=1e-5)        
         
         x0 = self.node.trajectory(z, t_span=t)[-1]
-        
-        size_factor = torch.exp(log_size_factor)
-        # Decode to parameterize negative binomial
-        x = self._decode(x0, size_factor)
-        
-        if not self.covariate_specific_theta:
-            distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta))
-        else:
-            distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta[covariate_indices]))
+        if self.multimodal:
+            x0 = torch.split(x0, [self.in_dim[d] for d in self.modality_list], dim=1)
+            x0 = {mod: x0[i] for i, mod in enumerate(self.modality_list)}
 
-        sample = distr.sample()
+        # Exponentiate log-size factor for decoding  
+        if self.multimodal:
+            size_factor = {mod: torch.exp(log_size_factor[mod]) for mod in self.modality_list}
+        else:
+            size_factor = torch.exp(log_size_factor)
+            
+        # Decode to parameterize sampling distributions
+        x = self._decode(x0, size_factor)
+
+        # Sample from noise model
+        if not self.multimodal:
+            if not self.covariate_specific_theta:
+                distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta))
+            else:
+                distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta[covariate_indices]))
+            sample = distr.sample()
+        else:
+            sample = {}  # containing final samples 
+            for mod in x:
+                if mod=="rna":  
+                    if not self.covariate_specific_theta:
+                        distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta))
+                    else:
+                        distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta[covariate_indices]))
+                else:  # if mod is atac
+                    if not self.encoder_model.is_binarized:
+                        distr = Poisson(rate=x[mod])
+                    else:
+                        distr = Bernoulli(probs=x[mod])
+                sample[mod] = distr.sample() 
         return sample
 
     @torch.no_grad()
     def batched_sample(self, batch_size, repetitions, n_sample_steps, covariate, covariate_indices=None, log_size_factor=None):
-        total_samples = []
-        for i in range(repetitions):
-            covariate_indices_batch = covariate_indices[(i*batch_size):((i+1)*batch_size)] if covariate_indices != None else None
-            log_size_factor_batch = log_size_factor[(i*batch_size):((i+1)*batch_size)] if log_size_factor != None else None
+        if not self.multimodal:
+            total_samples = []
+        else:
+            total_samples = {mod:[] for mod in self.modality_list}
+            
+        # Covariate is same for all modalities 
+        covariate_indices_batch = covariate_indices[(i*batch_size):((i+1)*batch_size)] if covariate_indices != None else None
+        for i in range(repetitions): 
+            # Input to the sampling pre-defined size factors if provided to the function 
+            if not self.multimodal or (self.multimodal and self.is_binarized):
+                log_size_factor_batch = log_size_factor[(i*batch_size):((i+1)*batch_size)] if log_size_factor != None else None 
+            else:
+                if log_size_factor != None:
+                    log_size_factor_batch = {} 
+                    for mod in self.modality_list:
+                        log_size_factor_batch[mod] = log_size_factor[mod][(i*batch_size):((i+1)*batch_size)] 
+                else:
+                    log_size_factor_batch = None
+            
+            # Sample batch 
             X_samples = self.sample(batch_size, n_sample_steps, covariate, covariate_indices_batch, log_size_factor_batch)
-            total_samples.append(X_samples.cpu())
-        return torch.cat(total_samples, dim=0)
+                
+            if not self.multimodal: 
+                total_samples.append(X_samples.cpu())
+            else:
+                for mod in X_samples:
+                    total_samples[mod].append(X_samples[mod].cpu())                
+        
+        # Concatenate observations in the samples 
+        if not self.multimodal:
+            return torch.cat(total_samples, dim=0)
+        else:
+            return {mod: torch.cat(total_samples[mod], dim=0) for mod in self.modality_list}                
 
     def _decode(self, z, size_factor):
         # Decode the rescaled z
         if self.encoder_type not in ["learnt_autoencoder", "learnt_encoder"]:
-            z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
+            if self.multimodal:
+                raise NotImplementedError
+            else:
+                z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
         else:
+            if self.multimodal and self.is_binarized:
+                size_factor = {"rna": size_factor}  # Compatibility with the decoder implementation for multimodal data 
             z = self.encoder_model.decode(z, size_factor)
         return z
     
@@ -439,11 +533,19 @@ class FM(pl.LightningModule):
         Returns:
             torch.Tensor: Loss value.
         """
-        self.testing_outputs.append(batch["X"].cpu())
+        # Append the batches
+        if not self.multimodal:
+            self.testing_outputs.append(batch["X"].cpu())
+        else:
+            for mod in self.modality_list:
+                self.testing_outputs[mod].append(batch["X"][mod].cpu())
 
     def on_test_epoch_end(self, *arg, **kwargs):
         self.compute_metrics_and_plots(dataset_type="test")
-        self.testing_outputs = []
+        if not self.multimodal:
+            self.testing_outputs = []
+        else:
+            self.testing_outputs = {}
 
     @torch.no_grad()
     def compute_metrics_and_plots(self, dataset_type, *arg, **kwargs):
@@ -457,7 +559,10 @@ class FM(pl.LightningModule):
             None
         """
         # Concatenate all test observations
-        testing_outputs = torch.cat(self.testing_outputs, dim=0)
+        if not self.multimodal:
+            testing_outputs = torch.cat(self.testing_outputs, dim=0)
+        else:
+            testing_outputs = {mod: torch.cat(self.testing_outputs[mod], dim=0) for mod in self.testing_outputs}
         
         # Plot UMAP of generated cells and real test cells
         wd = compute_umap_and_wasserstein(model=self, 
@@ -467,6 +572,7 @@ class FM(pl.LightningModule):
                                             X_real=testing_outputs, 
                                             epoch=self.current_epoch,
                                             conditioning_covariate=self.conditioning_covariate)
+        
         del testing_outputs
         metric_dict = {}
         for key in wd:

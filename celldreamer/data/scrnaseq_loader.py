@@ -15,7 +15,8 @@ class RNAseqLoader:
         encoder_type="proportions", 
         target_max=1, 
         target_min=-1,
-        multimodal=False):
+        multimodal=False, 
+        is_binarized=False):
         """
         Initialize the RNAseqLoader.
 
@@ -27,19 +28,22 @@ class RNAseqLoader:
             encoder_type (str, optional): Must be in (proportions, log_gexp, log_gexp_scaled).
             target_max (float, optional): Maximum value for scaling gene expression. Defaults to 1.
             target_min (float, optional): Minimum value for scaling gene expression. Defaults to 1.
+            multimodal (bool): If multimodal dataset.
+            is_binarized (bool): If the multimodal data is binarized. ss
         """
         # Initialize encoder type
-        self.encoder_type = encoder_type
+        self.encoder_type = encoder_type  
 
         # Whether multimodal dataset 
         self.multimodal = multimodal
+        self.is_binarized = is_binarized
         
         # Read adata
         if not self.multimodal:
             adata = sc.read(data_path)
         else:
             adata_mu = mu.read(data_path)
-            self.modality_list = list(adata_mu.mod.keys())
+            self.modality_list = list(adata_mu.mod.keys())  # "rna" and "atac"
             adata = {}
             for mod in self.modality_list:
                 adata[mod] = adata_mu.mod[mod]
@@ -94,18 +98,23 @@ class RNAseqLoader:
             self.id2cov[cov_name] = zip_cov_cat
             self.Y_cov[cov_name] = torch.tensor([zip_cov_cat[c] for c in cov])
         
-        # Compute mean and logvar of size factor
+        # Compute mean, standard deviation, maximum and minimum size factor - dictionary only if non-binarized multimodal 
         if not self.multimodal:
             self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata, layer_key, self.id2cov)
             log_size_factors = torch.log(self.X.sum(1))
             self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
         else:
-            self.log_size_factor_mu, self.log_size_factor_sd, self.max_size_factor, self.min_size_factor = {},{},{},{}
-            for mod in self.modality_list:
-                self.log_size_factor_mu[mod], self.log_size_factor_sd[mod] = compute_size_factor_lognorm(adata[mod], layer_key, self.id2cov)
-                log_size_factors = torch.log(self.X[mod].sum(1))
-                self.max_size_factor[mod], self.min_size_factor[mod] = log_size_factors.max(), log_size_factors.min()
-    
+            if not self.is_binarized:
+                self.log_size_factor_mu, self.log_size_factor_sd, self.max_size_factor, self.min_size_factor = {},{},{},{}
+                for mod in self.modality_list:
+                    self.log_size_factor_mu[mod], self.log_size_factor_sd[mod] = compute_size_factor_lognorm(adata[mod], layer_key, self.id2cov)
+                    log_size_factors = torch.log(self.X[mod].sum(1))
+                    self.max_size_factor[mod], self.min_size_factor[mod] = log_size_factors.max(), log_size_factors.min()
+            else:
+                self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata["rna"], layer_key, self.id2cov)
+                log_size_factors = torch.log(self.X["rna"].sum(1))
+                self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
+            
     def get_scaler(self):
         """Return the scaler object
         """
@@ -121,9 +130,11 @@ class RNAseqLoader:
         Returns:
             dict: Dictionary containing X (gene expression) and y (covariates).
         """
+        # Covariate
+        y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
+        # Return sampled cells
         if not self.multimodal:
             X = self.X[i]
-            y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
             X_norm = self.X_norm[i]
             return dict(X=X, X_norm=X_norm, y=y)
         else:
@@ -132,7 +143,6 @@ class RNAseqLoader:
             for mod in self.modality_list:
                 X[mod] = self.X[mod][i]
                 X_norm[mod] = self.X_norm[mod][i]
-            y = {cov: self.Y_cov[cov][i] for cov in self.Y_cov}
             return dict(X=X, X_norm=X_norm, y=y)
 
     def __len__(self):

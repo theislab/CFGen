@@ -61,24 +61,40 @@ def compute_umap_and_wasserstein(model,
         AnnData: Annotated Data object containing the generated samples with UMAP coordinates.
     """
     # Generate data and compute Wasserstein distance from test data
+    if not model.multimodal: 
+        modality_list = ["rna"]
+    else:
+        modality_list = model.modality_list
+
+    # Sample batches 
     repetitions  = batch_size // 100
-    X_generated = model.batched_sample(100, repetitions, n_sample_steps, covariate=conditioning_covariate)
-    X_generated = X_generated.cpu()
-    wd = compute_distribution_distances(X_generated, X_real)
-    # Compute and plot UMAP of generated data
-    X_generated = X_generated.numpy()
-    adata_generated = sc.AnnData(X=X_generated.copy())
-    adata_generated = scanpy_pipeline(adata_generated)
-    plot_and_save_umap(adata_generated, plotting_folder, epoch, real_and_fake_dataset=False)
+    X_generated_dict = model.batched_sample(100, repetitions, n_sample_steps, covariate=conditioning_covariate)
     
-    # Process the real data, take logarithm and compute UMAP 
-    X = np.concatenate([X_generated, 
-                        X_real.numpy()], axis=0) 
-    annot = ["generated" for _ in range(len(X_generated))]  + ["real" for _ in range(len(X_real))]
-    annot_df = pd.DataFrame({"dataset_type": annot})
-    adata_real_fake = sc.AnnData(X=X, obs=annot_df)
-    adata_real_fake = scanpy_pipeline(adata_real_fake)
-    plot_and_save_umap(adata_real_fake, plotting_folder, epoch, real_and_fake_dataset=True)    
+    # Collect into a dictionary 
+    if len(modality_list)==1:
+        X_generated_dict = {"rna": X_generated_dict}
+    
+    # Calculate metrics per modality 
+    wd = {}
+    for mod in modality_list:
+        X_generated = X_generated_dict[mod].cpu()
+        wd_mod = compute_distribution_distances(X_generated, X_real[mod])
+        wd_mod = {f"{key}_{mod}":val for key,val in wd_mod.items()}
+        wd.update(wd_mod)
+        # Compute and plot UMAP of generated data
+        X_generated = X_generated.numpy()
+        adata_generated = sc.AnnData(X=X_generated.copy())
+        adata_generated = scanpy_pipeline(adata_generated)
+        plot_and_save_umap(adata_generated, plotting_folder / mod, epoch, real_and_fake_dataset=False)
+        
+        # Process the real data, take logarithm and compute UMAP 
+        X = np.concatenate([X_generated, 
+                            X_real[mod].numpy()], axis=0) 
+        annot = ["generated" for _ in range(len(X_generated))]  + ["real" for _ in range(len(X_real[mod]))]
+        annot_df = pd.DataFrame({"dataset_type": annot})
+        adata_real_fake = sc.AnnData(X=X, obs=annot_df)
+        adata_real_fake = scanpy_pipeline(adata_real_fake)
+        plot_and_save_umap(adata_real_fake, plotting_folder / mod, epoch, real_and_fake_dataset=True)    
     return wd
 
 def compute_pairwise_distance(data_x, data_y=None):
@@ -94,7 +110,6 @@ def compute_pairwise_distance(data_x, data_y=None):
     dists = sklearn.metrics.pairwise_distances(
         data_x, data_y, metric='euclidean', n_jobs=8)
     return dists
-
 
 def get_kth_value(unsorted, k, axis=-1):
     """
