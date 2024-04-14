@@ -99,7 +99,8 @@ class FM(pl.LightningModule):
         self.save_hyperparameters()
         
         # OT sampler
-        self.ot_sampler = OTPlanSampler(method="exact")
+        if self.use_ot:
+            self.ot_sampler = OTPlanSampler(method="exact")
     
     def training_step(self, batch, batch_idx):
         """
@@ -126,7 +127,7 @@ class FM(pl.LightningModule):
             torch.Tensor: Loss value.
         """
         # Collect observation and put onto device 
-        x = batch["X"]
+        x = batch["X"]  # counts
         if self.multimodal:
             x = {mod: x[mod].to(self.device) for mod in x}
         else:
@@ -258,12 +259,14 @@ class FM(pl.LightningModule):
                                 rtol=1e-5)        
         
         x0 = self.node.trajectory(z, t_span=t)[-1]
+        
+        # If multimodal, split the output to get separate z's
         if self.multimodal:
             x0 = torch.split(x0, [self.in_dim[d] for d in self.modality_list], dim=1)
             x0 = {mod: x0[i] for i, mod in enumerate(self.modality_list)}
 
         # Exponentiate log-size factor for decoding  
-        if self.multimodal:
+        if self.multimodal and not self.is_binarized:
             size_factor = {mod: torch.exp(log_size_factor[mod]) for mod in self.modality_list}
         else:
             size_factor = torch.exp(log_size_factor)
@@ -302,8 +305,8 @@ class FM(pl.LightningModule):
             total_samples = {mod:[] for mod in self.modality_list}
             
         # Covariate is same for all modalities 
-        covariate_indices_batch = covariate_indices[(i*batch_size):((i+1)*batch_size)] if covariate_indices != None else None
         for i in range(repetitions): 
+            covariate_indices_batch = covariate_indices[(i*batch_size):((i+1)*batch_size)] if covariate_indices != None else None
             # Input to the sampling pre-defined size factors if provided to the function 
             if not self.multimodal or (self.multimodal and self.is_binarized):
                 log_size_factor_batch = log_size_factor[(i*batch_size):((i+1)*batch_size)] if log_size_factor != None else None 

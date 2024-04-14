@@ -21,7 +21,7 @@
 #SBATCH --nice=10000
 
 conda activate celldreamer
-# python ../celldreamer/train_encoder.py dataset=dentategyrus dataset.encoder_type=learnt_autoencoder logger.project=train_autoencoder_dentategyrus trainer.max_epochs=200
+python ../celldreamer/train_encoder.py dataset=dentategyrus dataset.encoder_type=learnt_autoencoder logger.project=train_autoencoder_dentategyrus trainer.max_epochs=200
 # python ../celldreamer/train_encoder.py dataset=hlca_core dataset.encoder_type=learnt_autoencoder logger.project=train_autoencoder_hlca_core trainer.max_epochs=200
 # python ../celldreamer/train_encoder.py dataset=neurips dataset.encoder_type=learnt_autoencoder logger.project=train_autoencoder_neurips trainer.max_epochs=200
 # python ../celldreamer/train_encoder.py dataset=pbmc3k dataset.encoder_type=learnt_autoencoder logger.project=train_autoencoder_pbmc3k trainer.max_epochs=200

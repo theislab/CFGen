@@ -59,7 +59,8 @@ class EncoderEstimator:
                                     encoder_type=self.args.dataset.encoder_type,
                                     target_max=self.args.dataset.target_max, 
                                     target_min=self.args.dataset.target_min,
-                                    multimodal=self.args.dataset.multimodal)
+                                    multimodal=self.args.dataset.multimodal, 
+                                    is_binarized=self.args.dataset.is_binarized)
         
         # Number of categories
         if self.args.encoder.covariate_specific_theta:

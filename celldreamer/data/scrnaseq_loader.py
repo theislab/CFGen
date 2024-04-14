@@ -34,7 +34,7 @@ class RNAseqLoader:
         # Initialize encoder type
         self.encoder_type = encoder_type  
 
-        # Whether multimodal dataset 
+        # Multimodal dataset or not  
         self.multimodal = multimodal
         self.is_binarized = is_binarized
         
@@ -152,5 +152,8 @@ class RNAseqLoader:
         Returns:
             int: Length of the dataset.
         """
-        return len(self.X["rna"])
+        if self.multimodal:
+            return len(self.X["rna"])
+        else:
+            return len(self.X)
     

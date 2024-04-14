@@ -102,6 +102,7 @@ class CellDreamerEstimator:
             # If not multimodal, gene dimension and input dimension computed only for RNA
             self.gene_dim = self.dataset.X.shape[1] 
             self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.x0_from_x_kwargs["dims"][-1]
+            self.modality_list = None 
         else:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
             self.modality_list = list(self.gene_dim.keys())
@@ -169,7 +170,7 @@ class CellDreamerEstimator:
         scaler = self.dataset.get_scaler()
         
         # Initialize the deoising model 
-        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()), 
+        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 

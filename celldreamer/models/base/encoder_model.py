@@ -32,7 +32,6 @@ class EncoderModel(pl.LightningModule):
         decode: Decodes encoded data.
 
     """
-
     def __init__(self,
                  in_dim,
                  x0_from_x_kwargs,
@@ -69,11 +68,12 @@ class EncoderModel(pl.LightningModule):
         if multimodal:
             self.modality_list = list(self.x0_from_x_kwargs.keys())
 
-        # ONLY for gene expression we initialize the theta value
+        # Theta for the negative binomial parameterization of scRNA-seq
+        in_dim_rna = self.in_dim if not self.multimodal else self.in_dim["rna"]
         if not covariate_specific_theta:
-            self.theta = torch.nn.Parameter(torch.randn(self.in_dim["rna"]), requires_grad=True)
+            self.theta = torch.nn.Parameter(torch.randn(in_dim_rna), requires_grad=True)
         else:
-            self.theta = torch.nn.Parameter(torch.randn(n_cat, self.in_dim["rna"]), requires_grad=True)
+            self.theta = torch.nn.Parameter(torch.randn(n_cat, in_dim_rna), requires_grad=True)
 
         # Initialize all the metrics
         if encoder_type == "learnt_encoder":
@@ -117,7 +117,6 @@ class EncoderModel(pl.LightningModule):
             loss (tensor): Loss value for the step.
 
         """
-
         if not self.multimodal:
             X = batch["X"].to(self.device)
             size_factor = X.sum(1).unsqueeze(1).to(self.device)
@@ -135,18 +134,18 @@ class EncoderModel(pl.LightningModule):
         z = self.encode(batch)
         mu_hat = self.decode(z, size_factor)
 
+        # Compute the negative log-likelihood of the data under the model
         if not self.multimodal:
             if not self.covariate_specific_theta:
                 px = NegativeBinomial(mu=mu_hat, theta=torch.exp(self.theta))
             else:
                 px = NegativeBinomial(mu=mu_hat, theta=torch.exp(self.theta[y]))
-
             loss = - px.log_prob(X).sum(1).mean()
-
         else:
             loss = 0
             for mod in mu_hat:
                 if mod == "rna":
+                    # Negative Binomial log-likelihood
                     if not self.covariate_specific_theta:
                         px = NegativeBinomial(mu=mu_hat[mod], theta=torch.exp(self.theta))
                     else:
@@ -156,7 +155,8 @@ class EncoderModel(pl.LightningModule):
                         px = Poisson(rate=mu_hat[mod])
                     else:
                         px = Bernoulli(probs=mu_hat[mod])
-
+                else:
+                    raise NotImplementedError
                 loss -= px.log_prob(X[mod]).sum(1).mean()
 
         self.log(f'{dataset_type}/loss', loss, on_epoch=True, prog_bar=True)
@@ -242,14 +242,14 @@ class EncoderModel(pl.LightningModule):
             if self.encoder_type == "learnt_autoencoder":
                 x = self.x_from_x0(x)
             mu_hat = F.softmax(x, dim=1)
-            mu_hat = mu_hat * size_factor
+            mu_hat = mu_hat * size_factor  # assume single modality is RNA
         else:
             mu_hat = {}
             for mod in self.modality_list:
                 if self.encoder_type == "learnt_autoencoder":
                     x_mod = self.x_from_x0[mod](x[mod])
                 if mod != "atac" or (mod == "atac" and not self.is_binarized):
-                    mu_hat_mod = F.softmax(x_mod, dim=1)
+                    mu_hat_mod = F.softmax(x_mod, dim=1)  # for Poisson counts the parameterization is similar to RNA 
                     mu_hat_mod = mu_hat_mod * size_factor[mod]
                 else:
                     mu_hat_mod = F.sigmoid(x_mod)
