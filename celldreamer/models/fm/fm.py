@@ -4,7 +4,6 @@ from pathlib import Path
 
 import torch
 from torch import nn, linspace
-import torch.nn.functional as F
 from torch.distributions import Normal
 
 import pytorch_lightning as pl
@@ -28,7 +27,9 @@ class FM(pl.LightningModule):
                  in_dim: int,
                  size_factor_statistics: dict,
                  scaler, 
-                 conditioning_covariate: str, 
+                 covariate_list: str, 
+                 theta_covariate: str,
+                 size_factor_covariate: str,
                  model_type: str,
                  encoder_type: str = "fixed", 
                  learning_rate: float = 0.001, 
@@ -41,7 +42,8 @@ class FM(pl.LightningModule):
                  use_ot=True, 
                  multimodal=False, 
                  is_binarized=False, 
-                 modality_list=None):
+                 modality_list=None, 
+                 guidance_weights=None):
         """
         Flow matching for single-cell model. 
         
@@ -51,7 +53,7 @@ class FM(pl.LightningModule):
             x0_from_x_kwargs (dict): Arguments for the x0_from_x MLP.
             plotting_folder (Path): Folder for saving plots.
             in_dim (int): Number of genes.
-            conditioning_covariate (str): Covariate controlling the size factor sampling.
+            conditioning_covariates (str): Covariate controlling the size factor sampling.
             learning_rate (float, optional): Learning rate. Defaults to 0.001.
             weight_decay (float, optional): Weight decay. Defaults to 0.0001.
             antithetic_time_sampling (bool, optional): Use antithetic time sampling. Defaults to True.
@@ -73,7 +75,9 @@ class FM(pl.LightningModule):
         self.scaling_method = scaling_method
         self.plotting_folder = plotting_folder
         self.model_type = model_type
-        self.conditioning_covariate = conditioning_covariate
+        self.covariate_list = covariate_list
+        self.theta_covariate = theta_covariate
+        self.size_factor_covariate = size_factor_covariate
         self.sigma = sigma
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
@@ -81,6 +85,7 @@ class FM(pl.LightningModule):
         self.multimodal = multimodal
         self.is_binarized = is_binarized
         self.modality_list = modality_list
+        self.guidance_weights = guidance_weights
         
         # MSE lost for the Flow Matching algorithm 
         self.criterion = torch.nn.MSELoss()
@@ -129,20 +134,19 @@ class FM(pl.LightningModule):
         # Collect observation and put onto device 
         x = batch["X"]  # counts
         if self.multimodal:
-            x = {mod: x[mod].to(self.device) for mod in x}
+            x = {mod: x[mod].to(self.device) for mod in x}  # move to device
         else:
             x = x.to(self.device)
         
         # Collect labels 
-        y = batch["y"]
-        y_fea = self.feature_embeddings[self.conditioning_covariate](y[self.conditioning_covariate])
+        y_fea = self._featurize_batch_y(batch)
 
         # Encode observations into the latent space
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             with torch.no_grad():
                 x0 = self.encoder_model.encode(batch)
                 if self.multimodal:
-                    x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)
+                    x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)  # concatenate ordered by the modality list 
         else:
             x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
             x0 = x_scaled
@@ -194,11 +198,10 @@ class FM(pl.LightningModule):
         Returns:
             torch.Tensor: Featurized covariates.
         """
-        y = []     
+        y = {}     
         for feature_cat in batch["y"]:
             y_cat = self.feature_embeddings[feature_cat](batch["y"][feature_cat])
-            y.append(y_cat)
-        y = torch.cat(y, dim=1).to(self.device)
+            y[feature_cat] = y_cat
         return y
     
     def _sample_times(self, batch_size):
@@ -219,13 +222,23 @@ class FM(pl.LightningModule):
         return times
 
     @torch.no_grad()
-    def sample(self, batch_size, n_sample_steps, covariate, covariate_indices=None, log_size_factor=None):
+    def sample(self,
+               batch_size, 
+               n_sample_steps,
+               theta_covariate, 
+               size_factor_covariate,
+               conditioning_covariates,
+               covariate_indices=None, 
+               log_size_factor=None):
+        
         # Sample random noise 
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
-        # Sample random classes from the sampling covariate 
+        # Sample random classes from the sampling covariates
         if covariate_indices==None:
-            covariate_indices = torch.randint(0, self.feature_embeddings[covariate].n_cat, (batch_size,))
+            covariate_indices = {}
+            for covariate in conditioning_covariates:  # For the covariates we decide to condition on 
+                covariate_indices[covariate] = torch.randint(0, self.feature_embeddings[covariate].n_cat, (batch_size,))
              
         # Sample size factor from the associated distribution
         if log_size_factor==None:
@@ -233,24 +246,30 @@ class FM(pl.LightningModule):
             if self.multimodal and not self.is_binarized:
                 log_size_factor = {}
                 for mod in self.modality_list:
-                    mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][mod][covariate], self.size_factor_statistics["sd"][mod][covariate]
-                    mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices], sd_size_factor[covariate_indices]
+                    mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][mod][size_factor_covariate], self.size_factor_statistics["sd"][mod][size_factor_covariate]
+                    mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices[size_factor_covariate]], sd_size_factor[covariate_indices[size_factor_covariate]]
                     size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
                     log_size_factor_mod = size_factor_dist.sample().to(self.device).view(-1, 1)
                     log_size_factor[mod] = log_size_factor_mod
             else:
-                mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][covariate], self.size_factor_statistics["sd"][covariate]
-                mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices], sd_size_factor[covariate_indices]
+                mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][size_factor_covariate], self.size_factor_statistics["sd"][size_factor_covariate]
+                mean_size_factor, sd_size_factor = mean_size_factor[covariate_indices[size_factor_covariate]], sd_size_factor[covariate_indices[size_factor_covariate]]
                 size_factor_dist = Normal(loc=mean_size_factor, scale=sd_size_factor)
                 log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
         
         # Featurize the covariate
-        y = self.feature_embeddings[covariate](covariate_indices.cuda())
+        y = {}
+        for covariate in self.covariate_list:
+            y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].cuda())
 
         # Generate 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
                 
-        denoising_model_ode = torch_wrapper(self.denoising_model, log_size_factor, y)    
+        denoising_model_ode = torch_wrapper(self.denoising_model, 
+                                            log_size_factor, 
+                                            y,
+                                            guidance_weights=self.guidance_weights, 
+                                            conditioning_covariates=conditioning_covariates)    
         
         self.node = NeuralODE(denoising_model_ode,
                                 solver="dopri5", 
@@ -279,7 +298,7 @@ class FM(pl.LightningModule):
             if not self.covariate_specific_theta:
                 distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta))
             else:
-                distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta[covariate_indices]))
+                distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta[covariate_indices[theta_covariate]]))
             sample = distr.sample()
         else:
             sample = {}  # containing final samples 
@@ -288,7 +307,7 @@ class FM(pl.LightningModule):
                     if not self.covariate_specific_theta:
                         distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta))
                     else:
-                        distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta[covariate_indices]))
+                        distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta[covariate_indices[theta_covariate]]))
                 else:  # if mod is atac
                     if not self.encoder_model.is_binarized:
                         distr = Poisson(rate=x[mod])
@@ -296,17 +315,32 @@ class FM(pl.LightningModule):
                         distr = Bernoulli(probs=x[mod])
                 sample[mod] = distr.sample() 
         return sample
-
+    
     @torch.no_grad()
-    def batched_sample(self, batch_size, repetitions, n_sample_steps, covariate, covariate_indices=None, log_size_factor=None):
+    def batched_sample(self, 
+                       batch_size, 
+                       repetitions,
+                       n_sample_steps, 
+                       theta_covariate, 
+                       size_factor_covariate,
+                       conditioning_covariates, 
+                       covariate_indices=None, 
+                       log_size_factor=None):
+        
         if not self.multimodal:
             total_samples = []
         else:
             total_samples = {mod:[] for mod in self.modality_list}
             
         # Covariate is same for all modalities 
-        for i in range(repetitions): 
-            covariate_indices_batch = covariate_indices[(i*batch_size):((i+1)*batch_size)] if covariate_indices != None else None
+        for i in range(repetitions):
+            if covariate_indices != None:
+                covariate_indices_batch = {}
+                for covariate in covariate_indices:
+                    covariate_indices_batch[covariate] = covariate_indices[covariate][(i*batch_size):((i+1)*batch_size)] 
+            else:
+                covariate_indices_batch = None
+                
             # Input to the sampling pre-defined size factors if provided to the function 
             if not self.multimodal or (self.multimodal and self.is_binarized):
                 log_size_factor_batch = log_size_factor[(i*batch_size):((i+1)*batch_size)] if log_size_factor != None else None 
@@ -319,7 +353,13 @@ class FM(pl.LightningModule):
                     log_size_factor_batch = None
             
             # Sample batch 
-            X_samples = self.sample(batch_size, n_sample_steps, covariate, covariate_indices_batch, log_size_factor_batch)
+            X_samples = self.sample(batch_size,
+                                    n_sample_steps,
+                                    theta_covariate, 
+                                    size_factor_covariate,
+                                    conditioning_covariates,
+                                    covariate_indices_batch, 
+                                    log_size_factor_batch)
                 
             if not self.multimodal: 
                 total_samples.append(X_samples.cpu())
@@ -503,9 +543,9 @@ class FM(pl.LightningModule):
         """
         params = list(self.parameters())
         
-        if not self.feature_embeddings[self.conditioning_covariate].one_hot_encode_features:
-            for cov in self.feature_embeddings:
-                params += list(self.feature_embeddings[cov].parameters())
+        for covariate in self.feature_embeddings:
+            if not self.feature_embeddings[covariate].one_hot_encode_features:
+                params += list(self.feature_embeddings[covariate].parameters())
                  
         optimizer = torch.optim.AdamW(params, 
                                     self.learning_rate, 
@@ -574,7 +614,8 @@ class FM(pl.LightningModule):
                                             plotting_folder=self.plotting_folder, 
                                             X_real=testing_outputs, 
                                             epoch=self.current_epoch,
-                                            conditioning_covariate=self.conditioning_covariate)
+                                            theta_covariate=self.theta_covariate,
+                                            size_factor_covariate=self.size_factor_covariate)
         
         del testing_outputs
         metric_dict = {}

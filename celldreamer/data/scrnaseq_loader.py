@@ -54,8 +54,7 @@ class RNAseqLoader:
             if not self.multimodal:
                 sc.pp.subsample(adata, fraction=subsample_frac)
             else:
-                for mod in self.modality_list:
-                    sc.pp.subsample(adata[mod], fraction=subsample_frac)
+                raise NotImplementedError
                 
         # Transform genes to tensors
         if not self.multimodal:

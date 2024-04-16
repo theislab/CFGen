@@ -64,7 +64,7 @@ class EncoderEstimator:
         
         # Number of categories
         if self.args.encoder.covariate_specific_theta:
-            self.n_cat = len(self.dataset.id2cov[self.args.dataset.conditioning_covariate])
+            self.n_cat = len(self.dataset.id2cov[self.args.dataset.theta_covariate])
         else:
             self.n_cat = None
 
@@ -123,7 +123,7 @@ class EncoderEstimator:
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
                                           scaler=scaler, 
                                           n_cat=self.n_cat,
-                                          conditioning_covariate=self.args.dataset.conditioning_covariate, 
+                                          conditioning_covariate=self.args.dataset.theta_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,
                                           **self.args.encoder)
         print("Encoder architecture", self.encoder_model)

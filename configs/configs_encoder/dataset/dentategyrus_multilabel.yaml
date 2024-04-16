@@ -1,6 +1,6 @@
-dataset_path: ../project_folder/datasets/processed/c_elegans.h5ad
+dataset_path: ../project_folder/datasets/processed/dentategyrus.h5ad
 layer_key: X_counts
-covariate_keys: [cell_type]
+covariate_keys: [clusters, Age]
 subsample_frac: 1
 encoder_type: "learnt_autoencoder"
 target_max: 1
@@ -11,4 +11,4 @@ cov_embedding_dimensions: 100
 multimodal: False
 is_binarized: False 
 theta_covariate: None
-size_factor_covariate: cell_type
+size_factor_covariate: clusters

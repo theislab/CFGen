@@ -11,3 +11,4 @@ embed_condition: True
 normalization: none
 multimodal: False
 is_binarized: False
+conditioning_probability: 0.8

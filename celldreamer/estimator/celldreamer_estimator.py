@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 from celldreamer.paths import TRAINING_FOLDER
 from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
-from celldreamer.models.fm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
+from celldreamer.models.fm.denoising_model import MLPTimeStep
 from celldreamer.models.fm.fm import FM
 from celldreamer.models.base.encoder_model import EncoderModel
 
@@ -159,14 +159,14 @@ class CellDreamerEstimator:
         """Initialize the (optional) autoencoder and generative model 
         """
         # Initialize denoising model 
-        conditioning_cov = self.args.dataset.conditioning_covariate  
         if not self.dataset.multimodal or (self.dataset.multimodal and self.is_binarized):
             size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                         "sd": self.dataset.log_size_factor_sd}
         else:
             size_factor_statistics = {"mean": {mod: self.dataset.log_size_factor_mu[mod] for mod in self.dataset.log_size_factor_mu}, 
                                         "sd": {mod: self.dataset.log_size_factor_sd[mod] for mod in self.dataset.log_size_factor_sd}}
-                
+        
+        # Scaler to rescale the input to the encoder
         scaler = self.dataset.get_scaler()
         
         # Initialize the deoising model 
@@ -179,11 +179,12 @@ class CellDreamerEstimator:
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
                                         embed_size_factor=self.args.denoising_module.embed_size_factor, 
+                                        covariate_list=self.args.dataset.covariate_keys,
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
                                         embed_condition=self.args.denoising_module.embed_condition,
-                                        n_cond=self.num_classes[conditioning_cov], 
+                                        n_cond=self.num_classes,  # TODO: num_classes is now a dictionary 
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list).to(self.device)
@@ -193,8 +194,8 @@ class CellDreamerEstimator:
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
                                           scaler=scaler, 
-                                          n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
-                                          conditioning_covariate=self.args.dataset.conditioning_covariate, 
+                                          n_cat=self.feature_embeddings[self.args.dataset.theta_covariate].n_cat,
+                                          conditioning_covariate=self.args.dataset.theta_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,
                                           **self.args.encoder)
         print("Encoder architecture", self.encoder_model)
@@ -218,12 +219,15 @@ class CellDreamerEstimator:
             in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
             scaler=scaler,
-            encoder_type=self.args.dataset.encoder_type,
-            conditioning_covariate=conditioning_cov,
+            covariate_list=self.args.dataset.covariate_keys, 
+            theta_covariate=self.args.dataset.theta_covariate,
+            size_factor_covariate=self.args.dataset.size_factor_covariate,
             model_type=denoising_model.model_type, 
+            encoder_type=self.args.dataset.encoder_type,
             multimodal=self.dataset.multimodal,
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,
+            guidance_weights=self.args.dataset.guidance_weights,
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
             )
 

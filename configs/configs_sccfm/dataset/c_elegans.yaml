@@ -1,9 +1,8 @@
 dataset_path: ../project_folder/datasets/processed/c_elegans.h5ad
 layer_key: X_counts
 covariate_keys: [cell_type]
-conditioning_covariate: cell_type
 subsample_frac: 1
-encoder_type: "learnt_encoder"
+encoder_type: "learnt_autoencoder"
 target_max: 1
 target_min: -1
 one_hot_encode_features: False
@@ -11,3 +10,7 @@ split_rates: [0.90, 0.05, 0.05]
 cov_embedding_dimensions: 100
 multimodal: False
 is_binarized: False 
+theta_covariate: cell_type
+size_factor_covariate: cell_type
+guidance_weights:
+  cell_type: 1

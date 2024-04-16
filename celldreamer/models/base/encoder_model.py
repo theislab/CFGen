@@ -58,7 +58,7 @@ class EncoderModel(pl.LightningModule):
 
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.covariate_specific_theta = covariate_specific_theta
+        self.covariate_specific_theta = covariate_specific_theta  # boolean, overdispersion covariate-specific?
         self.encoder_type = encoder_type
         self.conditioning_covariate = conditioning_covariate
         self.n_cat = n_cat
@@ -220,7 +220,7 @@ class EncoderModel(pl.LightningModule):
             return self.x0_from_x(X_scaled)
         else:
             z = {}
-            for mod in self.modality_list:
+            for mod in self.modality_list: 
                 X_scaled_mod = self.scaler[mod].scale(batch["X_norm"][mod].to(self.device), reverse=False)
                 z_mod = self.x0_from_x[mod](X_scaled_mod)
                 z[mod] = z_mod

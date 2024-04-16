@@ -68,6 +68,7 @@ class MLPTimeStep(pl.LightningModule):
                  size_factor_min: float, 
                  size_factor_max: float,
                  embed_size_factor: bool,
+                 covariate_list: list,
                  embedding_dim=128, 
                  normalization="layer", 
                  conditional=False,
@@ -75,7 +76,9 @@ class MLPTimeStep(pl.LightningModule):
                  n_cond=None,
                  multimodal=False, 
                  is_binarized=False, 
-                 modality_list=None):
+                 modality_list=None, 
+                 conditioning_probability=0.8
+                 ):
         
         super().__init__()
         
@@ -96,7 +99,9 @@ class MLPTimeStep(pl.LightningModule):
         self.conditional = conditional
         self.multimodal = multimodal
         self.is_binarized = is_binarized
+        self.covariate_list = covariate_list
         self.modality_list = modality_list
+        self.conditioning_probability = conditioning_probability
         
         added_dimensions = 0  # incremented if not embedding conditioning variables 
         
@@ -121,13 +126,16 @@ class MLPTimeStep(pl.LightningModule):
             
         # Covariate embedding
         if conditional:
-            if embed_condition:
-                self.condition_embedder = nn.Sequential(
-                    Linear(n_cond, embedding_dim * 4),  # Upsample embedding
-                    nn.SiLU(),
-                    Linear(embedding_dim * 4, embedding_dim * 4))
-            else:
-                added_dimensions += 1
+            self.condition_embedder = {}
+            for covariate in covariate_list:
+                if embed_condition:
+                    self.condition_embedder[covariate] = nn.Sequential(
+                        Linear(n_cond[covariate], embedding_dim * 4),  # Upsample embedding
+                        nn.SiLU(),
+                        Linear(embedding_dim * 4, embedding_dim * 4))
+                else:
+                    added_dimensions += 1
+            self.condition_embedder = torch.nn.ModuleDict(self.condition_embedder)
         
         # Initial convolution
         self.net_in = Linear(in_dim, self.hidden_dim)
@@ -158,7 +166,7 @@ class MLPTimeStep(pl.LightningModule):
                 nn.SiLU(),
                 Linear(self.hidden_dim, in_dim))
 
-    def forward(self, x, t, l, y):
+    def forward(self, x, t, l, y, inference=False, unconditional=False, covariate=None):
         # If time is unique (e.g., during sampling) for all batch observations, repeat over the batch dimension
         if t.shape[0] == 1:
             t = t.repeat((x.shape[0],) + (1,) * (t.ndim-1))
@@ -175,12 +183,15 @@ class MLPTimeStep(pl.LightningModule):
                 emb = unsqueeze_right(t_for_embeddings, x.ndim - t_for_embeddings.ndim)
                 
         # Embed condition
-        if self.conditional:
+        is_conditioned = torch.bernoulli(torch.tensor([self.conditioning_probability])).item() if not inference else 1. # Bernoulli variable to decide whether to condition or not
+        if self.conditional and is_conditioned and not unconditional:
             if self.embed_condition:
-                y = self.condition_embedder(y)
+                if covariate == None:
+                    covariate = np.random.choice(self.covariate_list)
+                y = self.condition_embedder[covariate](y[covariate])
                 emb = emb + y
             else:
-                emb = torch.cat([emb, y], dim=1)
+                raise NotImplementedError
     
         # Embed size factor
         if self.model_type == "conditional_latent":
@@ -309,68 +320,3 @@ class ResnetBlock(nn.Module):
         assert x.shape == h.shape
         
         return x + h
-    
-# Simple time MLP 
-class SimpleMLPTimeStep(pl.LightningModule):
-    def __init__(self,
-                 in_dim, 
-                 out_dim=None, 
-                 w=512, 
-                 model_type="conditional_latent", 
-                 conditional=False, 
-                 n_cond=None):
-        """
-        Simple Multi-Layer Perceptron (MLP) with optional time variation.
-
-        Args:
-            in_dim (int): Input dimension.
-            out_dim (int, optional): Output dimension. Defaults to None.
-            w (int, optional): Hidden layer dimension. Defaults to 64.
-        """
-        super().__init__()
-        self.in_dim = in_dim
-        self.model_type = model_type
-        self.conditional = conditional
-        
-        if out_dim is None:
-            out_dim = in_dim
-            
-        self.net = torch.nn.Sequential(
-            Linear(in_dim + 1 + (1 if self.model_type=="conditional_latent" else 0) + (n_cond if conditional else 0), w),
-            nn.SELU(),
-            Linear(w, w),
-            nn.SELU(),
-            Linear(w, w),
-            nn.SELU(),
-            Linear(w, out_dim),
-        )
-        self.save_hyperparameters()
-
-    def forward(self, x, t, l, y, **args):
-        """
-        Forward pass of the SimpleMLPTimeStep.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-            g_t (torch.Tensor): Time tensor.
-            l (torch.Tensor): Size factor
-
-        Returns:
-            torch.Tensor: Output tensor.
-        """
-        # If t is not repeated for all elements in the batch 
-        if t.shape[0] == 1:
-            t = t.repeat((x.shape[0],) + (1,) * (t.ndim-1))
-        if t.ndim != x.ndim:
-            t = unsqueeze_right(t, x.ndim-t.ndim)
-        
-        if self.model_type=="conditional_latent":
-            if l.ndim != x.ndim:
-                l = unsqueeze_right(l, x.ndim-l.ndim)    
-        
-        x = torch.cat([x, t], dim=1)
-        if self.model_type=="conditional_latent":
-            x = torch.cat([x, l], dim=1)
-        if self.conditional:
-            x = torch.cat([x, y], dim=1)
-        return self.net(x) 
