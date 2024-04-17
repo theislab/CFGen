@@ -229,7 +229,8 @@ class FM(pl.LightningModule):
                size_factor_covariate,
                conditioning_covariates,
                covariate_indices=None, 
-               log_size_factor=None):
+               log_size_factor=None,
+               unconditional=False):
         
         # Sample random noise 
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
@@ -237,7 +238,7 @@ class FM(pl.LightningModule):
         # Sample random classes from the sampling covariates
         if covariate_indices==None:
             covariate_indices = {}
-            for covariate in conditioning_covariates:  # For the covariates we decide to condition on 
+            for covariate in conditioning_covariates:  # for the covariates we decide to condition on 
                 covariate_indices[covariate] = torch.randint(0, self.feature_embeddings[covariate].n_cat, (batch_size,))
              
         # Sample size factor from the associated distribution
@@ -258,9 +259,12 @@ class FM(pl.LightningModule):
                 log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
         
         # Featurize the covariate
-        y = {}
-        for covariate in self.covariate_list:
-            y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].cuda())
+        if not unconditional:
+            y = {}
+            for covariate in covariate_indices:
+                y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].cuda())
+        else: 
+            y = None
 
         # Generate 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
@@ -269,7 +273,8 @@ class FM(pl.LightningModule):
                                             log_size_factor, 
                                             y,
                                             guidance_weights=self.guidance_weights, 
-                                            conditioning_covariates=conditioning_covariates)    
+                                            conditioning_covariates=conditioning_covariates, 
+                                            unconditional=unconditional)    
         
         self.node = NeuralODE(denoising_model_ode,
                                 solver="dopri5", 
@@ -325,7 +330,8 @@ class FM(pl.LightningModule):
                        size_factor_covariate,
                        conditioning_covariates, 
                        covariate_indices=None, 
-                       log_size_factor=None):
+                       log_size_factor=None, 
+                       unconditional=False):
         
         if not self.multimodal:
             total_samples = []
@@ -359,7 +365,8 @@ class FM(pl.LightningModule):
                                     size_factor_covariate,
                                     conditioning_covariates,
                                     covariate_indices_batch, 
-                                    log_size_factor_batch)
+                                    log_size_factor_batch, 
+                                    unconditional)
                 
             if not self.multimodal: 
                 total_samples.append(X_samples.cpu())
