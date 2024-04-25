@@ -65,6 +65,7 @@ class EncoderModel(pl.LightningModule):
         self.multimodal = multimodal
         self.is_binarized = is_binarized
 
+        # List of modalities present in the data 
         if multimodal:
             self.modality_list = list(self.x0_from_x_kwargs.keys())
 
@@ -248,6 +249,8 @@ class EncoderModel(pl.LightningModule):
             for mod in self.modality_list:
                 if self.encoder_type == "learnt_autoencoder":
                     x_mod = self.x_from_x0[mod](x[mod])
+                else:
+                    x_mod = x[mod]
                 if mod != "atac" or (mod == "atac" and not self.is_binarized):
                     mu_hat_mod = F.softmax(x_mod, dim=1)  # for Poisson counts the parameterization is similar to RNA 
                     mu_hat_mod = mu_hat_mod * size_factor[mod]

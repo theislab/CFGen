@@ -48,14 +48,6 @@ class RNAseqLoader:
             for mod in self.modality_list:
                 adata[mod] = adata_mu.mod[mod]
             del adata_mu
-        
-        # Subsample if required
-        if subsample_frac < 1:
-            if not self.multimodal:
-                sc.pp.subsample(adata, fraction=subsample_frac)
-            else:
-                for mod in self.modality_list:
-                    sc.pp.subsample(adata[mod], fraction=subsample_frac)
                 
         # Transform genes to tensors
         if not self.multimodal:
@@ -71,22 +63,43 @@ class RNAseqLoader:
             self.X = torch.Tensor(adata.layers[layer_key].todense())
             
             # Get normalized gene expression 
-            self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
+            X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
         
             # Initialize scaler object 
             self.scaler = Scaler(target_min=target_min, target_max=target_max)
-            self.scaler.fit(self.X_norm)
+            self.scaler.fit(X_norm)
+            del X_norm
         else:
             self.X = {}
-            self.X_norm = {}
+            X_norm = {}
             self.scaler = {}
             for mod in self.modality_list:
                 self.X[mod] = torch.Tensor(adata[mod].layers[layer_key].todense())
-                self.X_norm[mod] = normalize_expression(self.X[mod], self.X[mod].sum(1).unsqueeze(1), encoder_type)
+                
+                # Get normalized gene expression 
+                X_norm[mod] = normalize_expression(self.X[mod], self.X[mod].sum(1).unsqueeze(1), encoder_type)
+                
+                # Initialize scaler object 
                 scaler_mod = Scaler(target_min=target_min, target_max=target_max)
-                scaler_mod.fit(self.X_norm[mod])
+                scaler_mod.fit(X_norm[mod])
                 self.scaler[mod] = scaler_mod
-        
+            del X_norm
+            
+        # Subsample if required
+        np.random.seed(42)
+        if subsample_frac < 1:
+            if not self.multimodal:
+                n_to_keep = int(subsample_frac*len(self.X))
+                indices = np.random.choice(range(len(self.X)), n_to_keep)
+                self.X = self.X[indices]
+                adata = adata[indices]
+            else:
+                n_to_keep = int(subsample_frac*len(self.X["rna"]))
+                indices = np.random.choice(range(len(self.X["rna"])), n_to_keep)
+                for mod in self.modality_list:
+                    self.X[mod] = self.X[mod][indices]
+                    adata[mod] = adata[mod][indices]  
+                    
         # Covariate to index
         self.id2cov = {}  # cov_name: dict_cov_2_id 
         self.Y_cov = {}   # cov: cov_ids
@@ -114,6 +127,8 @@ class RNAseqLoader:
                 self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata["rna"], layer_key, self.id2cov)
                 log_size_factors = torch.log(self.X["rna"].sum(1))
                 self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
+                
+        del adata
             
     def get_scaler(self):
         """Return the scaler object
@@ -135,14 +150,14 @@ class RNAseqLoader:
         # Return sampled cells
         if not self.multimodal:
             X = self.X[i]
-            X_norm = self.X_norm[i]
+            X_norm = normalize_expression(X, X.sum(), self.encoder_type)
             return dict(X=X, X_norm=X_norm, y=y)
         else:
             X = {}
             X_norm = {}
             for mod in self.modality_list:
                 X[mod] = self.X[mod][i]
-                X_norm[mod] = self.X_norm[mod][i]
+                X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.encoder_type)
             return dict(X=X, X_norm=X_norm, y=y)
 
     def __len__(self):

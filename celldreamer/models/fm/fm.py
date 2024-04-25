@@ -4,7 +4,6 @@ from pathlib import Path
 
 import torch
 from torch import nn, linspace
-import torch.nn.functional as F
 from torch.distributions import Normal
 
 import pytorch_lightning as pl

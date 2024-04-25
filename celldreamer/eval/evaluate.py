@@ -73,6 +73,7 @@ def compute_umap_and_wasserstein(model,
     # Collect into a dictionary 
     if len(modality_list)==1:
         X_generated_dict = {"rna": X_generated_dict}
+        X_real = {"rna": X_real}
     
     # Calculate metrics per modality 
     wd = {}

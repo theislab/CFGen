@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 from celldreamer.paths import TRAINING_FOLDER
 from celldreamer.data.scrnaseq_loader import RNAseqLoader
 from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
-from celldreamer.models.fm.denoising_model import SimpleMLPTimeStep, MLPTimeStep
+from celldreamer.models.fm.denoising_model import MLPTimeStep
 from celldreamer.models.fm.fm import FM
 from celldreamer.models.base.encoder_model import EncoderModel
 
@@ -149,11 +149,11 @@ class CellDreamerEstimator:
             self.feature_embeddings[cov] = CategoricalFeaturizer(len(cov_names), 
                                                                     self.args.dataset.one_hot_encode_features, 
                                                                     self.device, 
-                                                                    embedding_dimensions=self.args.dataset.cov_embedding_dimensions)
+                                                                    embedding_dimensions=self.args.denoising_module.embedding_dim)
             if self.args.dataset.one_hot_encode_features:
                 self.num_classes[cov] = len(cov_names)
             else:
-                self.num_classes[cov] = self.args.dataset.cov_embedding_dimensions
+                self.num_classes[cov] = self.args.denoising_module.embedding_dim
 
     def init_model(self):
         """Initialize the (optional) autoencoder and generative model 
@@ -175,18 +175,15 @@ class CellDreamerEstimator:
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
                                         model_type=self.args.denoising_module.model_type, 
-                                        embed_time=self.args.denoising_module.embed_time,
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
-                                        embed_size_factor=self.args.denoising_module.embed_size_factor, 
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
-                                        embed_condition=self.args.denoising_module.embed_condition,
-                                        n_cond=self.num_classes[conditioning_cov], 
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
-                                        modality_list=self.modality_list).to(self.device)
+                                        modality_list=self.modality_list, 
+                                        embed_size_factor=self.denoising_module.embed_size_factor).to(self.device)
         
         print("Denoising model", denoising_model)
         
