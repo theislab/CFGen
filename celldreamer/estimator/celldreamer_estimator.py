@@ -1,5 +1,4 @@
 import os
-import numpy as np
 from pathlib import Path
 import uuid
 import torch
@@ -183,7 +182,7 @@ class CellDreamerEstimator:
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 
-                                        embed_size_factor=self.denoising_module.embed_size_factor).to(self.device)
+                                        embed_size_factor=self.args.denoising_module.embed_size_factor).to(self.device)
         
         print("Denoising model", denoising_model)
         
