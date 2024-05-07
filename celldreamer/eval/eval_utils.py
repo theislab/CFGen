@@ -19,6 +19,7 @@ def normalize_and_compute_metrics(adata_real, adata_fake, layer, sparse=True):
         else:
             X_real = adata_real.X
             X_fake = adata_fake.X
+            
     scaler = MinMaxScaler(feature_range=(-1, 1))
     normalized_real = torch.tensor(scaler.fit_transform(X_real))
     normalized_generated = torch.tensor(scaler.fit_transform(X_fake))
