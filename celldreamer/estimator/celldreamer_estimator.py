@@ -73,8 +73,8 @@ class CellDreamerEstimator:
                                     is_binarized=self.is_binarized)
 
         # Initialize the data loaders 
-        self.train_data, self.test_data, self.valid_data = random_split(self.dataset,
-                                                                        lengths=self.args.dataset.split_rates)   
+        self.train_data, self.valid_data = random_split(self.dataset,
+                                                        lengths=self.args.dataset.split_rates)   
         
         self.train_dataloader = torch.utils.data.DataLoader(self.train_data,
                                                             batch_size=self.args.training_config.batch_size,
@@ -83,12 +83,6 @@ class CellDreamerEstimator:
                                                             drop_last=True)
         
         self.valid_dataloader = torch.utils.data.DataLoader(self.valid_data,
-                                                            batch_size=self.args.training_config.batch_size,
-                                                            shuffle=False,
-                                                            num_workers=4, 
-                                                            drop_last=True)
-        
-        self.test_dataloader = torch.utils.data.DataLoader(self.test_data,
                                                             batch_size=self.args.training_config.batch_size,
                                                             shuffle=False,
                                                             num_workers=4, 
@@ -238,5 +232,5 @@ class CellDreamerEstimator:
         """
         self.trainer_generative.test(
             self.generative_model,
-            dataloaders=self.test_dataloader)
+            dataloaders=self.valid_dataloader)
     

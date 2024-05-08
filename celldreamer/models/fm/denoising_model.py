@@ -135,10 +135,9 @@ class MLPTimeStep(pl.LightningModule):
 
     def forward(self, x, t, l, y):
         # Make a copy of time for using in time embeddings
-        t_for_embeddings = t.clone().detach()
-                
-        # Embed time
-        t_for_embeddings = t_for_embeddings.squeeze()
+        t_for_embeddings = t.clone().detach().squeeze()
+        
+        # Collect time embedding
         emb = self.time_embedder(get_timestep_embedding(t_for_embeddings, self.embedding_dim))
                 
         # Embed condition

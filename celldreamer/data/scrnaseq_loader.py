@@ -68,7 +68,7 @@ class RNAseqLoader:
             # Initialize scaler object 
             self.scaler = Scaler(target_min=target_min, target_max=target_max)
             self.scaler.fit(X_norm)
-            del X_norm
+            del X_norm  # for whole genome, to spare memory
         else:
             self.X = {}
             X_norm = {}
