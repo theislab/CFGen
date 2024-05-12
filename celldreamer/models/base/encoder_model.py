@@ -7,6 +7,7 @@ from scvi.distributions import NegativeBinomial
 from torch.distributions import Poisson, Bernoulli
 from celldreamer.models.base.utils import MLP
 
+
 class EncoderModel(pl.LightningModule):
     """
     PyTorch Lightning Module for an encoder-decoder model.

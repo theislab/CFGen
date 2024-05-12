@@ -108,7 +108,7 @@ def main(args):
     
     vars = adata_real.var.copy()
     adata_real = adata_real[:, adata_real.var.highly_variable]
-    sc.tl.pca(adata_real)
+    sc.tl.pca(adata_real, n_comps=10)
     
     # Will contain results
     results_celldreamer = {}
@@ -142,7 +142,7 @@ def main(args):
         # Keep only HVG
         for adata_name in adatas:
             if args.dataset_name == "hlca_core" and adata_name=="scgan":
-                adatas[adata_name] = adatas[adata_name][:, adata_real.var.indexx]
+                adatas[adata_name] = adatas[adata_name][:, adata_real.var.index]
             else:
                 adatas[adata_name].var = vars
                 adatas[adata_name] = adatas[adata_name][:, vars.highly_variable]
