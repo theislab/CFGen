@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import sklearn 
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import f1_score
 
 from celldreamer.eval.mmd import linear_mmd2, poly_mmd2
@@ -141,6 +143,7 @@ def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
     y = np.concatenate((np.ones(len(X_real)), np.zeros(len(X_fake))), axis=0)
 
     # Initialize KNN classifier
+    # knn = RandomForestClassifier()
     knn = KNeighborsClassifier(n_neighbors=n_neighbors)
 
     # Train the classifier
@@ -161,6 +164,7 @@ def train_knn_real_data(adata_real, category_field, use_pca, n_neighbors=5):
 
     # Initialize the KNN classifier
     knn = KNeighborsClassifier(n_neighbors=n_neighbors)  # You can adjust the number of neighbors
+    # knn = RandomForestClassifier()    
 
     # Fit the classifier to the training data
     knn.fit(X, y)
