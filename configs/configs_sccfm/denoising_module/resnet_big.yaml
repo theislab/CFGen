@@ -8,4 +8,4 @@ conditional: True
 normalization: none
 multimodal: False
 is_binarized: False
-embed_size_factor: True
+embed_size_factor: False

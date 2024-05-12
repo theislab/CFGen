@@ -5,8 +5,7 @@ import numpy as np
 import torch
 import sklearn 
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import roc_auc_score, accuracy_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
 
 from celldreamer.eval.mmd import linear_mmd2, poly_mmd2
 from celldreamer.eval.optimal_transport import wasserstein
@@ -51,7 +50,7 @@ def compute_pairwise_distance(data_x, data_y=None):
     if data_y is None:
         data_y = data_x
     dists = sklearn.metrics.pairwise_distances(
-        data_x, data_y, metric='euclidean', n_jobs=8)
+        data_x, data_y, metric='l1', n_jobs=8)
     return dists
 
 def get_kth_value(unsorted, k, axis=-1):
@@ -92,10 +91,6 @@ def compute_prdc(real_features, fake_features, nearest_k):
     Returns:
         dict of precision, recall, density, and coverage.
     """
-
-    print('Num real: {} Num fake: {}'
-          .format(real_features.shape[0], fake_features.shape[0]))
-
     real_nearest_neighbour_distances = compute_nearest_neighbour_distances(
         real_features, nearest_k)
     fake_nearest_neighbour_distances = compute_nearest_neighbour_distances(
@@ -117,7 +112,7 @@ def compute_prdc(real_features, fake_features, nearest_k):
             distance_real_fake <
             np.expand_dims(real_nearest_neighbour_distances, axis=1)
     ).sum(axis=0).mean()
-
+    
     coverage = (
             distance_real_fake.min(axis=1) <
             real_nearest_neighbour_distances
@@ -126,6 +121,21 @@ def compute_prdc(real_features, fake_features, nearest_k):
     return dict(precision=precision, recall=recall,
                 density=density, coverage=coverage)
     
+# def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
+#     X = np.concatenate((X_real, X_fake), axis=0)
+#     y = np.concatenate((np.ones(len(X_real)), np.zeros(len(X_fake))), axis=0)
+
+#     # Initialize KNN classifier
+#     knn = KNeighborsClassifier(n_neighbors=n_neighbors)
+
+#     # Train the classifier
+#     knn.fit(X, y)
+
+#     # Evaluate the classifier
+#     y_pred = knn.predict(X_fake)
+#     auc = f1_score(np.ones(len(X_fake)), y_pred, average="macro")
+#     return auc
+
 def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
     X = np.concatenate((X_real, X_fake), axis=0)
     y = np.concatenate((np.ones(len(X_real)), np.zeros(len(X_fake))), axis=0)
@@ -138,10 +148,10 @@ def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
 
     # Evaluate the classifier
     y_pred = knn.predict(X)
-    auc = accuracy_score(y, y_pred)
+    auc = f1_score(y, y_pred, average="macro")
     return auc
 
-def train_knn_real_data(adata_real, category_field, use_pca):
+def train_knn_real_data(adata_real, category_field, use_pca, n_neighbors=5):
     if not use_pca:
         X = adata_real.X  # Features
     else:
@@ -150,7 +160,7 @@ def train_knn_real_data(adata_real, category_field, use_pca):
     y = adata_real.obs[category_field]  # Target variable
 
     # Initialize the KNN classifier
-    knn = KNeighborsClassifier(n_neighbors=5)  # You can adjust the number of neighbors
+    knn = KNeighborsClassifier(n_neighbors=n_neighbors)  # You can adjust the number of neighbors
 
     # Fit the classifier to the training data
     knn.fit(X, y)

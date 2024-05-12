@@ -26,7 +26,7 @@ class FM(pl.LightningModule):
                  plotting_folder: Path,
                  in_dim: int,
                  size_factor_statistics: dict,
-                 scaler, 
+                #  scaler, 
                  conditioning_covariate: str, 
                  model_type: str,
                  encoder_type: str = "fixed", 
@@ -66,7 +66,7 @@ class FM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.in_dim = in_dim
         self.size_factor_statistics = size_factor_statistics
-        self.scaler = scaler
+        # self.scaler = scaler
         self.encoder_type = encoder_type
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
@@ -143,10 +143,7 @@ class FM(pl.LightningModule):
                 if self.multimodal:
                     x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)
         else:
-            x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
-            x0 = x_scaled
-            if self.multimodal:
-                raise NotImplementedError
+            raise NotImplementedError
 
         # Quantify size factor 
         if not self.multimodal:
@@ -335,10 +332,7 @@ class FM(pl.LightningModule):
     def _decode(self, z, size_factor):
         # Decode the rescaled z
         if self.encoder_type not in ["learnt_autoencoder", "learnt_encoder"]:
-            if self.multimodal:
-                raise NotImplementedError
-            else:
-                z = self.cell_decoder(self.scaler.scale(z, reverse=True), size_factor)
+            raise NotImplementedError
         else:
             if self.multimodal and self.is_binarized:
                 size_factor = {"rna": size_factor}  # Compatibility with the decoder implementation for multimodal data 

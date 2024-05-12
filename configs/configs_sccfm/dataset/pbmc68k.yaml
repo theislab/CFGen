@@ -1,4 +1,4 @@
-dataset_path: ../project_folder/datasets/processed_full_genome/pbmc68k.h5ad
+dataset_path: ../project_folder/datasets/processed_full_genome/pbmc68k/pbmc68k_train.h5ad
 layer_key: X_counts
 covariate_keys: [celltype]
 conditioning_covariate: celltype
@@ -7,6 +7,6 @@ encoder_type: "learnt_encoder"
 target_max: 1
 target_min: -1
 one_hot_encode_features: False
-split_rates: [0.90, 0.05, 0.05]
+split_rates: [0.90, 0.10]
 multimodal: False
 is_binarized: False 

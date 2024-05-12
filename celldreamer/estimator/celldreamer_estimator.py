@@ -67,8 +67,8 @@ class CellDreamerEstimator:
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
-                                    target_max=self.args.dataset.target_max, 
-                                    target_min=self.args.dataset.target_min, 
+                                    # target_max=self.args.dataset.target_max, 
+                                    # target_min=self.args.dataset.target_min, 
                                     multimodal=self.multimodal,
                                     is_binarized=self.is_binarized)
 
@@ -160,7 +160,7 @@ class CellDreamerEstimator:
             size_factor_statistics = {"mean": {mod: self.dataset.log_size_factor_mu[mod] for mod in self.dataset.log_size_factor_mu}, 
                                         "sd": {mod: self.dataset.log_size_factor_sd[mod] for mod in self.dataset.log_size_factor_sd}}
                 
-        scaler = self.dataset.get_scaler()
+        # scaler = self.dataset.get_scaler()
         
         # Initialize the deoising model 
         denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
@@ -182,7 +182,7 @@ class CellDreamerEstimator:
         
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                          scaler=scaler, 
+                                        #   scaler=scaler, 
                                           n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
                                           conditioning_covariate=self.args.dataset.conditioning_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,
@@ -207,7 +207,7 @@ class CellDreamerEstimator:
             plotting_folder=self.plotting_dir,
             in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
-            scaler=scaler,
+            # scaler=scaler,
             encoder_type=self.args.dataset.encoder_type,
             conditioning_covariate=conditioning_cov,
             model_type=denoising_model.model_type, 

@@ -1,79 +1,87 @@
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import f1_score
 import numpy as np
 import pandas as pd
 import torch
 import scanpy as sc
-from scib.metrics.lisi import ilisi_graph
 from celldreamer.eval.distribution_distances import (compute_distribution_distances, 
                                                      compute_knn_real_fake, 
                                                      train_knn_real_data,
                                                      compute_prdc)
 
+CONDITIONAL = {"scDiffusion": True, 
+               "scgan": False, 
+               "scvi": True, 
+               "celldreamer": True, 
+               "activa": False, 
+               "scrdit": False}
 
-def compute_evaluation_metrics(adata_real, adata_generated, category_field):
-    # Get unique cell type list
-    cell_types_unique = np.unique(adata_real.obs[category_field])
+def process_labels(adata_original, adata_generated, category_field, categorical_obs=False):
+    """
+    If the labels are numeric, you convert them to strings 
+    """
+    if not categorical_obs:
+        label_unique = np.unique(adata_original.obs[category_field])
+    else:
+        label_unique = np.array(adata_original.obs[category_field].cat.categories)
+    labels_dict = dict(zip(range(len(label_unique)),label_unique))
+    adata_generated.obs[category_field] = [labels_dict[int(lab)] for lab in np.array(adata_generated.obs[category_field])]
+    return adata_generated
+
+def compute_evaluation_metrics(adata_real, 
+                               adata_generated, 
+                               category_field,
+                               model_name,
+                               nn=10, 
+                               original_space=True, 
+                               knn_pca=None, 
+                               knn_data=None):  
+    """
+    Compute metrics 
+    """
+    # Metric dict
+    print(f"Evaluating for {model_name}")
+    print("Real", adata_real.shape)
+    print("Generated", adata_generated.shape)
     
-    # Metrics per cell_type
-    metrics = ["1-Wasserstein", 
-               "2-Wasserstein",
-               "Linear_MMD", 
-               "Poly_MMD",
-               "KNN identity",
-               "KNN identity PCA",
-               "KNN category", 
-               "KNN category PCA",
-               "precision", 
-               "recall",
-               "density",
-               "coverage"]
+    cell_type_metrics = {}
+
+    # Wasserstein distance and MMD metrics 
+    mmd_wasserstein = compute_distribution_distances(torch.tensor(adata_real.obsm["X_pca"]).float(), 
+                                                         torch.tensor(adata_generated.obsm["X_pca"]).float())
+    for metric in mmd_wasserstein:
+        cell_type_metrics[metric+"_PCA"] = mmd_wasserstein[metric]
     
-    cell_type_metrics = {metric: [] for metric in metrics}
-    # Train cell type classification KNNs
-    knn_pca = train_knn_real_data(adata_real, category_field, use_pca=True)
-    knn_data = train_knn_real_data(adata_real, category_field, use_pca=False)
+    # KNN metric 
+    auc_real_fake = compute_knn_real_fake(adata_real.X.A, 
+                                              adata_generated.X.A, n_neighbors=nn)
+    auc_real_fake_pca = compute_knn_real_fake(adata_real.obsm["X_pca"], 
+                                              adata_generated.obsm["X_pca"], n_neighbors=nn)
+    cell_type_metrics["KNN identity"] = auc_real_fake
+    cell_type_metrics["KNN identity PCA"] = auc_real_fake_pca
+     
+    # KNN cell type pca
+    density_and_coverage = compute_prdc(adata_real.X.A, 
+                                            adata_generated.X.A, 
+                                            nearest_k=nn)
+    for metric in density_and_coverage:
+        cell_type_metrics[metric] = density_and_coverage[metric]
+
+    density_and_coverage_pca = compute_prdc(adata_real.obsm["X_pca"], 
+                        adata_generated.obsm["X_pca"], 
+                        nearest_k=nn)
+    for metric in density_and_coverage_pca:
+        cell_type_metrics[metric+"_PCA"] = density_and_coverage_pca[metric]
     
-    adata_generated.obsm["X_pca"] =  adata_generated.X.dot(adata_real.varm["PCs"])
-    # Loop over cell type 
-    for cell_type in cell_types_unique:
-        # MMD and Wasserstein 
-        adata_real_cell_type = adata_real[adata_real.obs[category_field]==cell_type]
-        adata_generated_cell_type = adata_generated[adata_generated.obs[category_field]==cell_type]
-        # adata_generated_cell_type.obsm["X_pca"] =  adata_generated_cell_type.X.dot(adata_real_cell_type.varm["PCs"])
-        
-        # MMD and Wasserstein
-        mmd_wasserstein = compute_distribution_distances(torch.tensor(adata_real_cell_type.X.A), 
-                                                         torch.tensor(adata_generated_cell_type.X.A))
-        
-        for metric in mmd_wasserstein:
-            cell_type_metrics[metric].append(mmd_wasserstein[metric])
-        
-        # KNN identity data space 
-        auc_real_fake = compute_knn_real_fake(adata_real_cell_type.X.A, 
-                                              adata_generated_cell_type.X.A, n_neighbors=5)
-        cell_type_metrics["KNN identity"].append(auc_real_fake)
-        
-        # KNN identity pca space 
-        auc_real_fake = compute_knn_real_fake(adata_real_cell_type.obsm["X_pca"], 
-                                              adata_generated_cell_type.obsm["X_pca"], n_neighbors=5)
-        cell_type_metrics["KNN identity PCA"].append(auc_real_fake)
-        
-        # KNN cell type data
-        y_pred = knn_data.predict(adata_generated_cell_type.X.A)    
-        accuracy = accuracy_score(np.array(adata_generated_cell_type.obs[category_field]), y_pred)
-        cell_type_metrics["KNN category"].append(accuracy)
+      # Train cell type classification KNNs
+    if CONDITIONAL[model_name]:   
+        if knn_data:
+            y_pred = knn_data.predict(adata_generated.X.A)    
+            accuracy = f1_score(np.array(adata_generated.obs[category_field]), y_pred, average="macro")
+            cell_type_metrics["KNN category"] = accuracy
         
         # KNN cell type pca
-        y_pred = knn_pca.predict(adata_generated_cell_type.obsm["X_pca"])
-        accuracy = accuracy_score(adata_generated_cell_type.obs[category_field], y_pred)
-        cell_type_metrics["KNN category PCA"].append(accuracy)
-        
-        # KNN cell type pca
-        density_and_coverage = compute_prdc(adata_real_cell_type.X, 
-                               adata_generated_cell_type.X, 
-                               nearest_k=5)
-        for metric in density_and_coverage:
-            cell_type_metrics[metric].append(density_and_coverage[metric])
-    
-    return cell_type_metrics       
-        
+        if knn_pca:
+            y_pred = knn_pca.predict(adata_generated.obsm["X_pca"])
+            accuracy = f1_score(adata_generated.obs[category_field], y_pred, average="macro")
+            cell_type_metrics["KNN category PCA"] = accuracy
+    return cell_type_metrics      

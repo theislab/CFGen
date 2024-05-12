@@ -35,7 +35,7 @@ class EncoderModel(pl.LightningModule):
     def __init__(self,
                  in_dim,
                  x0_from_x_kwargs,
-                 scaler,
+                #  scaler,
                  learning_rate,
                  weight_decay,
                  covariate_specific_theta,
@@ -54,7 +54,7 @@ class EncoderModel(pl.LightningModule):
         self.in_dim = in_dim
 
         self.x0_from_x_kwargs = x0_from_x_kwargs  # if multimodal, dictionary with arguments, one per effect
-        self.scaler = scaler  # if multimodal, dictionary with one scaler per modality
+        # self.scaler = scaler  # if multimodal, dictionary with one scaler per modality
 
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -217,13 +217,14 @@ class EncoderModel(pl.LightningModule):
 
         """
         if not self.multimodal:
-            X_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
-            return self.x0_from_x(X_scaled)
+            # X_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
+            return self.x0_from_x(batch["X_norm"].to(self.device))
         else:
             z = {}
             for mod in self.modality_list:
-                X_scaled_mod = self.scaler[mod].scale(batch["X_norm"][mod].to(self.device), reverse=False)
-                z_mod = self.x0_from_x[mod](X_scaled_mod)
+                # X_scaled_mod = self.scaler[mod].scale(batch["X_norm"][mod].to(self.device), reverse=False)
+                # z_mod = self.x0_from_x[mod](X_scaled_mod)
+                z_mod = self.x0_from_x[mod](batch["X_norm"][mod].to(self.device))
                 z[mod] = z_mod
             return z
 
