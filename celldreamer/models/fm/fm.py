@@ -26,7 +26,6 @@ class FM(pl.LightningModule):
                  plotting_folder: Path,
                  in_dim: int,
                  size_factor_statistics: dict,
-                #  scaler, 
                  conditioning_covariate: str, 
                  model_type: str,
                  encoder_type: str = "fixed", 
@@ -66,7 +65,6 @@ class FM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.in_dim = in_dim
         self.size_factor_statistics = size_factor_statistics
-        # self.scaler = scaler
         self.encoder_type = encoder_type
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
@@ -140,7 +138,7 @@ class FM(pl.LightningModule):
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             with torch.no_grad():
                 x0 = self.encoder_model.encode(batch)
-                if self.multimodal:
+                if self.multimodal and not self.encoder_model.encoder_multimodal_joint_layers:
                     x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)
         else:
             raise NotImplementedError
@@ -257,7 +255,7 @@ class FM(pl.LightningModule):
         x0 = self.node.trajectory(z, t_span=t)[-1]
         
         # If multimodal, split the output to get separate z's
-        if self.multimodal:
+        if self.multimodal and not self.encoder_model.encoder_multimodal_joint_layers:
             x0 = torch.split(x0, [self.in_dim[d] for d in self.modality_list], dim=1)
             x0 = {mod: x0[i] for i, mod in enumerate(self.modality_list)}
 

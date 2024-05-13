@@ -57,8 +57,6 @@ class EncoderEstimator:
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
-                                    # target_max=self.args.dataset.target_max, 
-                                    # target_min=self.args.dataset.target_min,
                                     multimodal=self.args.dataset.multimodal, 
                                     is_binarized=self.args.dataset.is_binarized)
         
@@ -121,7 +119,6 @@ class EncoderEstimator:
         """
         # scaler = self.dataset.get_scaler()
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                        #   scaler=scaler, 
                                           n_cat=self.n_cat,
                                           conditioning_covariate=self.args.dataset.conditioning_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,

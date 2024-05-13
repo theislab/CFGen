@@ -67,8 +67,6 @@ class CellDreamerEstimator:
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
-                                    # target_max=self.args.dataset.target_max, 
-                                    # target_min=self.args.dataset.target_min, 
                                     multimodal=self.multimodal,
                                     is_binarized=self.is_binarized)
 
@@ -100,11 +98,15 @@ class CellDreamerEstimator:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
             self.modality_list = list(self.gene_dim.keys())
             self.in_dim = {}
-            for mod in self.dataset.X:
-                if self.args.dataset.encoder_type!="learnt_autoencoder":
-                    self.in_dim[mod] = self.gene_dim[mod]
-                else:
-                    self.in_dim[mod] = self.args.encoder.x0_from_x_kwargs[mod]["dims"][-1]
+            
+            if self.args.encoder_model.encoder_multimodal_joint_layers:
+                for mod in self.dataset.X:
+                    if self.args.dataset.encoder_type!="learnt_autoencoder":
+                        self.in_dim[mod] = self.gene_dim[mod]
+                    else:
+                        self.in_dim[mod] = self.args.encoder.x0_from_x_kwargs[mod]["dims"][-1]
+            else:
+                self.in_dim = self.args.encoder.encoder_multimodal_joint_layers["dims"][-1]
 
     def init_trainer(self):
         """
@@ -163,7 +165,7 @@ class CellDreamerEstimator:
         # scaler = self.dataset.get_scaler()
         
         # Initialize the deoising model 
-        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
+        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if (self.multimodal and self.args.encoder_model.encoder_multimodal_joint_layers) else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
@@ -182,7 +184,6 @@ class CellDreamerEstimator:
         
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                        #   scaler=scaler, 
                                           n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
                                           conditioning_covariate=self.args.dataset.conditioning_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,
@@ -207,7 +208,6 @@ class CellDreamerEstimator:
             plotting_folder=self.plotting_dir,
             in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
-            # scaler=scaler,
             encoder_type=self.args.dataset.encoder_type,
             conditioning_covariate=conditioning_cov,
             model_type=denoising_model.model_type, 
