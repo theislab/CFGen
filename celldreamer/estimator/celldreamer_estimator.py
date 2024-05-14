@@ -98,8 +98,7 @@ class CellDreamerEstimator:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
             self.modality_list = list(self.gene_dim.keys())
             self.in_dim = {}
-            
-            if self.args.encoder_model.encoder_multimodal_joint_layers:
+            if not self.args.encoder.encoder_multimodal_joint_layers:
                 for mod in self.dataset.X:
                     if self.args.dataset.encoder_type!="learnt_autoencoder":
                         self.in_dim[mod] = self.gene_dim[mod]
@@ -165,7 +164,7 @@ class CellDreamerEstimator:
         # scaler = self.dataset.get_scaler()
         
         # Initialize the deoising model 
-        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if (self.multimodal and self.args.encoder_model.encoder_multimodal_joint_layers) else self.in_dim, 
+        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if (self.multimodal and not self.args.encoder.encoder_multimodal_joint_layers) else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 

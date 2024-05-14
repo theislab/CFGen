@@ -73,15 +73,14 @@ def compute_evaluation_metrics(adata_real,
         cell_type_metrics[metric+"_PCA"] = density_and_coverage_pca[metric]
     
       # Train cell type classification KNNs
-    if CONDITIONAL[model_name]:   
-        if knn_data:
-            y_pred = knn_data.predict(adata_generated.X.A)    
-            accuracy = f1_score(np.array(adata_generated.obs[category_field]), y_pred, average="macro")
-            cell_type_metrics["KNN category"] = accuracy
-        
-        # KNN cell type pca
-        if knn_pca:
-            y_pred = knn_pca.predict(adata_generated.obsm["X_pca"])
-            accuracy = f1_score(adata_generated.obs[category_field], y_pred, average="macro")
-            cell_type_metrics["KNN category PCA"] = accuracy
+    if knn_data:
+        y_pred = knn_data.predict(adata_generated.X.A)    
+        accuracy = f1_score(np.array(adata_generated.obs[category_field]), y_pred, average="macro")
+        cell_type_metrics["KNN category"] = accuracy
+    
+    # KNN cell type pca
+    if knn_pca:
+        y_pred = knn_pca.predict(adata_generated.obsm["X_pca"])
+        accuracy = f1_score(adata_generated.obs[category_field], y_pred, average="macro")
+        cell_type_metrics["KNN category PCA"] = accuracy
     return cell_type_metrics      

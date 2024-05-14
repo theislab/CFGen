@@ -60,7 +60,6 @@ class RNAseqLoader:
         # Transform X into a tensor
         if not self.multimodal:
             self.X = torch.Tensor(adata.layers[layer_key].todense())
-            
         else:
             self.X = {}
             for mod in self.modality_list:

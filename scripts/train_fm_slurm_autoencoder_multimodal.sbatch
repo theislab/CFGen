@@ -1,14 +1,16 @@
 #!/bin/bash
 
-#SBATCH -o ./logs/pbmc10k_multi_fm.out
+#SBATCH -o ./logs/pbmc10k_multi_fm_joint.out
 
-#SBATCH -e ./logs/pbmc10k_multi_fm.err
+#SBATCH -e ./logs/pbmc10k_multi_fm_joint.err
 
-#SBATCH -J pbmc10k_multi_fm
+#SBATCH -J pbmc10k_multi_fm_joint
 
 #SBATCH -p gpu_p
 
 #SBATCH --qos=gpu_normal
+
+#SBATCH --exclude=gpusrv26
 
 #SBATCH --gres=gpu:1
 
@@ -22,4 +24,38 @@
 
 export HYDRA_FULL_ERROR=1
 
-python ../celldreamer/train_sccfm.py dataset=neurips_multimodal dataset.encoder_type=learnt_autoencoder dataset.cov_embedding_dimensions=32 dataset.one_hot_encode_features=False denoising_module=resnet_big denoising_module.multimodal=True denoising_module.is_binarized=False encoder=encoder_multimodal encoder.multimodal=True encoder.is_binarized=False trainer.max_epochs=1500 launcher=slurm_icb logger.project=fm_resnet_autoencoder_neurips_multimodal training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_neurips_multimodal/fb44592a-78b7-4210-adaa-bd5df7665be2/checkpoints/last.ckpt
+# python ../celldreamer/train_sccfm.py dataset=neurips_multimodal dataset.encoder_type=learnt_autoencoder \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big \
+# denoising_module.multimodal=True denoising_module.is_binarized=False encoder=encoder_multimodal_joint \
+# encoder.multimodal=True encoder.is_binarized=False trainer.max_epochs=2000 launcher=slurm_icb \
+# logger.project=fm_resnet_autoencoder_neurips_multimodal_joint \
+# training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_neurips_multimodal_joint/1c26a129-9280-421c-b941-1203cd3887a2/checkpoints/last.ckpt
+
+# python ../celldreamer/train_sccfm.py dataset=neurips_multimodal_binary dataset.encoder_type=learnt_autoencoder \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big \
+# denoising_module.multimodal=True denoising_module.is_binarized=True encoder=encoder_multimodal_joint \
+# encoder.multimodal=True encoder.is_binarized=True trainer.max_epochs=1000 launcher=slurm_icb \
+# logger.project=fm_resnet_autoencoder_neurips_multimodal_bin_joint \
+# training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_neurips_multimodal/fb44592a-78b7-4210-adaa-bd5df7665be2/checkpoints/last.ckpt
+
+python ../celldreamer/train_sccfm.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder \
+dataset.one_hot_encode_features=False denoising_module=resnet_big \
+denoising_module.multimodal=True denoising_module.is_binarized=True encoder=encoder_multimodal_joint \
+encoder.multimodal=True encoder.is_binarized=True trainer.max_epochs=2000 launcher=slurm_icb \
+logger.project=fm_resnet_autoencoder_pbmc10k_multimodal_joint \
+training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_pbmc10k_multimodal_joint/64584c28-b271-40b4-8279-562f583f649b/checkpoints/last.ckpt
+
+
+# python ../celldreamer/train_sccfm.py dataset=neurips_multimodal dataset.encoder_type=learnt_autoencoder \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big \
+# denoising_module.multimodal=True denoising_module.is_binarized=False encoder=encoder_multimodal \
+# encoder.multimodal=True encoder.is_binarized=False trainer.max_epochs=1500 launcher=slurm_icb \
+# logger.project=fm_resnet_autoencoder_neurips_multimodal \
+# training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_neurips_multimodal/9e32dc3f-46f5-4eca-849c-40072c9ef0b0/checkpoints/last.ckpt
+
+# python ../celldreamer/train_sccfm.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big \
+# denoising_module.multimodal=True denoising_module.is_binarized=True encoder=encoder_multimodal \
+# encoder.multimodal=True encoder.is_binarized=True trainer.max_epochs=1500 launcher=slurm_icb \
+# logger.project=fm_resnet_autoencoder_pbmc10k_multimodal \
+# training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_autoencoder_pbmc10k_multimodal/17b54887-53a4-4983-8afc-7fdc9d3274c8/checkpoints/last.ckpt

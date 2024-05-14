@@ -8,6 +8,8 @@
 
 #SBATCH -p gpu_p
 
+#SBATCH --exclude gpusrv26
+
 #SBATCH --qos=gpu_normal
 
 #SBATCH --gres=gpu:1
@@ -28,4 +30,5 @@ conda activate celldreamer
 # python ../celldreamer/train_encoder.py dataset=pbmc68k dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large logger.project=off_train_autoencoder_pbmc68k_whole_genome trainer.max_epochs=300
 # python ../celldreamer/train_encoder.py dataset=tabula_muris dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large logger.project=off_train_autoencoder_tabula_muris_whole_genome trainer.max_epochs=300
 # python ../celldreamer/train_encoder.py dataset=c_elegans dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large logger.project=off_train_autoencoder_c_elegans_whole_genome trainer.max_epochs=300
+python ../celldreamer/train_encoder.py dataset=hlca_core_classification dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large logger.project=CLASSIFICATION_off_train_autoencoder_hlca_core trainer.max_epochs=300
 

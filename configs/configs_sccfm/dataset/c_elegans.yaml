@@ -4,8 +4,6 @@ covariate_keys: [cell_type]
 conditioning_covariate: cell_type
 subsample_frac: 1
 encoder_type: "learnt_encoder"
-target_max: 1
-target_min: -1
 one_hot_encode_features: False
 split_rates: [0.90, 0.10]
 multimodal: False
