@@ -50,12 +50,12 @@ conda activate celldreamer
 # logger.project=off_fm_resnet_autoencoder_neurips_whole_genome \
 # training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/off_train_autoencoder_neurips_whole_genome/eabc6534-947b-4486-8012-c9e351b297ca/checkpoints/epoch_59.ckpt
 
-# pbmc3k
-python ../celldreamer/train_sccfm.py dataset=pbmc3k dataset.encoder_type=learnt_autoencoder encoder=encoder_small \
-dataset.one_hot_encode_features=False denoising_module=resnet_big  denoising_module.embed_size_factor=False  \
-launcher=slurm_icb logger.project=off_fm_resnet_autoencoder_pbmc3k_whole_genome \
-training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/off_train_autoencoder_pbmc3k_whole_genome/3d875b67-d126-496c-9860-38ff7f25d7c4/checkpoints/epoch_39.ckpt \
-training_config.batch_size=64
+# # pbmc3k
+# python ../celldreamer/train_sccfm.py dataset=pbmc3k dataset.encoder_type=learnt_autoencoder encoder=encoder_small \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big  denoising_module.embed_size_factor=False  \
+# launcher=slurm_icb logger.project=off_fm_resnet_autoencoder_pbmc3k_whole_genome \
+# training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/off_train_autoencoder_pbmc3k_whole_genome/3d875b67-d126-496c-9860-38ff7f25d7c4/checkpoints/epoch_39.ckpt \
+# training_config.batch_size=64
 
 # # pbmc68k
 # python ../celldreamer/train_sccfm.py dataset=pbmc68k dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large \
@@ -74,3 +74,10 @@ training_config.batch_size=64
 # encoder=autoencoder_large dataset.one_hot_encode_features=False denoising_module=resnet_big denoising_module.embed_size_factor=False \
 # launcher=slurm_icb logger.project=off_fm_resnet_autoencoder_c_elegans_whole_genome \
 # training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/off_train_autoencoder_c_elegans_whole_genome/bd5c1915-ea4d-4428-9aeb-99d3346bcc55/checkpoints/epoch_19.ckpt
+
+
+# HLCA CORE - CLASSIFICATION
+python ../celldreamer/train_sccfm.py dataset=hlca_core_classification dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large \
+dataset.one_hot_encode_features=False denoising_module=resnet_big denoising_module.embed_size_factor=False launcher=slurm_icb \
+logger.project=CLASSIFIER_off_fm_resnet_autoencoder_hlca_core_whole_genome \
+training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/CLASSIFICATION_off_train_autoencoder_hlca_core/3dde9d9c-2fbc-4417-bdd7-9e8ebe1c948b/checkpoints/last.ckpt
