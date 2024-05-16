@@ -27,7 +27,7 @@ def main(args):
     adata_real_rna.X = adata_real_rna.layers["X_counts"].copy()
     sc.pp.highly_variable_genes(adata_real_rna,
                                 flavor="seurat_v3",
-                                n_top_genes=2000,
+                                n_top_genes=1000,
                                 layer="X_counts",
                                 subset=False)
     sc.pp.normalize_total(adata_real_rna, target_sum=1e4)
@@ -40,12 +40,12 @@ def main(args):
     adata_real_atac.X = adata_real_atac.layers["X_counts"].copy()
     sc.pp.highly_variable_genes(adata_real_atac,
                                 flavor="seurat_v3",
-                                n_top_genes=2000,
+                                n_top_genes=20000,
                                 layer="X_counts",
                                 subset=False)
     sc.pp.normalize_total(adata_real_atac, target_sum=1e4)
     sc.pp.log1p(adata_real_atac)
-    sc.tl.pca(adata_real_atac, n_comps=10)
+    sc.tl.pca(adata_real_atac, n_comps=40)
     
     del adata_real
     

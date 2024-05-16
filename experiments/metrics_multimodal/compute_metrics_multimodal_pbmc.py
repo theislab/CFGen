@@ -32,15 +32,15 @@ def main(args):
                                 subset=False)
     sc.pp.normalize_total(adata_real_rna, target_sum=1e4)
     sc.pp.log1p(adata_real_rna)
-    sc.tl.pca(adata_real_rna, n_comps=20)
+    sc.tl.pca(adata_real_rna, n_comps=10)
 
     # ATAC 
     adata_real_atac = adata_real["atac"]
     adata_real_atac.obs["cell_type"] = adata_real_rna.obs["cell_type"]  # Harmonize annotation
     adata_real_atac.X = adata_real_atac.layers["X_counts"].copy()
     ac.pp.tfidf(adata_real_atac, scale_factor=1e4)
-    sc.pp.highly_variable_genes(adata_real_atac, n_top_genes=2000, subset=False)
-    sc.tl.pca(adata_real_rna, n_comps=20)
+    sc.pp.highly_variable_genes(adata_real_atac, n_top_genes=10000, subset=False)
+    sc.tl.pca(adata_real_rna, n_comps=30)
     
     del adata_real
     
@@ -127,7 +127,8 @@ def main(args):
             adata_generated_multivi_atac_ct = adata_generated_multivi_atac[adata_generated_multivi_atac.obs[args.category_name]==ct]
             adata_generated_multivi_rna_ct = adata_generated_multivi_rna[adata_generated_multivi_rna.obs[args.category_name]==ct]
             adata_generated_scvi_rna_ct = adata_generated_scvi_rna[adata_generated_scvi_rna.obs[args.category_name]==ct]
-            
+            if len(adata_real_ct_atac) < 20:
+                continue
             results_celldreamer_rna_ct = compute_evaluation_metrics(adata_real_ct_rna, 
                                                                         adata_generated_celldreamer_rna_ct, 
                                                                         args.category_name,
@@ -205,7 +206,7 @@ def main(args):
                                                     y_pred = knn_data_atac.predict(adata_generated_celldreamer_atac.X.A), 
                                                     average="macro")
         results_peakvi_atac["global_f1"] = f1_score(np.array(adata_generated_peakvi_atac.obs[args.category_name]), 
-                                                    y_pred = knn_data_rna.predict(adata_generated_peakvi_atac.X.A), 
+                                                    y_pred = knn_data_atac.predict(adata_generated_peakvi_atac.X.A), 
                                                     average="macro")
         results_multivi_atac["global_f1"] = f1_score(np.array(adata_generated_multivi_atac.obs[args.category_name]), 
                                                     y_pred = knn_data_atac.predict(adata_generated_multivi_atac.X.A), 
