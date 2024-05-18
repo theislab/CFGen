@@ -3,12 +3,11 @@ hidden_dim: 64
 dropout_prob: 0 
 n_blocks: 3
 model_type: conditional_latent # conditional_latent, factorized_latent, learnt_size_factor
-embed_time: True
-embed_size_factor: True
-embedding_dim: 32
+embedding_dim: 100
 conditional: True
-embed_condition: True
 normalization: none
 multimodal: False
 is_binarized: False
+embed_size_factor: False
 conditioning_probability: 0.8
+guided_conditioning: True

@@ -2,7 +2,7 @@ import numpy as np
 import scanpy as sc
 import muon as mu
 import torch
-from celldreamer.data.utils import Scaler, normalize_expression, compute_size_factor_lognorm
+from celldreamer.data.utils import normalize_expression, compute_size_factor_lognorm
 
 class RNAseqLoader:
     """Class for RNAseq data loader."""
@@ -12,9 +12,7 @@ class RNAseqLoader:
         layer_key: str,
         covariate_keys=None,
         subsample_frac=1,
-        encoder_type="proportions", 
-        target_max=1, 
-        target_min=-1,
+        encoder_type="proportions",
         multimodal=False, 
         is_binarized=False):
         """
@@ -48,13 +46,6 @@ class RNAseqLoader:
             for mod in self.modality_list:
                 adata[mod] = adata_mu.mod[mod]
             del adata_mu
-        
-        # Subsample if required
-        if subsample_frac < 1:
-            if not self.multimodal:
-                sc.pp.subsample(adata, fraction=subsample_frac)
-            else:
-                raise NotImplementedError
                 
         # Transform genes to tensors
         if not self.multimodal:
@@ -68,23 +59,25 @@ class RNAseqLoader:
         # Transform X into a tensor
         if not self.multimodal:
             self.X = torch.Tensor(adata.layers[layer_key].todense())
-            
-            # Get normalized gene expression 
-            self.X_norm = normalize_expression(self.X, self.X.sum(1).unsqueeze(1), encoder_type)
-        
-            # Initialize scaler object 
-            self.scaler = Scaler(target_min=target_min, target_max=target_max)
-            self.scaler.fit(self.X_norm)
         else:
             self.X = {}
-            self.X_norm = {}
-            self.scaler = {}
             for mod in self.modality_list:
                 self.X[mod] = torch.Tensor(adata[mod].layers[layer_key].todense())
-                self.X_norm[mod] = normalize_expression(self.X[mod], self.X[mod].sum(1).unsqueeze(1), encoder_type)
-                scaler_mod = Scaler(target_min=target_min, target_max=target_max)
-                scaler_mod.fit(self.X_norm[mod])
-                self.scaler[mod] = scaler_mod
+        
+        # Subsample if required
+        np.random.seed(42)
+        if subsample_frac < 1:
+            if not self.multimodal:
+                n_to_keep = int(subsample_frac*len(self.X))
+                indices = np.random.choice(range(len(self.X)), n_to_keep)
+                self.X = self.X[indices]
+                adata = adata[indices]
+            else:
+                n_to_keep = int(subsample_frac*len(self.X["rna"]))
+                indices = np.random.choice(range(len(self.X["rna"])), n_to_keep)
+                for mod in self.modality_list:
+                    self.X[mod] = self.X[mod][indices]
+                    adata[mod] = adata[mod][indices]  
         
         # Covariate to index
         self.id2cov = {}  # cov_name: dict_cov_2_id 
@@ -113,11 +106,6 @@ class RNAseqLoader:
                 self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata["rna"], layer_key, self.id2cov)
                 log_size_factors = torch.log(self.X["rna"].sum(1))
                 self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
-            
-    def get_scaler(self):
-        """Return the scaler object
-        """
-        return self.scaler
     
     def __getitem__(self, i):
         """
@@ -134,14 +122,18 @@ class RNAseqLoader:
         # Return sampled cells
         if not self.multimodal:
             X = self.X[i]
-            X_norm = self.X_norm[i]
+            X_norm = normalize_expression(X, X.sum(), self.encoder_type)
             return dict(X=X, X_norm=X_norm, y=y)
         else:
             X = {}
             X_norm = {}
             for mod in self.modality_list:
                 X[mod] = self.X[mod][i]
-                X_norm[mod] = self.X_norm[mod][i]
+                # Only log norm if Poisson
+                if mod == "atac" and (not self.is_binarized):
+                    X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.encoder_type)
+                else:
+                    X_norm[mod] = X[mod]
             return dict(X=X, X_norm=X_norm, y=y)
 
     def __len__(self):

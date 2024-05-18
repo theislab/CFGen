@@ -14,3 +14,4 @@ weight_decay: 0.00001
 covariate_specific_theta: False 
 multimodal: True
 is_binarized: False
+encoder_multimodal_joint_layers: null

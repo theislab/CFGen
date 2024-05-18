@@ -68,13 +68,11 @@ class CellDreamerEstimator:
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
-                                    target_max=self.args.dataset.target_max, 
-                                    target_min=self.args.dataset.target_min, 
                                     multimodal=self.multimodal,
                                     is_binarized=self.is_binarized)
 
         # Initialize the data loaders 
-        self.train_data, self.test_data, self.valid_data = random_split(self.dataset,
+        self.train_data, self.valid_data = random_split(self.dataset,
                                                                         lengths=self.args.dataset.split_rates)   
         
         self.train_dataloader = torch.utils.data.DataLoader(self.train_data,
@@ -89,11 +87,6 @@ class CellDreamerEstimator:
                                                             num_workers=4, 
                                                             drop_last=True)
         
-        self.test_dataloader = torch.utils.data.DataLoader(self.test_data,
-                                                            batch_size=self.args.training_config.batch_size,
-                                                            shuffle=False,
-                                                            num_workers=4, 
-                                                            drop_last=True)
     
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
@@ -166,16 +159,12 @@ class CellDreamerEstimator:
             size_factor_statistics = {"mean": {mod: self.dataset.log_size_factor_mu[mod] for mod in self.dataset.log_size_factor_mu}, 
                                         "sd": {mod: self.dataset.log_size_factor_sd[mod] for mod in self.dataset.log_size_factor_sd}}
         
-        # Scaler to rescale the input to the encoder
-        scaler = self.dataset.get_scaler()
-        
         # Initialize the deoising model 
         denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
                                         model_type=self.args.denoising_module.model_type, 
-                                        embed_time=self.args.denoising_module.embed_time,
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
                                         embed_size_factor=self.args.denoising_module.embed_size_factor, 
@@ -183,17 +172,16 @@ class CellDreamerEstimator:
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
-                                        embed_condition=self.args.denoising_module.embed_condition,
                                         n_cond=self.num_classes,  # TODO: num_classes is now a dictionary 
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
-                                        modality_list=self.modality_list).to(self.device)
+                                        modality_list=self.modality_list, 
+                                        guided_conditioning=self.args.denoising_module.guided_conditioning).to(self.device)
         
         print("Denoising model", denoising_model)
         
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                          scaler=scaler, 
                                           n_cat=self.feature_embeddings[self.args.dataset.theta_covariate].n_cat,
                                           conditioning_covariate=self.args.dataset.theta_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,
@@ -218,7 +206,6 @@ class CellDreamerEstimator:
             plotting_folder=self.plotting_dir,
             in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
-            scaler=scaler,
             covariate_list=self.args.dataset.covariate_keys, 
             theta_covariate=self.args.dataset.theta_covariate,
             size_factor_covariate=self.args.dataset.size_factor_covariate,
@@ -246,5 +233,5 @@ class CellDreamerEstimator:
         """
         self.trainer_generative.test(
             self.generative_model,
-            dataloaders=self.test_dataloader)
+            dataloaders=self.valid_dataloader)
     

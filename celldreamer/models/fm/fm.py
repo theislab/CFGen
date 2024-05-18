@@ -26,7 +26,6 @@ class FM(pl.LightningModule):
                  plotting_folder: Path,
                  in_dim: int,
                  size_factor_statistics: dict,
-                 scaler, 
                  covariate_list: str, 
                  theta_covariate: str,
                  size_factor_covariate: str,
@@ -69,7 +68,6 @@ class FM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.in_dim = in_dim
         self.size_factor_statistics = size_factor_statistics
-        self.scaler = scaler
         self.encoder_type = encoder_type
         self.antithetic_time_sampling = antithetic_time_sampling
         self.scaling_method = scaling_method
@@ -145,13 +143,10 @@ class FM(pl.LightningModule):
         if self.encoder_type in ["learnt_encoder", "learnt_autoencoder"]:
             with torch.no_grad():
                 x0 = self.encoder_model.encode(batch)
-                if self.multimodal:
+                if self.multimodal and not self.encoder_model.encoder_multimodal_joint_layers:
                     x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)  # concatenate ordered by the modality list 
         else:
-            x_scaled = self.scaler.scale(batch["X_norm"].to(self.device), reverse=False)
-            x0 = x_scaled
-            if self.multimodal:
-                raise NotImplementedError
+            raise NotImplementedError
 
         # Quantify size factor 
         if not self.multimodal:
@@ -230,8 +225,12 @@ class FM(pl.LightningModule):
                conditioning_covariates,
                covariate_indices=None, 
                log_size_factor=None,
-               unconditional=False):
+               unconditional=False, 
+               guidance_weights=None):
         
+        if guidance_weights==None:
+            guidance_weights=self.guidance_weights
+            
         # Sample random noise 
         z = torch.randn((batch_size, self.denoising_model.in_dim), device=self.device)
 
@@ -272,7 +271,7 @@ class FM(pl.LightningModule):
         denoising_model_ode = torch_wrapper(self.denoising_model, 
                                             log_size_factor, 
                                             y,
-                                            guidance_weights=self.guidance_weights, 
+                                            guidance_weights=guidance_weights,
                                             conditioning_covariates=conditioning_covariates, 
                                             unconditional=unconditional)    
         
@@ -285,7 +284,7 @@ class FM(pl.LightningModule):
         x0 = self.node.trajectory(z, t_span=t)[-1]
         
         # If multimodal, split the output to get separate z's
-        if self.multimodal:
+        if self.multimodal and not self.encoder_model.encoder_multimodal_joint_layers:
             x0 = torch.split(x0, [self.in_dim[d] for d in self.modality_list], dim=1)
             x0 = {mod: x0[i] for i, mod in enumerate(self.modality_list)}
 

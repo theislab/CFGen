@@ -1,0 +1,21 @@
+x0_from_x_kwargs:
+  rna:
+    dims: [512, 300, 100]
+    batch_norm: True
+    dropout: False 
+    dropout_p: 0.0
+  atac:
+    dims: [1024, 512, 100]
+    batch_norm: True
+    dropout: False 
+    dropout_p: 0.0    
+learning_rate: 0.001
+weight_decay: 0.00001
+covariate_specific_theta: False 
+multimodal: True
+is_binarized: False
+encoder_multimodal_joint_layers:
+  dims: [100]
+  batch_norm: False
+  dropout: False 
+  dropout_p: 0.0
