@@ -23,4 +23,4 @@ conda activate celldreamer
 export HYDRA_FULL_ERROR=1
 
 python ../compute_metrics.py --dataset_name 'c_elegans' --category_name 'cell_type' --batched \
---batch_size 2000 --n_batches 10 --nn 10
+--batch_size 5000 --n_batches 10 --nn 10

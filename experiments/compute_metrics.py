@@ -108,7 +108,7 @@ def main(args):
     
     vars = adata_real.var.copy()
     adata_real = adata_real[:, adata_real.var.highly_variable]
-    sc.tl.pca(adata_real, n_comps=10)
+    sc.tl.pca(adata_real, n_comps=30)
     
     # Will contain results
     results_celldreamer = {}

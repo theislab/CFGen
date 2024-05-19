@@ -32,7 +32,7 @@ def main(args):
                                 subset=False)
     sc.pp.normalize_total(adata_real_rna, target_sum=1e4)
     sc.pp.log1p(adata_real_rna)
-    sc.tl.pca(adata_real_rna, n_comps=10)
+    sc.tl.pca(adata_real_rna, n_comps=30)
 
     # ATAC 
     adata_real_atac = adata_real["atac"]

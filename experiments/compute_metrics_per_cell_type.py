@@ -63,8 +63,8 @@ def main(args):
     n_obs = adata_real["cont"].shape[0]
     vars = adata_real["cont"].var.copy()
     adata_real = {mod: adata_real[mod][:, adata_real[mod].var.highly_variable] for mod in adata_real}  # Keep only highly variable 
-    sc.tl.pca(adata_real["cont"], n_comps=10)
-    sc.tl.pca(adata_real["disc"], n_comps=10)
+    sc.tl.pca(adata_real["cont"], n_comps=30)
+    sc.tl.pca(adata_real["disc"], n_comps=30)
     
     # Get PCA score 
     knn_pca_disc = train_knn_real_data(adata_real["disc"], args.category_name, use_pca=True, n_neighbors=args.nn)
