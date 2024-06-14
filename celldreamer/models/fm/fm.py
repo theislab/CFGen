@@ -46,7 +46,7 @@ class FM(pl.LightningModule):
         Args:
             denoising_model (nn.Module): Denoising model.
             feature_embeddings (dict): Feature embeddings for covariates.
-            x0_from_x_kwargs (dict): Arguments for the x0_from_x MLP.
+            encoder_kwargs (dict): Arguments for the encoder MLP.
             plotting_folder (Path): Folder for saving plots.
             in_dim (int): Number of genes.
             conditioning_covariate (str): Covariate controlling the size factor sampling.
@@ -239,7 +239,7 @@ class FM(pl.LightningModule):
                 log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
         
         # Featurize the covariate
-        y = self.feature_embeddings[covariate](covariate_indices.cuda())
+        y = self.feature_embeddings[covariate](covariate_indices)
 
         # Generate 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)

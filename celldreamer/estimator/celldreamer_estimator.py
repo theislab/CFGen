@@ -92,7 +92,7 @@ class CellDreamerEstimator:
         if not self.dataset.multimodal:
             # If not multimodal, gene dimension and input dimension computed only for RNA
             self.gene_dim = self.dataset.X.shape[1] 
-            self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.x0_from_x_kwargs["dims"][-1]
+            self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.encoder_kwargs["dims"][-1]
             self.modality_list = None 
         else:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
@@ -103,7 +103,7 @@ class CellDreamerEstimator:
                     if self.args.dataset.encoder_type!="learnt_autoencoder":
                         self.in_dim[mod] = self.gene_dim[mod]
                     else:
-                        self.in_dim[mod] = self.args.encoder.x0_from_x_kwargs[mod]["dims"][-1]
+                        self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
             else:
                 self.in_dim = self.args.encoder.encoder_multimodal_joint_layers["dims"][-1]
 

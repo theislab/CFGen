@@ -1,4 +1,4 @@
-x0_from_x_kwargs:
+encoder_kwargs:
   dims: [512, 256, 100]
   batch_norm: True
   dropout: False 
