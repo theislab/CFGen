@@ -239,7 +239,7 @@ class FM(pl.LightningModule):
                 log_size_factor = size_factor_dist.sample().to(self.device).view(-1, 1)
         
         # Featurize the covariate
-        y = self.feature_embeddings[covariate](covariate_indices)
+        y = self.feature_embeddings[covariate](covariate_indices.to(self.device))
 
         # Generate 
         t = linspace(0.0, 1.0, n_sample_steps, device=self.device)
