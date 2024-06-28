@@ -98,12 +98,9 @@ class CellDreamerEstimator:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
             self.modality_list = list(self.gene_dim.keys())
             self.in_dim = {}
-            if not self.args.encoder.encoder_multimodal_joint_layers:
+            if not self.args.encoder.encoder_multimodal_joint_layers:  # Optional latent space between modalities
                 for mod in self.dataset.X:
-                    if self.args.dataset.encoder_type!="learnt_autoencoder":
-                        self.in_dim[mod] = self.gene_dim[mod]
-                    else:
-                        self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
+                    self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
             else:
                 self.in_dim = self.args.encoder.encoder_multimodal_joint_layers["dims"][-1]
 
@@ -153,7 +150,6 @@ class CellDreamerEstimator:
         """Initialize the (optional) autoencoder and generative model 
         """
         # Initialize denoising model 
-        conditioning_cov = self.args.dataset.conditioning_covariate  
         if not self.dataset.multimodal or (self.dataset.multimodal and self.is_binarized):
             size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                         "sd": self.dataset.log_size_factor_sd}
@@ -164,20 +160,23 @@ class CellDreamerEstimator:
         # scaler = self.dataset.get_scaler()
         
         # Initialize the deoising model 
-        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if (self.multimodal and not self.args.encoder.encoder_multimodal_joint_layers) else self.in_dim, 
+        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
                                         model_type=self.args.denoising_module.model_type, 
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
+                                        embed_size_factor=self.args.denoising_module.embed_size_factor, 
+                                        covariate_list=self.args.dataset.covariate_keys,
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
+                                        n_cond=self.num_classes,  
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 
-                                        embed_size_factor=self.args.denoising_module.embed_size_factor).to(self.device)
+                                        guided_conditioning=self.args.denoising_module.guided_conditioning).to(self.device)
         
         print("Denoising model", denoising_model)
         
@@ -207,12 +206,15 @@ class CellDreamerEstimator:
             plotting_folder=self.plotting_dir,
             in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
-            encoder_type=self.args.dataset.encoder_type,
-            conditioning_covariate=conditioning_cov,
+            covariate_list=self.args.dataset.covariate_keys, 
+            theta_covariate=self.args.dataset.theta_covariate,
+            size_factor_covariate=self.args.dataset.size_factor_covariate,
             model_type=denoising_model.model_type, 
+            encoder_type=self.args.dataset.encoder_type,
             multimodal=self.dataset.multimodal,
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,
+            guidance_weights=self.args.dataset.guidance_weights,
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
             )
 
