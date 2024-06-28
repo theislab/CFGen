@@ -2,7 +2,6 @@ import numpy as np
 import scanpy as sc
 import muon as mu
 import torch
-# from celldreamer.data.utils import Scaler, normalize_expression, compute_size_factor_lognorm
 from celldreamer.data.utils import normalize_expression, compute_size_factor_lognorm
 
 class RNAseqLoader:
@@ -28,7 +27,7 @@ class RNAseqLoader:
             target_max (float, optional): Maximum value for scaling gene expression. Defaults to 1.
             target_min (float, optional): Minimum value for scaling gene expression. Defaults to 1.
             multimodal (bool): If multimodal dataset.
-            is_binarized (bool): If the multimodal data is binarized. ss
+            is_binarized (bool): If the multimodal data is binarized.
         """
         # Initialize encoder type
         self.encoder_type = encoder_type  
@@ -66,16 +65,16 @@ class RNAseqLoader:
                 self.X[mod] = torch.Tensor(adata[mod].layers[layer_key].todense())
 
         # Subsample if required
-        np.random.seed(42)
         if subsample_frac < 1:
+            np.random.seed(42)
             if not self.multimodal:
                 n_to_keep = int(subsample_frac*len(self.X))
-                indices = np.random.choice(range(len(self.X)), n_to_keep)
+                indices = np.random.choice(range(len(self.X)), n_to_keep, replace=False)
                 self.X = self.X[indices]
                 adata = adata[indices]
             else:
                 n_to_keep = int(subsample_frac*len(self.X["rna"]))
-                indices = np.random.choice(range(len(self.X["rna"])), n_to_keep)
+                indices = np.random.choice(range(len(self.X["rna"])), n_to_keep, replace=False)
                 for mod in self.modality_list:
                     self.X[mod] = self.X[mod][indices]
                     adata[mod] = adata[mod][indices]  
@@ -94,7 +93,7 @@ class RNAseqLoader:
         # Compute mean, standard deviation, maximum and minimum size factor - dictionary only if non-binarized multimodal 
         if not self.multimodal:
             self.log_size_factor_mu, self.log_size_factor_sd = compute_size_factor_lognorm(adata, layer_key, self.id2cov)
-            log_size_factors = torch.log(self.X.sum(1))
+            log_size_factors = torch.log(self.X.sum(1))  # Size factor of log counts
             self.max_size_factor, self.min_size_factor = log_size_factors.max(), log_size_factors.min()
         else:
             if not self.is_binarized:
@@ -132,7 +131,7 @@ class RNAseqLoader:
             X_norm = {}
             for mod in self.modality_list:
                 X[mod] = self.X[mod][i]
-                # Only log norm if Poisson
+                # Only log-normalization if ATAC not binarized
                 if mod == "atac" and (not self.is_binarized):
                     X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.encoder_type)
                 else:
@@ -150,4 +149,3 @@ class RNAseqLoader:
             return len(self.X["rna"])
         else:
             return len(self.X)
-    
