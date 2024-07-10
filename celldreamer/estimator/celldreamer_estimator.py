@@ -157,8 +157,7 @@ class CellDreamerEstimator:
             size_factor_statistics = {"mean": {mod: self.dataset.log_size_factor_mu[mod] for mod in self.dataset.log_size_factor_mu}, 
                                         "sd": {mod: self.dataset.log_size_factor_sd[mod] for mod in self.dataset.log_size_factor_sd}}
                 
-        # scaler = self.dataset.get_scaler()
-        
+
         # Initialize the deoising model 
         denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
