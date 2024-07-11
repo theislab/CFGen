@@ -67,6 +67,7 @@ class EncoderModel(pl.LightningModule):
         # Joint into a single latent space or not 
         self.encoder_multimodal_joint_layers = encoder_multimodal_joint_layers
         if self.encoder_multimodal_joint_layers:
+            # Initialize another layer 
             self.encoder_joint = None
 
         # List of modalities present in the data 
@@ -75,43 +76,36 @@ class EncoderModel(pl.LightningModule):
 
         # Theta for the negative binomial parameterization of scRNA-seq
         in_dim_rna = self.in_dim if not self.multimodal else self.in_dim["rna"]
+        # Inverse dispersion
         if not covariate_specific_theta:
             self.theta = torch.nn.Parameter(torch.randn(in_dim_rna), requires_grad=True)
         else:
             self.theta = torch.nn.Parameter(torch.randn(n_cat, in_dim_rna), requires_grad=True)
 
-        # Initialize all the metrics
-        if encoder_type == "learnt_encoder":
-            if not self.multimodal:
-                encoder_kwargs["dims"] = [self.in_dim, *encoder_kwargs["dims"], self.in_dim]
-                self.encoder = MLP(**encoder_kwargs)
-            else:
-                raise NotImplementedError
+        if not self.multimodal:
+            encoder_kwargs["dims"] = [self.in_dim, *encoder_kwargs["dims"]]  # Encoder params
+            self.encoder = MLP(**encoder_kwargs)
+            encoder_kwargs["dims"] = encoder_kwargs["dims"][::-1]  # Decoder params
+            self.decoder = MLP(**encoder_kwargs)
         else:
-            if not self.multimodal:
-                encoder_kwargs["dims"] = [self.in_dim, *encoder_kwargs["dims"]]  # Encoder params
-                self.encoder = MLP(**encoder_kwargs)
-                encoder_kwargs["dims"] = encoder_kwargs["dims"][::-1]  # Decoder params
-                self.decoder = MLP(**encoder_kwargs)
-            else:
-                # Modality specific part 
-                self.encoder = {}
-                self.decoder = {}
-                for mod in self.modality_list:
-                    encoder_kwargs[mod]["dims"] = [self.in_dim[mod], *encoder_kwargs[mod]["dims"]]
-                    self.encoder[mod] = MLP(**encoder_kwargs[mod])
-                    if self.encoder_multimodal_joint_layers:
-                        encoder_kwargs[mod]["dims"].append(self.encoder_multimodal_joint_layers["dims"][-1])
-                    encoder_kwargs[mod]["dims"] = encoder_kwargs[mod]["dims"][::-1]
-                    self.decoder[mod] = MLP(**encoder_kwargs[mod])
-                self.encoder = torch.nn.ModuleDict(self.encoder)
-                self.decoder = torch.nn.ModuleDict(self.decoder)
-                
-                # Shared modality part in the encoder 
+            # Modality specific part 
+            self.encoder = {}
+            self.decoder = {}
+            for mod in self.modality_list:
+                encoder_kwargs[mod]["dims"] = [self.in_dim[mod], *encoder_kwargs[mod]["dims"]]
+                self.encoder[mod] = MLP(**encoder_kwargs[mod])
                 if self.encoder_multimodal_joint_layers:
-                    joint_inputs = sum([encoder_kwargs[mod]["dims"][0] for mod in self.modality_list])
-                    self.encoder_multimodal_joint_layers["dims"] = [joint_inputs, *self.encoder_multimodal_joint_layers["dims"]]
-                    self.encoder_joint = MLP(**self.encoder_multimodal_joint_layers)
+                    encoder_kwargs[mod]["dims"].append(self.encoder_multimodal_joint_layers["dims"][-1])
+                encoder_kwargs[mod]["dims"] = encoder_kwargs[mod]["dims"][::-1]
+                self.decoder[mod] = MLP(**encoder_kwargs[mod])
+            self.encoder = torch.nn.ModuleDict(self.encoder)
+            self.decoder = torch.nn.ModuleDict(self.decoder)
+            
+            # Shared modality part in the encoder 
+            if self.encoder_multimodal_joint_layers:
+                joint_inputs = sum([encoder_kwargs[mod]["dims"][0] for mod in self.modality_list])
+                self.encoder_multimodal_joint_layers["dims"] = [joint_inputs, *self.encoder_multimodal_joint_layers["dims"]]
+                self.encoder_joint = MLP(**self.encoder_multimodal_joint_layers)
 
         self.save_hyperparameters()
 
@@ -259,14 +253,11 @@ class EncoderModel(pl.LightningModule):
         else:
             mu_hat = {}
             for mod in self.modality_list:
-                if self.encoder_type == "learnt_autoencoder":
-                    if not self.encoder_multimodal_joint_layers:
-                        x_mod = self.decoder[mod](x[mod])
-                    else:
-                        x_mod = self.decoder[mod](x)
+                if not self.encoder_multimodal_joint_layers:
+                    x_mod = self.decoder[mod](x[mod])
                 else:
-                    raise NotImplementedError
-                
+                    x_mod = self.decoder[mod](x)
+
                 if mod != "atac" or (mod == "atac" and not self.is_binarized):
                     mu_hat_mod = F.softmax(x_mod, dim=1)  # for Poisson counts the parameterization is similar to RNA 
                     mu_hat_mod = mu_hat_mod * size_factor[mod]

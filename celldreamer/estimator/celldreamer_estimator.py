@@ -98,7 +98,7 @@ class CellDreamerEstimator:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
             self.modality_list = list(self.gene_dim.keys())
             self.in_dim = {}
-            if not self.args.encoder.encoder_multimodal_joint_layers:  # Optional latent space between modalities
+            if not self.args.encoder.encoder_multimodal_joint_layers:  # Optional latent space shared between modalities
                 for mod in self.dataset.X:
                     self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
             else:
@@ -171,7 +171,6 @@ class CellDreamerEstimator:
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
-                                        n_cond=self.num_classes,  
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 

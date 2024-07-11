@@ -56,6 +56,7 @@ def get_timestep_embedding(
     emb = timesteps.to(dtype)[:, None] * inv_timescales[None, :]  # (T, D/2)
     return torch.cat([emb.sin(), emb.cos()], dim=1)  # (T, D)
 
+
 # ResNet MLP 
 class MLPTimeStep(pl.LightningModule):
     def __init__(self, 
@@ -63,16 +64,18 @@ class MLPTimeStep(pl.LightningModule):
                  hidden_dim: int,
                  dropout_prob: int,
                  n_blocks: int, 
-                 model_type: str,
                  size_factor_min: float, 
                  size_factor_max: float,
-                 embedding_dim=100, 
+                 embed_size_factor: bool,
+                 covariate_list: list,
+                 embedding_dim=128, 
                  normalization="layer", 
                  conditional=False,
                  multimodal=False, 
                  is_binarized=False, 
-                 modality_list=None,
-                 embed_size_factor=True):
+                 modality_list=None, 
+                 conditioning_probability=0.8, 
+                 guided_conditioning=True):
         
         super().__init__()
         
@@ -83,16 +86,18 @@ class MLPTimeStep(pl.LightningModule):
         self.hidden_dim = hidden_dim 
         
         # Initialize attributes 
-        self.model_type = model_type
         self.size_factor_min = size_factor_min
         self.size_factor_max = size_factor_max
+        self.embed_size_factor = embed_size_factor 
         self.embedding_dim = embedding_dim
         self.conditional = conditional
         self.multimodal = multimodal
         self.is_binarized = is_binarized
+        self.covariate_list = covariate_list
         self.modality_list = modality_list
-        self.embed_size_factor = embed_size_factor  # If False, p(x|l,y)=p(x|y)
-                
+        self.conditioning_probability = conditioning_probability  # Conditioning probability during the guiding 
+        self.guided_conditioning = guided_conditioning
+        
         # Time embedding network
         self.time_embedder = nn.Sequential(
             Linear(embedding_dim, embedding_dim),  # Upsample embedding
@@ -100,7 +105,7 @@ class MLPTimeStep(pl.LightningModule):
             Linear(embedding_dim, embedding_dim))
             
         # Size factor embeddings 
-        if model_type=="conditional_latent" and embed_size_factor:
+        if embed_size_factor:
             self.size_factor_embedder = nn.Sequential(
                 Linear(embedding_dim, embedding_dim),  # Upsample embedding
                 nn.SiLU(),
@@ -133,19 +138,27 @@ class MLPTimeStep(pl.LightningModule):
                 nn.SiLU(),
                 Linear(self.hidden_dim, in_dim))
 
-    def forward(self, x, t, l, y):
+    def forward(self, x, t, l, y, inference=False, unconditional=False, covariate=None):        
         # Make a copy of time for using in time embeddings
         t_for_embeddings = t.clone().detach().squeeze()
         
-        # Collect time embedding
+        # Time embedding   
         emb = self.time_embedder(get_timestep_embedding(t_for_embeddings, self.embedding_dim))
                 
         # Embed condition
-        if self.conditional:
-            emb = emb + y
+        if self.guided_conditioning:  
+            is_conditioned = torch.bernoulli(torch.tensor([self.conditioning_probability])).item() if not inference else 1. # Bernoulli variable to decide whether to condition or not
+            if self.conditional and is_conditioned and not unconditional:
+                if covariate == None:  
+                    covariate = np.random.choice(self.covariate_list)
+                emb = emb + y[covariate]
+        else:
+            # Normal conditioning 
+            for covariate in y:
+                emb = emb + y[covariate]
     
         # Embed size factor
-        if self.model_type == "conditional_latent" and self.embed_size_factor:
+        if self.embed_size_factor:
             if self.multimodal and not self.is_binarized:
                 for mod in self.modality_list:
                     l_mod = l[mod].squeeze()
@@ -156,8 +169,8 @@ class MLPTimeStep(pl.LightningModule):
                 l = l.squeeze()
                 l = (l - self.size_factor_min) / (self.size_factor_max - self.size_factor_min)
                 l = self.size_factor_embedder(get_timestep_embedding(l, self.embedding_dim))
-                emb = emb + l
-                    
+                emb = emb + l        
+
         # Compute prediction
         h = self.net_in(x)  
         for block in self.blocks:  # n_blocks times
@@ -205,8 +218,7 @@ class ResnetBlock(nn.Module):
                 Linear(in_dim, out_dim))
         
         # Projections for conditions 
-        self.cond_proj = nn.Sequential(nn.SiLU(), 
-                                        Linear(self.embedding_dim, out_dim))
+        self.cond_proj = nn.Sequential(nn.SiLU(), Linear(self.embedding_dim, out_dim))
             
         # Second linear block with LayerNorm, SiLU activation, and optional dropout
         if normalization not in ["layer", "batch"]:

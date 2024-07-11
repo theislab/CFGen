@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+# From https://github.com/atong01/conditional-flow-matching/blob/v0/src/models/components/mmd.py
 
 import torch
 

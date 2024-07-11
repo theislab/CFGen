@@ -99,6 +99,7 @@ class RNAseqLoader:
             if not self.is_binarized:
                 self.log_size_factor_mu, self.log_size_factor_sd, self.max_size_factor, self.min_size_factor = {},{},{},{}
                 for mod in self.modality_list:
+                    # Compute size factor for both RNA and Poisson ATAC
                     self.log_size_factor_mu[mod], self.log_size_factor_sd[mod] = compute_size_factor_lognorm(adata[mod], layer_key, self.id2cov)
                     log_size_factors = torch.log(self.X[mod].sum(1))
                     self.max_size_factor[mod], self.min_size_factor[mod] = log_size_factors.max(), log_size_factors.min()
