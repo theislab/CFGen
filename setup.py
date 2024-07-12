@@ -18,9 +18,9 @@ with open('requirements.txt') as f:
 
 
 setup(
-    name="cfgen",
+    name="CFGen",
     version="0.1.0",
-    url="https://github.com/theislab/celldreamer",
+    url="https://github.com/theislab/CFGen/",
     license='MIT',
     author="Till Richter, Alessandro Palma",
     author_email="till.richter@helmholtz-munich.de",
