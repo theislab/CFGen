@@ -16,20 +16,20 @@ Installation
 
    .. code-block:: bash
 
-       conda activate CFGen
+       conda activate cfgen
 
 3. Install the CFGen package in development mode:
 
    .. code-block:: bash
 
-       cd directory_where_you_have_your_git_repos/CFGen
+       cd directory_where_you_have_your_git_repos/cfgen
        pip install -e . 
 
 4. Create symlink to the storage folder for experiments:
 
    .. code-block:: bash
 
-       cd directory_where_you_have_your_git_repos/CFGen
+       cd directory_where_you_have_your_git_repos/cfgen
        ln -s folder_for_experiment_storage project_folder
 
 
@@ -39,8 +39,8 @@ See `environment.yml` and `requirements.txt` for the required packages.
 
 Compatibility
 -------------
-`CFGen` is compatible with Python 3.10.
+`cfgen` is compatible with Python 3.10.
 
 Licence
 -------
-`CFGen` is licensed under the `MIT License <https://opensource.org/licenses/MIT>`_.
+`cfgen` is licensed under the `MIT License <https://opensource.org/licenses/MIT>`_.

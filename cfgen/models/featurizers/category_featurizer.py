@@ -1,5 +1,4 @@
 import torch 
-import pandas as pd
 import torch.nn.functional as F
 
 class CategoricalFeaturizer(torch.nn.Module):

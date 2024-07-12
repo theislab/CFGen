@@ -21,26 +21,26 @@
 #SBATCH --nice=10000
 
 # Dentategyrus
-python ../celldreamer/train_encoder.py dataset=dentategyrus dataset.encoder_type=learnt_autoencoder \
+python ../cfgen/train_encoder.py dataset=dentategyrus dataset.encoder_type=learnt_autoencoder \
 logger.project=train_autoencoder_dentategyrus trainer.max_epochs=300
 
 # Hlca_core
-python ../celldreamer/train_encoder.py dataset=hlca_core dataset.encoder_type=learnt_autoencoder \
+python ../cfgen/train_encoder.py dataset=hlca_core dataset.encoder_type=learnt_autoencoder \
 logger.project=train_autoencoder_hlca_core trainer.max_epochs=300
 
 # NeurIPS
-python ../celldreamer/train_encoder.py dataset=neurips dataset.encoder_type=learnt_autoencoder \
+python ../cfgen/train_encoder.py dataset=neurips dataset.encoder_type=learnt_autoencoder \
 logger.project=train_autoencoder_neurips trainer.max_epochs=300
 
 # pbmc3k
-python ../celldreamer/train_encoder.py dataset=pbmc3k dataset.encoder_type=learnt_autoencoder \
+python ../cfgen/train_encoder.py dataset=pbmc3k dataset.encoder_type=learnt_autoencoder \
 logger.project=train_autoencoder_pbmc3k trainer.max_epochs=300
 
 # tabula_muris
-python ../celldreamer/train_encoder.py dataset=tabula_muris dataset.encoder_type=learnt_autoencoder \
+python ../cfgen/train_encoder.py dataset=tabula_muris dataset.encoder_type=learnt_autoencoder \
 logger.project=train_autoencoder_tabula_muris trainer.max_epochs=300
 
 # pbmc covid
-python ../celldreamer/train_encoder.py dataset=pbmc_covid dataset.encoder_type=learnt_autoencoder \
+python ../cfgen/train_encoder.py dataset=pbmc_covid dataset.encoder_type=learnt_autoencoder \
 logger.project=train_autoencoder_pbmc_covid trainer.max_epochs=300
 

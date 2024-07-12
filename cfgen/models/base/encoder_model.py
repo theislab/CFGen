@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Poisson, Bernoulli
-from celldreamer.models.base.utils import MLP
+from cfgen.models.base.utils import MLP
 
 
 class EncoderModel(pl.LightningModule):

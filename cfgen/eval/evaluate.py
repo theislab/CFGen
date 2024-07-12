@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from celldreamer.eval.distribution_distances import compute_distribution_distances
+from cfgen.eval.distribution_distances import compute_distribution_distances
 import scanpy as sc
 
 def scanpy_pipeline(adata):

@@ -1,6 +1,5 @@
 from typing import Callable, List, Optional
 import torch
-import torch.nn as nn
 
 def unsqueeze_right(x, num_dims=1):
     """

@@ -1,5 +1,5 @@
 import scanpy as sc
-from celldreamer.eval.distribution_distances import compute_distribution_distances
+from cfgen.eval.distribution_distances import compute_distribution_distances
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 import torch
