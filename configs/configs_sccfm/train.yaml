@@ -5,7 +5,7 @@ defaults:
   - _self_
   - checkpoints: default
   - dataset: dentategyrus 
-  - denoising_module: default
+  - denoising_module: resnet_small
   - early_stopping: default
   - generative_model: default
   - hparams_search: null
