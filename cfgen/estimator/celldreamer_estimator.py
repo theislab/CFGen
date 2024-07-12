@@ -6,22 +6,22 @@ from torch.utils.data import random_split
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
-from celldreamer.paths import TRAINING_FOLDER
-from celldreamer.data.scrnaseq_loader import RNAseqLoader
-from celldreamer.models.featurizers.category_featurizer import CategoricalFeaturizer
-from celldreamer.models.fm.denoising_model import MLPTimeStep
-from celldreamer.models.fm.fm import FM
-from celldreamer.models.base.encoder_model import EncoderModel
+from cfgen.paths import TRAINING_FOLDER
+from cfgen.data.scrnaseq_loader import RNAseqLoader
+from cfgen.models.featurizers.category_featurizer import CategoricalFeaturizer
+from cfgen.models.fm.denoising_model import MLPTimeStep
+from cfgen.models.fm.fm import FM
+from cfgen.models.base.encoder_model import EncoderModel
 
 # Some general settings for the run
 os.environ["WANDB__SERVICE_WAIT"] = "300"
 torch.autograd.set_detect_anomaly(True)
 
-class CellDreamerEstimator:
-    """Class for training and using the CellDreamer model."""
+class CfgenEstimator:
+    """Class for training and using the cfgen model."""
     def __init__(self, args):
         """
-        Initialize the CellDreamerEstimator.
+        Initialize the CFGgen Estimator.
 
         Args:
             args (Args): Configuration hyperparameters for the model.

@@ -3,8 +3,7 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 
-from celldreamer.models.fm.layer_utils import Linear
-from celldreamer.models.base.utils import unsqueeze_right
+from cfgen.models.fm.layer_utils import Linear
 
 # Util functions
 def zero_init(module):

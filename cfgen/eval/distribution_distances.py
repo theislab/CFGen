@@ -9,8 +9,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import f1_score
 
-from celldreamer.eval.mmd import linear_mmd2, poly_mmd2
-from celldreamer.eval.optimal_transport import wasserstein
+from cfgen.eval.mmd import linear_mmd2, poly_mmd2
+from cfgen.eval.optimal_transport import wasserstein
 
 
 def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor, list]):

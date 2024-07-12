@@ -1,9 +1,7 @@
 # From https://github.com/atong01/conditional-flow-matching/blob/main/torchcfm/optimal_transport.py
 
-import math
 import warnings
 from functools import partial
-from typing import Optional
 
 import numpy as np
 import ot as pot

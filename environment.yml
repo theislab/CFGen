@@ -1,4 +1,4 @@
-name: celldreamer
+name: cfgen
 channels:
   - conda-forge
 dependencies:

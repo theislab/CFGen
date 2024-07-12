@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 import scanpy as sc
-from celldreamer.eval.distribution_distances import (compute_distribution_distances, 
+from cfgen.eval.distribution_distances import (compute_distribution_distances, 
                                                      compute_knn_real_fake, 
                                                      compute_prdc)
 
@@ -11,7 +11,7 @@ from celldreamer.eval.distribution_distances import (compute_distribution_distan
 CONDITIONAL = {"scDiffusion": True, 
                "scgan": False, 
                "scvi": True, 
-               "celldreamer": True, 
+               "cfgen": True, 
                "activa": False, 
                "scrdit": False}
 

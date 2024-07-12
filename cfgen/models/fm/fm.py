@@ -10,11 +10,11 @@ import pytorch_lightning as pl
 
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Poisson, Bernoulli
-from celldreamer.models.base.cell_decoder import CellDecoder
-from celldreamer.eval.evaluate import compute_umap_and_wasserstein
-from celldreamer.models.base.utils import pad_t_like_x
-from celldreamer.models.fm.ode import torch_wrapper
-from celldreamer.models.fm.ot_sampler import OTPlanSampler
+from cfgen.models.base.cell_decoder import CellDecoder
+from cfgen.eval.evaluate import compute_umap_and_wasserstein
+from cfgen.models.base.utils import pad_t_like_x
+from cfgen.models.fm.ode import torch_wrapper
+from cfgen.models.fm.ot_sampler import OTPlanSampler
 
 from torchdyn.core import NeuralODE
 

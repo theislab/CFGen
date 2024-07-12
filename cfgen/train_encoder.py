@@ -1,7 +1,7 @@
 import hydra
 import sys
 from omegaconf import DictConfig
-from celldreamer.estimator.encoder_estimator import EncoderEstimator
+from cfgen.estimator.encoder_estimator import EncoderEstimator
 
 @hydra.main(config_path="../configs/configs_encoder", config_name="train", version_base=None)
 def train(cfg: DictConfig):

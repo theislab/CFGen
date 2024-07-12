@@ -2,7 +2,7 @@ import numpy as np
 import scanpy as sc
 import muon as mu
 import torch
-from celldreamer.data.utils import normalize_expression, compute_size_factor_lognorm
+from cfgen.data.utils import normalize_expression, compute_size_factor_lognorm
 
 class RNAseqLoader:
     """Class for RNAseq data loader."""

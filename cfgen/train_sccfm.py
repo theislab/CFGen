@@ -1,7 +1,7 @@
 import hydra
 import sys
 from omegaconf import DictConfig
-from celldreamer.estimator.celldreamer_estimator import CellDreamerEstimator
+from cfgen.estimator.cfgen_estimator import CfgenEstimator
 
 @hydra.main(config_path="../configs/configs_sccfm", config_name="train", version_base=None)
 def train(cfg: DictConfig):
@@ -18,7 +18,7 @@ def train(cfg: DictConfig):
         None
     """
     # Initialize estimator 
-    estimator = CellDreamerEstimator(cfg)
+    estimator = CfgenEstimator(cfg)
     # Train and test 
     estimator.train()
     estimator.test()
