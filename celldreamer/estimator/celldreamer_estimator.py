@@ -67,8 +67,6 @@ class CellDreamerEstimator:
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     encoder_type=self.args.dataset.encoder_type,
-                                    # target_max=self.args.dataset.target_max, 
-                                    # target_min=self.args.dataset.target_min, 
                                     multimodal=self.multimodal,
                                     is_binarized=self.is_binarized)
 
@@ -94,17 +92,17 @@ class CellDreamerEstimator:
         if not self.dataset.multimodal:
             # If not multimodal, gene dimension and input dimension computed only for RNA
             self.gene_dim = self.dataset.X.shape[1] 
-            self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.x0_from_x_kwargs["dims"][-1]
+            self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.encoder_kwargs["dims"][-1]
             self.modality_list = None 
         else:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
             self.modality_list = list(self.gene_dim.keys())
             self.in_dim = {}
-            for mod in self.dataset.X:
-                if self.args.dataset.encoder_type!="learnt_autoencoder":
-                    self.in_dim[mod] = self.gene_dim[mod]
-                else:
-                    self.in_dim[mod] = self.args.encoder.x0_from_x_kwargs[mod]["dims"][-1]
+            if not self.args.encoder.encoder_multimodal_joint_layers:  # Optional latent space shared between modalities
+                for mod in self.dataset.X:
+                    self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
+            else:
+                self.in_dim = self.args.encoder.encoder_multimodal_joint_layers["dims"][-1]
 
     def init_trainer(self):
         """
@@ -152,7 +150,6 @@ class CellDreamerEstimator:
         """Initialize the (optional) autoencoder and generative model 
         """
         # Initialize denoising model 
-        conditioning_cov = self.args.dataset.conditioning_covariate  
         if not self.dataset.multimodal or (self.dataset.multimodal and self.is_binarized):
             size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                         "sd": self.dataset.log_size_factor_sd}
@@ -160,8 +157,7 @@ class CellDreamerEstimator:
             size_factor_statistics = {"mean": {mod: self.dataset.log_size_factor_mu[mod] for mod in self.dataset.log_size_factor_mu}, 
                                         "sd": {mod: self.dataset.log_size_factor_sd[mod] for mod in self.dataset.log_size_factor_sd}}
                 
-        # scaler = self.dataset.get_scaler()
-        
+
         # Initialize the deoising model 
         denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
@@ -170,19 +166,20 @@ class CellDreamerEstimator:
                                         model_type=self.args.denoising_module.model_type, 
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
+                                        embed_size_factor=self.args.denoising_module.embed_size_factor, 
+                                        covariate_list=self.args.dataset.covariate_keys,
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
                                         multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 
-                                        embed_size_factor=self.args.denoising_module.embed_size_factor).to(self.device)
+                                        guided_conditioning=self.args.denoising_module.guided_conditioning).to(self.device)
         
         print("Denoising model", denoising_model)
         
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                        #   scaler=scaler, 
                                           n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
                                           conditioning_covariate=self.args.dataset.conditioning_covariate, 
                                           encoder_type=self.args.dataset.encoder_type,
@@ -207,13 +204,15 @@ class CellDreamerEstimator:
             plotting_folder=self.plotting_dir,
             in_dim=self.in_dim,
             size_factor_statistics=size_factor_statistics,
-            # scaler=scaler,
-            encoder_type=self.args.dataset.encoder_type,
-            conditioning_covariate=conditioning_cov,
+            covariate_list=self.args.dataset.covariate_keys, 
+            theta_covariate=self.args.dataset.theta_covariate,
+            size_factor_covariate=self.args.dataset.size_factor_covariate,
             model_type=denoising_model.model_type, 
+            encoder_type=self.args.dataset.encoder_type,
             multimodal=self.dataset.multimodal,
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,
+            guidance_weights=self.args.dataset.guidance_weights,
             **self.args.generative_model  # model_kwargs should contain the rest of the arguments
             )
 

@@ -14,11 +14,15 @@ from celldreamer.eval.optimal_transport import wasserstein
 
 
 def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor, list]):
-    """computes distances between distributions.
-    pred: [batch, times, dims] tensor
-    true: [batch, times, dims] tensor or list[batch[i], dims] of length times
+    """
+    Computes distances between predicted and true distributions.
 
-    This handles jagged times as a list of tensors.
+    Args:
+        pred (torch.Tensor): Predicted tensor of shape [batch, times, dims].
+        true (Union[torch.Tensor, list]): True tensor of shape [batch, times, dims] or list of tensors of length times.
+
+    Returns:
+        dict: Dictionary containing the computed distribution distances.
     """
     min_size = min(pred.shape[0], true.shape[0])
     
@@ -41,13 +45,17 @@ def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor,
     to_return.extend(np.array(dists).mean(axis=0))
     return dict(zip(names, to_return))
 
+
 def compute_pairwise_distance(data_x, data_y=None):
     """
+    Computes pairwise distances between two datasets.
+
     Args:
-        data_x: numpy.ndarray([N, feature_dim], dtype=np.float32)
-        data_y: numpy.ndarray([N, feature_dim], dtype=np.float32)
+        data_x (np.ndarray): Array of shape [N, feature_dim].
+        data_y (np.ndarray, optional): Array of shape [N, feature_dim]. Defaults to None.
+
     Returns:
-        numpy.ndarray([N, N], dtype=np.float32) of pairwise distances.
+        np.ndarray: Array of shape [N, N] containing pairwise distances.
     """
     if data_y is None:
         data_y = data_x
@@ -55,13 +63,17 @@ def compute_pairwise_distance(data_x, data_y=None):
         data_x, data_y, metric='l1', n_jobs=8)
     return dists
 
+
 def get_kth_value(unsorted, k, axis=-1):
     """
+    Gets the k-th smallest value along the specified axis.
+
     Args:
-        unsorted: numpy.ndarray of any dimensionality.
-        k: int
+        unsorted (np.ndarray): Unsorted array of any dimensionality.
+        k (int): The k-th index.
+
     Returns:
-        kth values along the designated axis.
+        np.ndarray: Array containing k-th smallest values along the specified axis.
     """
     indices = np.argpartition(unsorted, k, axis=axis)[..., :k]
     k_smallests = np.take_along_axis(unsorted, indices, axis=axis)
@@ -71,11 +83,14 @@ def get_kth_value(unsorted, k, axis=-1):
 
 def compute_nearest_neighbour_distances(input_features, nearest_k):
     """
+    Computes distances to the k-th nearest neighbours.
+
     Args:
-        input_features: numpy.ndarray([N, feature_dim], dtype=np.float32)
-        nearest_k: int
+        input_features (np.ndarray): Array of shape [N, feature_dim].
+        nearest_k (int): The number of nearest neighbours.
+
     Returns:
-        Distances to kth nearest neighbours.
+        np.ndarray: Distances to the k-th nearest neighbours.
     """
     distances = compute_pairwise_distance(input_features)
     radii = get_kth_value(distances, k=nearest_k + 1, axis=-1)
@@ -87,11 +102,12 @@ def compute_prdc(real_features, fake_features, nearest_k):
     Computes precision, recall, density, and coverage given two manifolds.
 
     Args:
-        real_features: numpy.ndarray([N, feature_dim], dtype=np.float32)
-        fake_features: numpy.ndarray([N, feature_dim], dtype=np.float32)
-        nearest_k: int.
+        real_features (np.ndarray): Array of real features of shape [N, feature_dim].
+        fake_features (np.ndarray): Array of fake features of shape [N, feature_dim].
+        nearest_k (int): Number of nearest neighbours.
+
     Returns:
-        dict of precision, recall, density, and coverage.
+        dict: Dictionary containing precision, recall, density, and coverage.
     """
     real_nearest_neighbour_distances = compute_nearest_neighbour_distances(
         real_features, nearest_k)
@@ -122,23 +138,20 @@ def compute_prdc(real_features, fake_features, nearest_k):
 
     return dict(precision=precision, recall=recall,
                 density=density, coverage=coverage)
-    
-# def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
-#     X = np.concatenate((X_real, X_fake), axis=0)
-#     y = np.concatenate((np.ones(len(X_real)), np.zeros(len(X_fake))), axis=0)
 
-#     # Initialize KNN classifier
-#     knn = KNeighborsClassifier(n_neighbors=n_neighbors)
-
-#     # Train the classifier
-#     knn.fit(X, y)
-
-#     # Evaluate the classifier
-#     y_pred = knn.predict(X_fake)
-#     auc = f1_score(np.ones(len(X_fake)), y_pred, average="macro")
-#     return auc
 
 def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
+    """
+    Computes F1 score using k-nearest neighbours classifier for real and fake data.
+
+    Args:
+        X_real (np.ndarray): Array of real features.
+        X_fake (np.ndarray): Array of fake features.
+        n_neighbors (int, optional): Number of neighbours. Defaults to 5.
+
+    Returns:
+        float: F1 score.
+    """
     X = np.concatenate((X_real, X_fake), axis=0)
     y = np.concatenate((np.ones(len(X_real)), np.zeros(len(X_fake))), axis=0)
 
@@ -154,7 +167,20 @@ def compute_knn_real_fake(X_real, X_fake, n_neighbors=5):
     auc = f1_score(y, y_pred, average="macro")
     return auc
 
+
 def train_knn_real_data(adata_real, category_field, use_pca, n_neighbors=5):
+    """
+    Trains a k-nearest neighbours classifier on real data.
+
+    Args:
+        adata_real (AnnData): Annotated Data object containing real data.
+        category_field (str): The category field to be used as the target variable.
+        use_pca (bool): Whether to use PCA-transformed data.
+        n_neighbors (int, optional): Number of neighbours. Defaults to 5.
+
+    Returns:
+        KNeighborsClassifier: Trained KNN classifier.
+    """
     if not use_pca:
         X = adata_real.X  # Features
     else:

@@ -1,4 +1,4 @@
 batch_size: 256
 chekpoint_path: Null 
 use_early_stopping: False
-encoder_ckpt: /home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/train_encoder_dentategyrus/2d149a86-99da-46cd-804e-58d219c22b5a/checkpoints/last.ckpt
+encoder_ckpt: "path/to/encoder_ckpt"

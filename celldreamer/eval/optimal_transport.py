@@ -1,3 +1,5 @@
+# From https://github.com/atong01/conditional-flow-matching/blob/v0/src/models/components/optimal_transport.py
+
 import torch
 from typing import Optional
 from functools import partial

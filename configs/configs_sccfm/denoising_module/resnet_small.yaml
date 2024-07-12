@@ -2,10 +2,11 @@ denoising_net: resnet
 hidden_dim: 32
 dropout_prob: 0 
 n_blocks: 3
-model_type: conditional_latent # conditional_latent, factorized_latent, learnt_size_factor
 embedding_dim: 20
 conditional: True
 normalization: none
 multimodal: False
 is_binarized: False
 embed_size_factor: False
+conditioning_probability: 0.8
+guided_conditioning: True
