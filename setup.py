@@ -18,12 +18,12 @@ with open('requirements.txt') as f:
 
 
 setup(
-    name="celldreamer",
+    name="cfgen",
     version="0.1.0",
     url="https://github.com/theislab/celldreamer",
     license='MIT',
-    author="Till Richter",
-    author_email="till.richter@helmholtz-muenchen.de",
+    author="Till Richter, Alessandro Palma",
+    author_email="till.richter@helmholtz-munich.de",
     description="A package for generative modeling of single-cell data.",
     long_description=read("README.rst"),
     packages=find_packages(exclude=('tests',)),
