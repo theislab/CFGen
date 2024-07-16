@@ -1,4 +1,4 @@
-dataset_path: ../../../project_folder/datasets/processed_full_genome/tabula_muris/tabula_muris_train.h5ad
+dataset_path: ../../project_folder/datasets/processed_full_genome/tabula_muris/tabula_muris_train.h5ad
 layer_key: X_counts
 covariate_keys: [tissue]
 subsample_frac: 1

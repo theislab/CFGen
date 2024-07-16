@@ -1,4 +1,4 @@
-dataset_path: ../../../project_folder/datasets/processed_full_genome/pbmc3k/pbmc3k_train.h5ad
+dataset_path: ../../project_folder/datasets/processed_full_genome/pbmc3k/pbmc3k_train.h5ad
 layer_key: X_counts
 covariate_keys: [cell_type]
 subsample_frac: 1

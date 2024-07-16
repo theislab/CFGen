@@ -1,4 +1,4 @@
-dataset_path: ../../../project_folder/datasets/processed/atac/pbmc/pbmc10k_multiome_train.h5mu
+dataset_path: ../../project_folder/datasets/processed/atac/pbmc/pbmc10k_multiome_train.h5mu
 layer_key: X_counts
 covariate_keys: [cell_type]
 subsample_frac: 1

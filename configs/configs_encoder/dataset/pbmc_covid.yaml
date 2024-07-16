@@ -1,4 +1,4 @@
-dataset_path: ../../../project_folder/datasets/processed/classifier_experiment/pbmc_covid_train.h5ad
+dataset_path: ../../project_folder/datasets/processed/classifier_experiment/pbmc_covid_train.h5ad
 layer_key: X_counts
 covariate_keys: [cell_type]
 subsample_frac: 1
