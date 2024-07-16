@@ -23,8 +23,8 @@
 #SBATCH --nice=10000
 
 # Dentategyrus
-python ../../cfgen/train_encoder.py dataset=dentategyrus \
-logger.project=train_autoencoder_dentategyrus trainer.max_epochs=300
+# python ../../cfgen/train_encoder.py dataset=dentategyrus \
+# logger.project=train_autoencoder_dentategyrus trainer.max_epochs=300
 
 # # Hlca_core
 # python ../../cfgen/train_encoder.py dataset=hlca_core \
@@ -42,6 +42,6 @@ logger.project=train_autoencoder_dentategyrus trainer.max_epochs=300
 # python ../../cfgen/train_encoder.py dataset=tabula_muris \
 # logger.project=train_autoencoder_tabula_muris trainer.max_epochs=300
 
-# # pbmc covid
+# pbmc covid
 # python ../../cfgen/train_encoder.py dataset=pbmc_covid \
 # logger.project=train_autoencoder_pbmc_covid trainer.max_epochs=300
