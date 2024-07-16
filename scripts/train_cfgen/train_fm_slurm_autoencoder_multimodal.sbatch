@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ../logs/train_autoencoder_multimodal.out
+#SBATCH -o ../logs/cfgen_multimodal.out
 
-#SBATCH -e ../logs/train_autoencoder_multimodal.err
+#SBATCH -e ../logs/cfgen_multimodal.err
 
-#SBATCH -J train_autoencoder_multimodal
+#SBATCH -J cfgen_multimodal
 
 #SBATCH -p gpu_p
 

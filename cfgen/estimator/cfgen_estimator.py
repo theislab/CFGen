@@ -163,7 +163,6 @@ class CfgenEstimator:
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
-                                        model_type=self.args.denoising_module.model_type, 
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
                                         embed_size_factor=self.args.denoising_module.embed_size_factor, 
@@ -180,8 +179,8 @@ class CfgenEstimator:
         
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                          n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
-                                          conditioning_covariate=self.args.dataset.conditioning_covariate, 
+                                          n_cat=self.feature_embeddings[self.args.dataset.theta_covariate].n_cat,
+                                          conditioning_covariate=self.args.dataset.theta_covariate, 
                                           **self.args.encoder)
         print("Encoder architecture", self.encoder_model)
     
