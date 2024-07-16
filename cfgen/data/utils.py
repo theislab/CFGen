@@ -1,12 +1,12 @@
 import torch
 
-def normalize_expression(X, size_factor, encoder_type):
+def normalize_expression(X, size_factor, normalization_type):
     """Normalize gene expression data based on the specified encoder type.
 
     Args:
         X (torch.Tensor): Input gene expression matrix.
         size_factor (torch.Tensor): Size factors for normalization.
-        encoder_type (str): Type of encoder for normalization. It can be one of the following:
+        normalization_type (str): Type of encoder for normalization. It can be one of the following:
                             - "proportions": Normalize by dividing by size factor.
                             - "log_gexp": Apply log transformation to gene expression data.
                             - "learnt_encoder": Apply log transformation to gene expression data.
@@ -19,14 +19,14 @@ def normalize_expression(X, size_factor, encoder_type):
     Raises:
         NotImplementedError: If the encoder type is not recognized.
     """
-    if encoder_type == "proportions":
+    if normalization_type == "proportions":
         X = X / size_factor
-    elif encoder_type in ["log_gexp", "learnt_encoder", "learnt_autoencoder"]:
+    elif normalization_type == "log_gexp":
         X = torch.log1p(X)
-    elif encoder_type == "log_gexp_scaled":
+    elif normalization_type == "log_gexp_scaled":
         X = torch.log1p(X / size_factor)
     else:
-        raise NotImplementedError(f"Encoder type '{encoder_type}' is not implemented.")
+        raise NotImplementedError(f"Encoder type '{normalization_type}' is not implemented.")
     return X
 
 def compute_size_factor_lognorm(adata, layer, id2cov):
