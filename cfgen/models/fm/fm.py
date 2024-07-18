@@ -251,7 +251,7 @@ class FM(pl.LightningModule):
         if not unconditional:
             y = {}
             for covariate in covariate_indices:
-                y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].cuda())
+                y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].to(self.device))
         else: 
             y = None
 

@@ -205,8 +205,6 @@ class CfgenEstimator:
             covariate_list=self.args.dataset.covariate_keys, 
             theta_covariate=self.args.dataset.theta_covariate,
             size_factor_covariate=self.args.dataset.size_factor_covariate,
-            model_type=denoising_model.model_type, 
-            normalization_type=self.args.dataset.normalization_type,
             multimodal=self.dataset.multimodal,
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,
