@@ -65,10 +65,7 @@ def compute_umap_and_wasserstein(model,
         dict: Dictionary containing Wasserstein distances for each modality.
     """
     # Determine the modalities based on the model
-    if not model.multimodal:
-        modality_list = ["rna"]
-    else:
-        modality_list = model.modality_list
+    modality_list = model.modality_list
 
     # Sample batches
     repetitions = batch_size // 100
@@ -78,11 +75,6 @@ def compute_umap_and_wasserstein(model,
                                             theta_covariate,
                                             size_factor_covariate, 
                                             conditioning_covariates=model.covariate_list)
-    
-    # Ensure the generated data is in dictionary format
-    if len(modality_list) == 1:
-        X_generated_dict = {"rna": X_generated_dict}
-        X_real = {"rna": X_real}
     
     # Initialize a dictionary to store Wasserstein distances
     wd = {}

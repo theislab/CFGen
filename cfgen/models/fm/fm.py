@@ -37,7 +37,6 @@ class FM(pl.LightningModule):
                  covariate_specific_theta: float = False, 
                  plot_and_eval_every=100, 
                  use_ot=True, 
-                 multimodal=False, 
                  is_binarized=False, 
                  modality_list=None, 
                  guidance_weights=None):
@@ -77,7 +76,6 @@ class FM(pl.LightningModule):
         self.covariate_specific_theta = covariate_specific_theta
         self.plot_and_eval_every = plot_and_eval_every
         self.use_ot = use_ot
-        self.multimodal = multimodal
         self.is_binarized = is_binarized
         self.modality_list = modality_list
         self.guidance_weights = guidance_weights
@@ -86,10 +84,7 @@ class FM(pl.LightningModule):
         self.criterion = torch.nn.MSELoss()
                 
         # Collection of testing observations for evaluation 
-        if not self.multimodal:
-            self.testing_outputs = []  
-        else:
-            self.testing_outputs = {mod: [] for mod in self.modality_list}
+        self.testing_outputs = {mod: [] for mod in self.modality_list}
         
         # save hyper-parameters to self.hparams (auto-logged by W&B)
         self.save_hyperparameters()
@@ -124,10 +119,7 @@ class FM(pl.LightningModule):
         """
         # Collect observation and put onto device 
         x = batch["X"]  # counts
-        if self.multimodal:
-            x = {mod: x[mod].to(self.device) for mod in x}  # move to device
-        else:
-            x = x.to(self.device)
+        x = {mod: x[mod].to(self.device) for mod in x}  # move to device
         
         # Collect labels 
         y_fea = self._featurize_batch_y(batch)
@@ -135,21 +127,17 @@ class FM(pl.LightningModule):
         # Encode observations into the latent space
         with torch.no_grad():
             x0 = self.encoder_model.encode(batch)
-            if self.multimodal and not self.encoder_model.encoder_multimodal_joint_layers:
+            if not self.encoder_model.encoder_multimodal_joint_layers:
                 x0 = torch.cat([x0[mod] for mod in self.modality_list], dim=1)  # concatenate ordered by the modality list 
 
         # Quantify size factor 
-        if not self.multimodal:
-            size_factor = x.sum(1).unsqueeze(1)
-            log_size_factor = torch.log(size_factor)
-        else: 
-            if self.is_binarized:
-                # If binarized, the size factor is not required for atac 
-                size_factor = x["rna"].sum(1).unsqueeze(1)
-                log_size_factor = torch.log(size_factor)            
-            else:
-                size_factor = {mod: x[mod].sum(1).unsqueeze(1) for mod in self.modality_list}
-                log_size_factor = {mod: torch.log(size_factor[mod]) for mod in self.modality_list}
+        if self.is_binarized:
+            # If binarized, the size factor is not required for atac 
+            size_factor = x["rna"].sum(1).unsqueeze(1)
+            log_size_factor = torch.log(size_factor)            
+        else:
+            size_factor = {mod: x[mod].sum(1).unsqueeze(1) for mod in self.modality_list}
+            log_size_factor = {mod: torch.log(size_factor[mod]) for mod in self.modality_list}
         
         # Sample time 
         t = self._sample_times(x0.shape[0])  # B
@@ -233,7 +221,7 @@ class FM(pl.LightningModule):
         # Sample size factor from the associated distribution
         if log_size_factor==None:
             # If size factor conditions the denoising, sample from the log-norm distribution. Else the size factor is None
-            if self.multimodal and not self.is_binarized:
+            if not self.is_binarized:
                 log_size_factor = {}
                 for mod in self.modality_list:
                     mean_size_factor, sd_size_factor = self.size_factor_statistics["mean"][mod][size_factor_covariate], self.size_factor_statistics["sd"][mod][size_factor_covariate]
@@ -274,12 +262,12 @@ class FM(pl.LightningModule):
         x0 = self.node.trajectory(z, t_span=t)[-1]
         
         # If multimodal, split the output to get separate z's
-        if self.multimodal and not self.encoder_model.encoder_multimodal_joint_layers:
+        if not self.encoder_model.encoder_multimodal_joint_layers:
             x0 = torch.split(x0, [self.in_dim[d] for d in self.modality_list], dim=1)
             x0 = {mod: x0[i] for i, mod in enumerate(self.modality_list)}
 
         # Exponentiate log-size factor for decoding  
-        if self.multimodal and not self.is_binarized:
+        if not self.is_binarized:
             size_factor = {mod: torch.exp(log_size_factor[mod]) for mod in self.modality_list}
         else:
             size_factor = torch.exp(log_size_factor)
@@ -288,26 +276,19 @@ class FM(pl.LightningModule):
         x = self._decode(x0, size_factor)
 
         # Sample from noise model
-        if not self.multimodal:
-            if not self.covariate_specific_theta:
-                distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta))
-            else:
-                distr = NegativeBinomial(mu=x, theta=torch.exp(self.encoder_model.theta[covariate_indices[theta_covariate]]))
-            sample = distr.sample()
-        else:
-            sample = {}  # containing final samples 
-            for mod in x:
-                if mod=="rna":  
-                    if not self.covariate_specific_theta:
-                        distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta))
-                    else:
-                        distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta[covariate_indices[theta_covariate]]))
-                else:  # if mod is atac
-                    if not self.encoder_model.is_binarized:
-                        distr = Poisson(rate=x[mod])
-                    else:
-                        distr = Bernoulli(probs=x[mod])
-                sample[mod] = distr.sample() 
+        sample = {}  # containing final samples 
+        for mod in x:
+            if mod=="rna":  
+                if not self.covariate_specific_theta:
+                    distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta))
+                else:
+                    distr = NegativeBinomial(mu=x[mod], theta=torch.exp(self.encoder_model.theta[covariate_indices[theta_covariate]]))
+            else:  # if mod is atac
+                if not self.encoder_model.is_binarized:
+                    distr = Poisson(rate=x[mod])
+                else:
+                    distr = Bernoulli(probs=x[mod])
+            sample[mod] = distr.sample() 
         return sample
     
     @torch.no_grad()
@@ -322,10 +303,7 @@ class FM(pl.LightningModule):
                        log_size_factor=None, 
                        unconditional=False):
         
-        if not self.multimodal:
-            total_samples = []
-        else:
-            total_samples = {mod:[] for mod in self.modality_list}
+        total_samples = {mod:[] for mod in self.modality_list}
             
         # Covariate is same for all modalities 
         for i in range(repetitions):
@@ -337,7 +315,7 @@ class FM(pl.LightningModule):
                 covariate_indices_batch = None
                 
             # Input to the sampling pre-defined size factors if provided to the function 
-            if not self.multimodal or (self.multimodal and self.is_binarized):
+            if self.is_binarized:
                 log_size_factor_batch = log_size_factor[(i*batch_size):((i+1)*batch_size)] if log_size_factor != None else None 
             else:
                 if log_size_factor != None:
@@ -357,21 +335,15 @@ class FM(pl.LightningModule):
                                     log_size_factor_batch, 
                                     unconditional)
                 
-            if not self.multimodal: 
-                total_samples.append(X_samples.cpu())
-            else:
-                for mod in X_samples:
-                    total_samples[mod].append(X_samples[mod].cpu())                
+            for mod in X_samples:
+                total_samples[mod].append(X_samples[mod].cpu())                
         
         # Concatenate observations in the samples 
-        if not self.multimodal:
-            return torch.cat(total_samples, dim=0)
-        else:
-            return {mod: torch.cat(total_samples[mod], dim=0) for mod in self.modality_list}                
+        return {mod: torch.cat(total_samples[mod], dim=0) for mod in self.modality_list}                
 
     def _decode(self, z, size_factor):
         # Decode the rescaled z
-        if self.multimodal and self.is_binarized:
+        if self.is_binarized:
             size_factor = {"rna": size_factor}  # Compatibility with the decoder implementation for multimodal data 
         z = self.encoder_model.decode(z, size_factor)
         return z
@@ -567,18 +539,12 @@ class FM(pl.LightningModule):
             torch.Tensor: Loss value.
         """
         # Append the batches
-        if not self.multimodal:
-            self.testing_outputs.append(batch["X"].cpu())
-        else:
-            for mod in self.modality_list:
-                self.testing_outputs[mod].append(batch["X"][mod].cpu())
+        for mod in self.modality_list:
+            self.testing_outputs[mod].append(batch["X"][mod].cpu())
 
     def on_test_epoch_end(self, *arg, **kwargs):
         self.compute_metrics_and_plots(dataset_type="test")
-        if not self.multimodal:
-            self.testing_outputs = []
-        else:
-            self.testing_outputs = {}
+        self.testing_outputs = {}
 
     @torch.no_grad()
     def compute_metrics_and_plots(self, dataset_type, *arg, **kwargs):
@@ -592,10 +558,7 @@ class FM(pl.LightningModule):
             None
         """
         # Concatenate all test observations
-        if not self.multimodal:
-            testing_outputs = torch.cat(self.testing_outputs, dim=0)
-        else:
-            testing_outputs = {mod: torch.cat(self.testing_outputs[mod], dim=0) for mod in self.testing_outputs}
+        testing_outputs = {mod: torch.cat(self.testing_outputs[mod], dim=0) for mod in self.testing_outputs}
         
         # Plot UMAP of generated cells and real test cells
         wd = compute_umap_and_wasserstein(model=self, 
