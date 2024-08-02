@@ -117,7 +117,6 @@ class EncoderEstimator:
     def init_model(self):
         """Initialize encoder model 
         """
-        scaler = self.dataset.get_scaler()
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
                                           n_cat=self.n_cat,
                                           conditioning_covariate=self.args.dataset.theta_covariate, 
