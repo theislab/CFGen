@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ./logs/REBUTTALS_PBMC10K_FM.out
+#SBATCH -o ./logs/REBUTTALS_KANG_FM.out
 
-#SBATCH -e ./logs/REBUTTALS_PBMC10K_FM.err
+#SBATCH -e ./logs/REBUTTALS_KANG_FM.err
 
-#SBATCH -J REBUTTALS_PBMC10K_FM
+#SBATCH -J REBUTTALS_KANG_FM
 
 #SBATCH --exclude=supergpu02
 
@@ -82,8 +82,14 @@ conda activate celldreamer
 # logger.project=CLASSIFIER_off_fm_resnet_autoencoder_hlca_core_whole_genome \
 # training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/celldreamer/project_folder/experiments/CLASSIFICATION_off_train_autoencoder_hlca_core/3dde9d9c-2fbc-4417-bdd7-9e8ebe1c948b/checkpoints/last.ckpt
 
-# HLCA CORE - CLASSIFICATION
-python ../celldreamer/train_sccfm.py dataset=pbmc10k_multimodal_rna dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large \
+# # HLCA CORE - CLASSIFICATION
+# python ../celldreamer/train_sccfm.py dataset=pbmc10k_multimodal_rna dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large \
+# dataset.one_hot_encode_features=False denoising_module=resnet_small denoising_module.embed_size_factor=False launcher=slurm_icb \
+# logger.project=REBUTTALS_PBMC10K_FM \
+# training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/cfgen/project_folder/experiments/REBUTTALS_PBMC10K/201a2a6e-9dd8-4641-a62b-fc1cdf874724/checkpoints/last.ckpt
+
+# Kang - CLASSIFICATION
+python ../celldreamer/train_sccfm.py dataset=kang dataset.encoder_type=learnt_autoencoder encoder=autoencoder_large \
 dataset.one_hot_encode_features=False denoising_module=resnet_small denoising_module.embed_size_factor=False launcher=slurm_icb \
-logger.project=REBUTTALS_PBMC10K_FM \
-training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/cfgen/project_folder/experiments/REBUTTALS_PBMC10K/201a2a6e-9dd8-4641-a62b-fc1cdf874724/checkpoints/last.ckpt
+logger.project=REBUTTALS_KANG_FM \
+training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/cfgen/project_folder/experiments/REBUTTALS_KANG_AUTOENCODER/dfbcc385-d315-4f5a-97ad-9f29c14c80a8/checkpoints/epoch_19.ckpt

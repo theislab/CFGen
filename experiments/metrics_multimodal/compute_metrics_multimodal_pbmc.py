@@ -7,6 +7,7 @@ import argparse
 from sklearn.metrics import f1_score
 import mudata as mu
 from muon import atac as ac
+from celldreamer.eval.compute_evaluation_metrics import process_labels, compute_evaluation_metrics
 
 from celldreamer.eval.distribution_distances import train_knn_real_data
 
@@ -20,7 +21,7 @@ def add_to_dict(d, metrics):
 
 def main(args):
     # Read real dataset 
-    adata_real = mu.read(f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/processed/atac/pbmc/pbmc10k_multiome_test.h5mu")
+    adata_real = mu.read(f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/processed/atac/pbmc/pbmc10k_multiome_test.h5mu")
     
     # RNA 
     adata_real_rna = adata_real["rna"]
@@ -63,26 +64,29 @@ def main(args):
     results_multivi_atac = {}
     results_multivi_rna = {}
     results_scvi_rna = {}
-
+    # REBUTTAL
+    results_celldreamer_rna_only = {}
+    results_scdiffusion_rna = {}
+    
     for i in range(3):
         # Dictionary with the read anndatas
         adatas = {}
         
         # Read fake datasets 
-        adata_generated_path_celldreamer_rna = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/generated/pbmc10k_multimodal/generated_cells_{i}_rna.h5ad"
+        adata_generated_path_celldreamer_rna = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/generated/pbmc10k_multimodal/generated_cells_{i}_rna.h5ad"
         adata_generated_celldreamer_rna = sc.read_h5ad(adata_generated_path_celldreamer_rna)
         adata_generated_celldreamer_rna.var = vars_rna
         adata_generated_celldreamer_rna = adata_generated_celldreamer_rna[:, adata_generated_celldreamer_rna.var.highly_variable]
         adata_generated_celldreamer_rna.obsm["X_pca"] = adata_generated_celldreamer_rna.X.A.dot(adata_real_rna.varm["PCs"])
         
-        adata_generated_path_celldreamer_atac = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/generated/pbmc10k_multimodal/generated_cells_{i}_atac.h5ad"
+        adata_generated_path_celldreamer_atac = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/generated/pbmc10k_multimodal/generated_cells_{i}_atac.h5ad"
         adata_generated_celldreamer_atac = sc.read_h5ad(adata_generated_path_celldreamer_atac)
         adata_generated_celldreamer_atac.var = vars_atac
         ac.pp.tfidf(adata_generated_celldreamer_atac, scale_factor=1e4)
         adata_generated_celldreamer_atac = adata_generated_celldreamer_atac[:, adata_generated_celldreamer_atac.var.highly_variable]
         adata_generated_celldreamer_atac.obsm["X_pca"] = adata_generated_celldreamer_atac.X.A.dot(adata_real_atac.varm["PCs"])
         
-        adata_generated_path_peakvi_atac = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/peakvi/generated/pbmc10k_multimodal_{i}.h5ad"
+        adata_generated_path_peakvi_atac = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/peakvi/pbmc/generated/pbmc10k_multimodal_{i}.h5ad"
         adata_generated_peakvi_atac = sc.read_h5ad(adata_generated_path_peakvi_atac)
         adata_generated_peakvi_atac.layers["X_counts"] = np.where(adata_generated_peakvi_atac.layers["X_counts"]>0.5, 1., 0.)
         adata_generated_peakvi_atac.obs["cell_type"] = adata_real_atac.obs["cell_type"]
@@ -92,7 +96,7 @@ def main(args):
         adata_generated_peakvi_atac = adata_generated_peakvi_atac[:, adata_generated_peakvi_atac.var.highly_variable]
         adata_generated_peakvi_atac.obsm["X_pca"] = adata_generated_peakvi_atac.X.A.dot(adata_real_atac.varm["PCs"])
 
-        adata_generated_path_multivi_atac = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/multivi/pbmc/generated/atac/pbmc10k_multimodal_{i}.h5ad"
+        adata_generated_path_multivi_atac = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/multivi/pbmc/generated/atac/pbmc10k_multimodal_{i}.h5ad"
         adata_generated_multivi_atac = sc.read_h5ad(adata_generated_path_multivi_atac)
         adata_generated_multivi_atac.layers["X_counts"] = np.where(adata_generated_multivi_atac.layers["X_counts"]>0.5, 1., 0.)
         adata_generated_multivi_atac.X = sparse.csr_matrix(adata_generated_multivi_atac.X)
@@ -102,7 +106,7 @@ def main(args):
         adata_generated_multivi_atac = adata_generated_multivi_atac[:, adata_generated_multivi_atac.var.highly_variable]
         adata_generated_multivi_atac.obsm["X_pca"] = adata_generated_multivi_atac.X.A.dot(adata_real_atac.varm["PCs"])
 
-        adata_generated_path_multivi_rna = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/multivi/pbmc/generated/expression/pbmc10k_multimodal_{i}.h5ad"
+        adata_generated_path_multivi_rna = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/multivi/pbmc/generated/expression/pbmc10k_multimodal_{i}.h5ad"
         adata_generated_multivi_rna = sc.read_h5ad(adata_generated_path_multivi_rna)
         adata_generated_multivi_rna.X = sparse.csr_matrix(adata_generated_multivi_rna.X)
         process_labels(adata_real_rna, adata_generated_multivi_rna, args.category_name, categorical_obs=True)
@@ -110,13 +114,27 @@ def main(args):
         adata_generated_multivi_rna = adata_generated_multivi_rna[:, adata_generated_multivi_rna.var.highly_variable]
         adata_generated_multivi_rna.obsm["X_pca"] = adata_generated_multivi_rna.X.dot(adata_real_rna.varm["PCs"])
 
-        adata_generated_path_scvi_rna = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/scvi/pbmc10k_multimodal/generated/pbmc_multimodal_{i}.h5ad"
+        adata_generated_path_scvi_rna = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/scvi/pbmc10k_multimodal/generated/pbmc_multimodal_{i}.h5ad"
         adata_generated_scvi_rna = sc.read_h5ad(adata_generated_path_scvi_rna)
         adata_generated_scvi_rna.X = sparse.csr_matrix(adata_generated_scvi_rna.X)        
         process_labels(adata_real_rna, adata_generated_scvi_rna, args.category_name, categorical_obs=True)
         adata_generated_scvi_rna.var = vars_rna
         adata_generated_scvi_rna = adata_generated_scvi_rna[:, adata_generated_scvi_rna.var.highly_variable]
         adata_generated_scvi_rna.obsm["X_pca"] = adata_generated_scvi_rna.X.dot(adata_real_rna.varm["PCs"])
+        
+        # REBUTTALS
+        adata_generated_path_celldreamer_rna_only = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/generated/pbmc10k_rna/generated_cells_{i}.h5ad"
+        adata_generated_celldreamer_rna_only = sc.read_h5ad(adata_generated_path_celldreamer_rna_only)
+        adata_generated_celldreamer_rna_only.var = vars_rna
+        adata_generated_celldreamer_rna_only = adata_generated_celldreamer_rna_only[:, adata_generated_celldreamer_rna_only.var.highly_variable]
+        adata_generated_celldreamer_rna_only.obsm["X_pca"] = adata_generated_celldreamer_rna_only.X.A.dot(adata_real_rna.varm["PCs"])
+        
+        adata_generated_path_diffusion_rna = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/scDiffusion/generated/pbmc10k/generated_cells_{i}.h5ad"
+        adata_generated_diffusion_rna = sc.read_h5ad(adata_generated_path_diffusion_rna)
+        adata_generated_diffusion_rna = process_labels(adata_real_rna, adata_generated_diffusion_rna, args.category_name, categorical_obs=False)
+        adata_generated_diffusion_rna.var = vars_rna
+        adata_generated_diffusion_rna = adata_generated_diffusion_rna[:, adata_generated_diffusion_rna.var.highly_variable]
+        adata_generated_diffusion_rna.obsm["X_pca"] = adata_generated_diffusion_rna.X.A.dot(adata_real_rna.varm["PCs"])
     
         for ct in celltype_unique:
             adata_real_ct_atac = adata_real_atac[adata_real_atac.obs[args.category_name]==ct]
@@ -127,6 +145,11 @@ def main(args):
             adata_generated_multivi_atac_ct = adata_generated_multivi_atac[adata_generated_multivi_atac.obs[args.category_name]==ct]
             adata_generated_multivi_rna_ct = adata_generated_multivi_rna[adata_generated_multivi_rna.obs[args.category_name]==ct]
             adata_generated_scvi_rna_ct = adata_generated_scvi_rna[adata_generated_scvi_rna.obs[args.category_name]==ct]
+            # REBUTTALS
+            adata_generated_celldreamer_rna_only_ct = adata_generated_celldreamer_rna_only[adata_generated_celldreamer_rna_only.obs[args.category_name]==ct]
+            adata_generated_diffusion_rna_ct = adata_generated_diffusion_rna[adata_generated_diffusion_rna.obs[args.category_name]==ct]
+            
+            
             if len(adata_real_ct_atac) < 20:
                 continue
             results_celldreamer_rna_ct = compute_evaluation_metrics(adata_real_ct_rna, 
@@ -182,7 +205,26 @@ def main(args):
                                                                 original_space=True, 
                                                                 knn_pca=knn_pca_rna, 
                                                                 knn_data=knn_data_rna)
-                        
+            
+            # REBUTTALS
+            results_celldreamer_rna_only_ct = compute_evaluation_metrics(adata_real_ct_rna, 
+                                                                        adata_generated_celldreamer_rna_only_ct, 
+                                                                        args.category_name,
+                                                                        "celldreamer_rna_only",
+                                                                        nn=args.nn, 
+                                                                        original_space=True, 
+                                                                        knn_pca=knn_pca_rna, 
+                                                                        knn_data=knn_data_rna)
+            
+            results_diffusion_rna_ct = compute_evaluation_metrics(adata_real_ct_rna, 
+                                                                    adata_generated_diffusion_rna_ct, 
+                                                                    args.category_name,
+                                                                    "diffusion_rna",
+                                                                    nn=args.nn, 
+                                                                    original_space=True, 
+                                                                    knn_pca=knn_pca_rna, 
+                                                                    knn_data=knn_data_rna)
+                                
             
             results_celldreamer_rna_ct["ct"] = ct
             results_celldreamer_atac_ct["ct"] = ct
@@ -190,14 +232,19 @@ def main(args):
             results_multivi_rna_ct["ct"] = ct
             results_multivi_atac_ct["ct"] = ct
             results_scvi_rna_ct["ct"] = ct
+            # REBUTTALS
+            results_celldreamer_rna_only_ct["ct"] = ct
+            results_diffusion_rna_ct["ct"] = ct
             
             results_celldreamer_rna = add_to_dict(results_celldreamer_rna, results_celldreamer_rna_ct)
             results_celldreamer_atac = add_to_dict(results_celldreamer_atac, results_celldreamer_atac_ct)
             results_peakvi_atac = add_to_dict(results_peakvi_atac, results_peakvi_atac_ct)
             results_multivi_atac = add_to_dict(results_multivi_atac, results_multivi_atac_ct)
             results_multivi_rna = add_to_dict(results_multivi_rna, results_multivi_rna_ct)
-            results_scvi_rna = add_to_dict(results_scvi_rna, results_scvi_rna_ct)
-            
+            results_scvi_rna = add_to_dict(results_scvi_rna, results_diffusion_rna_ct)
+            # REBUTTALS
+            results_celldreamer_rna_only = add_to_dict(results_celldreamer_rna_only, results_celldreamer_rna_only_ct)
+            results_scdiffusion_rna = add_to_dict(results_scdiffusion_rna, results_diffusion_rna_ct)
         
         results_celldreamer_rna["global_f1"] = f1_score(np.array(adata_generated_celldreamer_rna.obs[args.category_name]), 
                                                     y_pred = knn_data_rna.predict(adata_generated_celldreamer_rna.X.A), 
@@ -217,6 +264,14 @@ def main(args):
         results_scvi_rna["global_f1"] = f1_score(np.array(adata_generated_scvi_rna.obs[args.category_name]), 
                                                     y_pred = knn_data_rna.predict(adata_generated_scvi_rna.X.A), 
                                                     average="macro")
+        # REBUTTALS
+        results_celldreamer_rna_only["global_f1"] = f1_score(np.array(adata_generated_celldreamer_rna_only.obs[args.category_name]), 
+                                                    y_pred = knn_data_rna.predict(adata_generated_celldreamer_rna_only.X.A), 
+                                                    average="macro")
+        
+        results_scdiffusion_rna["global_f1"] = f1_score(np.array(adata_generated_diffusion_rna.obs[args.category_name]), 
+                                                    y_pred = knn_data_rna.predict(adata_generated_diffusion_rna.X.A), 
+                                                    average="macro")
 
     results_celldreamer_rna_df = pd.DataFrame(results_celldreamer_rna)
     results_celldreamer_atac_df = pd.DataFrame(results_celldreamer_atac)
@@ -224,13 +279,19 @@ def main(args):
     results_multivi_rna_df = pd.DataFrame(results_multivi_rna)
     results_multivi_atac_df = pd.DataFrame(results_multivi_atac)
     results_scvi_rna_df = pd.DataFrame(results_scvi_rna)
+    # REBUTTALS
+    results_celldreamer_rna_only_df = pd.DataFrame(results_celldreamer_rna_only)
+    results_scdiffusion_rna_df = pd.DataFrame(results_scdiffusion_rna)
     
-    results_celldreamer_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/metrics_multimodal/results_pbmc/results_celldreamer_rna")
-    results_celldreamer_atac_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/metrics_multimodal/results_pbmc/results_celldreamer_atac")
-    results_peakvi_atac_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/metrics_multimodal/results_pbmc/results_peakvi_atac")
-    results_multivi_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/metrics_multimodal/results_pbmc/results_multivi_rna")
-    results_multivi_atac_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/metrics_multimodal/results_pbmc/results_multivi_atac")
-    results_scvi_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/metrics_multimodal/results_pbmc/results_scvi_rna")
+    results_celldreamer_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_celldreamer_rna")
+    results_celldreamer_atac_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_celldreamer_atac")
+    results_peakvi_atac_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_peakvi_atac")
+    results_multivi_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_multivi_rna")
+    results_multivi_atac_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_multivi_atac")
+    results_scvi_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_scvi_rna")
+    # REBUTTALS
+    results_celldreamer_rna_only_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_celldreamer_rna_only")
+    results_scdiffusion_rna_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/metrics_multimodal/results_pbmc/results_scdiffusion_rna")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

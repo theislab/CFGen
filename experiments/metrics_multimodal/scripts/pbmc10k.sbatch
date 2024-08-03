@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ./logs/pbmc.out
+#SBATCH -o ./logs/pbmc_rebuttals.out
 
-#SBATCH -e ./logs/pbmc.err
+#SBATCH -e ./logs/pbmc_rebuttals.err
 
-#SBATCH -J pbmc
+#SBATCH -J pbmc_rebuttals
 
 #SBATCH -p cpu_p
 
