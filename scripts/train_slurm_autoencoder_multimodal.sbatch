@@ -24,7 +24,7 @@ conda activate celldreamer
 # python ../celldreamer/train_encoder.py dataset=neurips_multimodal dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal encoder.is_binarized=False logger.project=train_autoencoder_neurips_multimodal trainer.max_epochs=300
 # python ../celldreamer/train_encoder.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k_multimodal trainer.max_epochs=300
 # python ../celldreamer/train_encoder.py dataset=neurips_multimodal dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal_joint encoder.is_binarized=False logger.project=train_autoencoder_neurips_multimodal_joint trainer.max_epochs=300
-# python ../celldreamer/train_encoder.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal_joint encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k_multimodal_joint trainer.max_epochs=300
+python ../celldreamer/train_encoder.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal_joint encoder.is_binarized=True logger.project=REBUTTAL_train_autoencoder_pbmc10k_multimodal_joint trainer.max_epochs=300
 # python ../celldreamer/train_encoder.py dataset=neurips_multimodal_binary dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal encoder.is_binarized=True logger.project=train_autoencoder_neurips_multimodal_binary trainer.max_epochs=300
 # python ../celldreamer/train_encoder.py dataset=neurips_multimodal_binary dataset.encoder_type=learnt_autoencoder encoder=encoder_multimodal_joint encoder.is_binarized=True logger.project=train_autoencoder_neurips_multimodal_joint_binary trainer.max_epochs=300
 
