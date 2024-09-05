@@ -66,7 +66,7 @@ class CfgenEstimator:
                                     layer_key=self.args.dataset.layer_key,
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
-                                    encoder_type=self.args.dataset.encoder_type,
+                                    normalization_type=self.args.dataset.normalization_type,
                                     multimodal=self.multimodal,
                                     is_binarized=self.is_binarized)
 
@@ -92,7 +92,7 @@ class CfgenEstimator:
         if not self.dataset.multimodal:
             # If not multimodal, gene dimension and input dimension computed only for RNA
             self.gene_dim = self.dataset.X.shape[1] 
-            self.in_dim = self.gene_dim if self.args.dataset.encoder_type!="learnt_autoencoder" else self.args.encoder.encoder_kwargs["dims"][-1]
+            self.in_dim = self.args.encoder.encoder_kwargs["dims"][-1]
             self.modality_list = None 
         else:
             self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
@@ -163,7 +163,6 @@ class CfgenEstimator:
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
-                                        model_type=self.args.denoising_module.model_type, 
                                         size_factor_min=self.dataset.min_size_factor, 
                                         size_factor_max=self.dataset.max_size_factor,
                                         embed_size_factor=self.args.denoising_module.embed_size_factor, 
@@ -180,9 +179,8 @@ class CfgenEstimator:
         
         # Initialize encoder
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
-                                          n_cat=self.feature_embeddings[self.args.dataset.conditioning_covariate].n_cat,
-                                          conditioning_covariate=self.args.dataset.conditioning_covariate, 
-                                          encoder_type=self.args.dataset.encoder_type,
+                                          n_cat=self.feature_embeddings[self.args.dataset.theta_covariate].n_cat,
+                                          conditioning_covariate=self.args.dataset.theta_covariate, 
                                           **self.args.encoder)
         print("Encoder architecture", self.encoder_model)
     
@@ -207,8 +205,6 @@ class CfgenEstimator:
             covariate_list=self.args.dataset.covariate_keys, 
             theta_covariate=self.args.dataset.theta_covariate,
             size_factor_covariate=self.args.dataset.size_factor_covariate,
-            model_type=denoising_model.model_type, 
-            encoder_type=self.args.dataset.encoder_type,
             multimodal=self.dataset.multimodal,
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,

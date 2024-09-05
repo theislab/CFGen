@@ -1,10 +1,14 @@
-dataset_path: ../project_folder/datasets/processed_full_genome/neurips/neurips_train.h5ad
+dataset_path: ../../project_folder/datasets/processed_full_genome/neurips/neurips_train.h5ad
 layer_key: X_counts
 covariate_keys: [cell_type]
-conditioning_covariate: cell_type
 subsample_frac: 1
+normalization_type: log_gexp
 one_hot_encode_features: False
 split_rates: [0.90, 0.10]
 cov_embedding_dimensions: 100
 multimodal: False
-is_binarized: False
+is_binarized: False 
+theta_covariate: cell_type
+size_factor_covariate: cell_type
+guidance_weights:
+  cell_type: 1

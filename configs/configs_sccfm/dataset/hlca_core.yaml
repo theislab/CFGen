@@ -1,8 +1,9 @@
-dataset_path: ../project_folder/datasets/processed/hlca_core.h5ad
+dataset_path: ../../project_folder/datasets/processed_full_genome/hlca_core/hlca_core_train.h5ad
 layer_key: X_counts
 covariate_keys: [cell_type]
 subsample_frac: 1
 one_hot_encode_features: False
+normalization_type: log_gexp
 split_rates: [0.90, 0.10]
 cov_embedding_dimensions: 100
 multimodal: False

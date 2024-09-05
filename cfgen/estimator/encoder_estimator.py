@@ -58,7 +58,7 @@ class EncoderEstimator:
                                     layer_key=self.args.dataset.layer_key,
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
-                                    encoder_type=self.args.dataset.encoder_type,
+                                    normalization_type=self.args.dataset.normalization_type,
                                     multimodal=self.args.dataset.multimodal, 
                                     is_binarized=self.args.dataset.is_binarized)
         
@@ -127,7 +127,6 @@ class EncoderEstimator:
         self.encoder_model = EncoderModel(in_dim=self.gene_dim,
                                           n_cat=self.n_cat,
                                           conditioning_covariate=self.args.dataset.theta_covariate, 
-                                          encoder_type=self.args.dataset.encoder_type,
                                           **self.args.encoder)
         print("Encoder architecture", self.encoder_model)
 

@@ -19,7 +19,6 @@ class EncoderModel(pl.LightningModule):
         learning_rate (float): Learning rate for optimization.
         weight_decay (float): Weight decay for optimization.
         covariate_specific_theta (bool): Flag indicating whether theta is specific to covariates.
-        encoder_type (str): Type of encoder, either 'learnt_encoder' or 'learnt_autoencoder'.
         conditioning_covariate (str): Covariate used for conditioning.
         n_cat (int): Number of categories for the theta parameter.
         multimodal (bool): Flag indicating whether the model is multimodal.
@@ -39,7 +38,6 @@ class EncoderModel(pl.LightningModule):
                  learning_rate,
                  weight_decay,
                  covariate_specific_theta,
-                 encoder_type,
                  conditioning_covariate,
                  n_cat=None,
                  multimodal=False,
@@ -59,7 +57,6 @@ class EncoderModel(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.covariate_specific_theta = covariate_specific_theta
-        self.encoder_type = encoder_type
         self.conditioning_covariate = conditioning_covariate
         self.n_cat = n_cat
         self.multimodal = multimodal
@@ -246,8 +243,7 @@ class EncoderModel(pl.LightningModule):
 
         """
         if not self.multimodal:
-            if self.encoder_type == "learnt_autoencoder":
-                x = self.decoder(x)
+            x = self.decoder(x)
             mu_hat = F.softmax(x, dim=1)
             mu_hat = mu_hat * size_factor  # assume single modality is RNA
         else:

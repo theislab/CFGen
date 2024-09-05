@@ -10,7 +10,6 @@ import pytorch_lightning as pl
 
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Poisson, Bernoulli
-from cfgen.models.base.cell_decoder import CellDecoder
 from cfgen.eval.evaluate import compute_umap_and_wasserstein
 from cfgen.models.base.utils import pad_t_like_x
 from cfgen.models.fm.ode import torch_wrapper
@@ -91,10 +90,6 @@ class FM(pl.LightningModule):
             self.testing_outputs = []  
         else:
             self.testing_outputs = {mod: [] for mod in self.modality_list}
-        
-        # If the encoder is fixed, we just need an inverting decoder. If learnt, the decoding is simply the softmax operation 
-        if encoder_type not in ["learnt_encoder", "learnt_autoencoder"]:
-            self.cell_decoder = CellDecoder(self.encoder_type)
         
         # save hyper-parameters to self.hparams (auto-logged by W&B)
         self.save_hyperparameters()
@@ -256,7 +251,7 @@ class FM(pl.LightningModule):
         if not unconditional:
             y = {}
             for covariate in covariate_indices:
-                y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].cuda())
+                y[covariate] = self.feature_embeddings[covariate](covariate_indices[covariate].to(self.device))
         else: 
             y = None
 

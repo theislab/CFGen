@@ -12,7 +12,7 @@ class RNAseqLoader:
         layer_key: str,
         covariate_keys=None,
         subsample_frac=1,
-        encoder_type="proportions", 
+        normalization_type="proportions", 
         multimodal=False, 
         is_binarized=False):
         """
@@ -23,14 +23,12 @@ class RNAseqLoader:
             layer_key (str): Layer key.
             covariate_keys (list, optional): List of covariate names. Defaults to None.
             subsample_frac (float, optional): Fraction of the dataset to use. Defaults to 1.
-            encoder_type (str, optional): Must be in (proportions, log_gexp, log_gexp_scaled).
-            target_max (float, optional): Maximum value for scaling gene expression. Defaults to 1.
-            target_min (float, optional): Minimum value for scaling gene expression. Defaults to 1.
+            normalization_type (str, optional): Must be in (proportions, log_gexp, log_gexp_scaled).
             multimodal (bool): If multimodal dataset.
             is_binarized (bool): If the multimodal data is binarized.
         """
         # Initialize encoder type
-        self.encoder_type = encoder_type  
+        self.normalization_type = normalization_type  
 
         # Multimodal dataset or not  
         self.multimodal = multimodal
@@ -125,7 +123,7 @@ class RNAseqLoader:
         # Return sampled cells
         if not self.multimodal:
             X = self.X[i]
-            X_norm = normalize_expression(X, X.sum(), self.encoder_type)
+            X_norm = normalize_expression(X, X.sum(), self.normalization_type)
             return dict(X=X, X_norm=X_norm, y=y)
         else:
             X = {}
@@ -134,7 +132,7 @@ class RNAseqLoader:
                 X[mod] = self.X[mod][i]
                 # Only log-normalization if ATAC not binarized
                 if mod == "atac" and (not self.is_binarized):
-                    X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.encoder_type)
+                    X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.normalization_type)
                 else:
                     X_norm[mod] = X[mod]
             return dict(X=X, X_norm=X_norm, y=y)

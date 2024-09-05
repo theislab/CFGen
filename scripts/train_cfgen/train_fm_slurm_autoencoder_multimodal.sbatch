@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ../logs/cfgen_pbmc10k_multimodal.out
+#SBATCH -o ../logs/cfgen_multimodal.out
 
-#SBATCH -e ../logs/cfgen_pbmc10k_multimodal.err
+#SBATCH -e ../logs/cfgen_multimodal.err
 
-#SBATCH -J cfgen_pbmc10k_multimodal
+#SBATCH -J cfgen_multimodal
 
 #SBATCH -p gpu_p
 
@@ -23,17 +23,17 @@
 export HYDRA_FULL_ERROR=1
 
 # Train autoencoder with joint latent space  
-python ../cfgen/train_sccfm.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder \
+python ../../cfgen/train_sccfm.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder \
 dataset.one_hot_encode_features=False denoising_module=resnet_big \
 denoising_module.multimodal=True denoising_module.is_binarized=True encoder=encoder_multimodal_joint \
 encoder.multimodal=True encoder.is_binarized=True trainer.max_epochs=1000 launcher=slurm_icb \
 logger.project=fm_resnet_autoencoder_pbmc10k_multimodal_joint \
 training_config.encoder_ckpt=/path/to/checkpoints/
 
-# Train autoencoder with separate latent space   
-python ../cfgen/train_sccfm.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder \
-dataset.one_hot_encode_features=False denoising_module=resnet_big \
-denoising_module.multimodal=True denoising_module.is_binarized=True encoder=encoder_multimodal \
-encoder.multimodal=True encoder.is_binarized=True trainer.max_epochs=1000 launcher=slurm_icb \
-logger.project=fm_resnet_autoencoder_pbmc10k_multimodal \
-training_config.encoder_ckpt=/path/to/checkpoints/
+# # Train autoencoder with separate latent space   
+# python ../../cfgen/train_sccfm.py dataset=pbmc10k_multimodal dataset.encoder_type=learnt_autoencoder \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big \
+# denoising_module.multimodal=True denoising_module.is_binarized=True encoder=encoder_multimodal \
+# encoder.multimodal=True encoder.is_binarized=True trainer.max_epochs=1000 launcher=slurm_icb \
+# logger.project=fm_resnet_autoencoder_pbmc10k_multimodal \
+# training_config.encoder_ckpt=/path/to/checkpoints/
