@@ -8,7 +8,7 @@ class RNAseqLoader:
     """Class for RNAseq data loader."""
     def __init__(
         self,
-        data_path: str,
+        data,
         layer_key: str,
         covariate_keys=None,
         subsample_frac=1,
@@ -19,7 +19,7 @@ class RNAseqLoader:
         Initialize the RNAseqLoader.
 
         Args:
-            data_path (str): Path to the data.
+            data (str or anndata object): AnnData object to load. If this is a str, we assume it is a path. Otherwise assume this is an AnnData/MuData object
             layer_key (str): Layer key.
             covariate_keys (list, optional): List of covariate names. Defaults to None.
             subsample_frac (float, optional): Fraction of the dataset to use. Defaults to 1.
@@ -33,18 +33,26 @@ class RNAseqLoader:
         # Multimodal dataset or not  
         self.multimodal = multimodal
         self.is_binarized = is_binarized
-        
-        # Read adata
-        if not self.multimodal:
-            adata = sc.read(data_path)
-        else:
+
+        self.covariate_keys = covariate_keys
+
+        if type(data) == str:
             adata_mu = mu.read(data_path)
+        else:
+            adata_mu = data
+    
+        if hasattr(adata_mu, "mod"):
             self.modality_list = list(adata_mu.mod.keys())  # "rna" and "atac"
             adata = {}
             for mod in self.modality_list:
                 adata[mod] = adata_mu.mod[mod]
             del adata_mu
-                
+        else:
+            self.modality_list = ["rna"]
+            adata = {}
+            adata["rna"] = adata_mu
+            del adata_mu
+
         # Transform genes to tensors
         if not self.multimodal:
             if layer_key not in adata.layers:
