@@ -17,17 +17,29 @@ from cfgen.models.fm.fm import FM
 
 
 class CFGen:
-    def __init__(self, adata, project: str="CFGen model"):
+    def __init__(self, adata, config_path: str | None = "../configs/", project: str="CFGen model"):
+        """Model class for CFGen, a framework for generating counterfactual samples in a single-cell context.
+
+        Args:
+            adata (AnnData): The annotated data object containing gene expression data, typically in the form of 
+                             single-cell RNA-seq data. This dataset serves as the input for the model.
+            config_path (str, optional): Path to the directory containing the configuration files for the encoder and 
+                                         SCCFM models. These files are expected to be YAML format and are used to load
+                                         model parameters and training settings. Defaults to "../configs/".
+            project (str, optional): The name of the project or experiment. This is used to create a unique directory 
+                                     structure for saving training results, plots, and checkpoints. Defaults to "CFGen model".
+        """
         self.adata = adata
         self.adata_set_up = False
 
-        initialize(version_base=None, config_path="../configs/") # TODO check whether this is relative to file or working dir
+        initialize(version_base=None, config_path=config_path) # TODO check whether this is relative to file or working dir (probably relative to working dir)
+        # TODO here we may want to find a way for the user to either pass parameters as a yaml or from a notebook, somehow
+        # TODO More in general, we should find a way to make sure the user can control the parameters they set a little bit (e.g. default)
         self.cfg_encoder = compose("configs_encoder/train.yaml")
         self.cfg_sccfm = compose("configs_sccfm/train.yaml")
 
         # to name the run
-        self.unique_id = str(uuid.uuid4())
-
+        self.unique_id = str(uuid.uuid4())  # TODO for the below code, one followup functionality would be to create the folders only if training 
 
         # Initialize training/plotting dir
         self.training_dir = TRAINING_FOLDER / project / self.unique_id
@@ -42,7 +54,7 @@ class CFGen:
         # TODO check if adata contains counts and warn if not
 
     def setup_encoder(self):
-        
+        # TODO here we may want to somehow allow the user to decide whether they want to train the encoder from scratch or import it 
         checkpoint_callback = ModelCheckpoint(dirpath=self.training_dir / "encoder" / "checkpoints", 
                                                 **self.cfg_encoder.checkpoints)
         callbacks = [checkpoint_callback]
@@ -60,12 +72,12 @@ class CFGen:
 
     def setup_sccfm(self):
         # Callbacks for saving checkpoints 
-        checkpoint_callback = ModelCheckpoint(dirpath=self.training_dir / "sccfm" / "checkpoints", 
+        checkpoint_callback = ModelCheckpoint(dirpath=self.training_dir / "cfgen" / "checkpoints", 
                                                 **self.cfg_sccfm.checkpoints)
         callbacks = [checkpoint_callback]
         
         self.trainer_sccfm = Trainer(callbacks=callbacks, 
-                                          default_root_dir=self.training_dir / "sccfm", 
+                                          default_root_dir=self.training_dir / "cfgen", 
                                           logger=False, # TODO this is needed to not crash lightning. Fix this properly
                                           **self.cfg_sccfm.trainer)
         
@@ -75,16 +87,17 @@ class CFGen:
                       covariate_keys: list=None,
                       normalization_type: str="log_gexp",
                       is_binarized: bool=False,
-                      conditioning_method: Literal["classic", "guided"] = None, # TODO implement
+                      conditioning_method: Literal["unconditional", "classic", "guided"] = None, # TODO implement
                       theta_covariate: str=None,
                       size_factor_covariate: str=None,
                       one_hot_encode_features: bool=False,
                       guidance_weights: dict=None):
 
+        # TODO is binarized is relevant only if multimodal 
         self.is_binarized = is_binarized
         self.theta_covariate = theta_covariate
-        self.one_hot_encode_features = one_hot_encode_features
         self.size_factor_covariate = size_factor_covariate
+        self.one_hot_encode_features = one_hot_encode_features
         self.guidance_weights = guidance_weights
 
         if self.adata_set_up:
@@ -186,13 +199,14 @@ class CFGen:
                 self.num_classes[cov] = self.cfg_sccfm.denoising_module.embedding_dim
 
 
-    def get_fixed_rna_model_params(self):                               
+    def get_fixed_rna_model_params(self):    
+        # TODO add support in case not multimodal                           
         self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
         self.modality_list = list(self.gene_dim.keys())
         self.in_dim = {}
         if not self.cfg_encoder.encoder.encoder_multimodal_joint_layers:  # Optional latent space shared between modalities
             for mod in self.dataset.X:
-                self.in_dim[mod] = self.cfg_encoder.encoder.encoder_kwargs[mod]["dims"][-1]
+                self.in_dim[mod] = self.cfg_encoder.encoder.encoder_kwargs[mod]["dims"][-1]  # TODO: better naming here instead of in_dim
         else:
             self.in_dim = self.cfg_encoder.encoder.encoder_multimodal_joint_layers["dims"][-1]
 
@@ -223,4 +237,4 @@ class CFGen:
 
     def __repr__(self):
         return "CFGen model" # TODO
-
+    

@@ -36,6 +36,7 @@ class RNAseqLoader:
 
         self.covariate_keys = covariate_keys
 
+        # TODO add data path 
         if type(data) == str:
             adata_mu = mu.read(data_path)
         else:
