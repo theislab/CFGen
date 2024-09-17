@@ -17,6 +17,8 @@ from cfgen.models.fm.fm import FM
 
 
 class CFGen:
+    hydra_initialized = False
+
     def __init__(self, adata, config_path: str | None = "../configs/", project: str="CFGen model"):
         """Model class for CFGen, a framework for generating counterfactual samples in a single-cell context.
 
@@ -32,7 +34,9 @@ class CFGen:
         self.adata = adata
         self.adata_set_up = False
 
-        initialize(version_base=None, config_path=config_path) # TODO check whether this is relative to file or working dir (probably relative to working dir)
+        if not CFGen.hydra_initialized:
+            initialize(version_base=None, config_path=config_path) # TODO check whether this is relative to file or working dir (probably relative to working dir)
+            CFGen.hydra_initialized = True
         # TODO here we may want to find a way for the user to either pass parameters as a yaml or from a notebook, somehow
         # TODO More in general, we should find a way to make sure the user can control the parameters they set a little bit (e.g. default)
         self.cfg_encoder = compose("configs_encoder/train.yaml")
@@ -87,7 +91,7 @@ class CFGen:
                       covariate_keys: list=None,
                       normalization_type: str="log_gexp",
                       is_binarized: bool=False,
-                      conditioning_method: Literal["unconditional", "classic", "guided"] = None, # TODO implement
+                      conditioning_method: Literal["unconditional", "classic", "guided"] = "unconditional",
                       theta_covariate: str=None,
                       size_factor_covariate: str=None,
                       one_hot_encode_features: bool=False,
@@ -99,6 +103,20 @@ class CFGen:
         self.size_factor_covariate = size_factor_covariate
         self.one_hot_encode_features = one_hot_encode_features
         self.guidance_weights = guidance_weights
+
+        if conditioning_method == "classic":
+            self.conditional = True
+            self.guided_conditioning = False
+        elif conditioning_method == "guided":
+            self.conditional = True
+            self.guided_conditioning = False
+            if not guidance_weights:
+                raise Exception("guided conditioning was selected, but no guidance weights were provided")
+        elif conditioning_method == "unconditional":
+            self.conditional = False
+            self.guided_conditioning = False
+        else:
+            raise Exception("conditioning_method must be one of the following: unconditional, classic, guided")
 
         if self.adata_set_up:
             raise Exception("AnnData object has already been set up")
@@ -152,11 +170,11 @@ class CFGen:
                                         covariate_list=self.dataset.covariate_keys,
                                         embedding_dim=self.cfg_sccfm.denoising_module.embedding_dim,
                                         normalization=self.cfg_sccfm.denoising_module.normalization,
-                                        conditional=self.cfg_sccfm.denoising_module.conditional, 
+                                        conditional=self.conditional,
                                         multimodal=True, # TODO remove 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 
-                                        guided_conditioning=self.cfg_sccfm.denoising_module.guided_conditioning).to(self.device)
+                                        guided_conditioning=self.guided_conditioning).to(self.device)
         
         print("Denoising model", denoising_model)
             
@@ -210,18 +228,30 @@ class CFGen:
         else:
             self.in_dim = self.cfg_encoder.encoder.encoder_multimodal_joint_layers["dims"][-1]
 
+    def train_encoder(self):
+        self.trainer_encoder.fit(self.encoder_model,
+            train_dataloaders=self.dataloader)
+    
+
+    def train_flow_model(self):
+        self.trainer_sccfm.fit(self.flow_model,
+                    train_dataloaders=self.dataloader)
+    
 
     def train(self):
         print("Training encoder")
-        self.trainer_encoder.fit(self.encoder_model,
-            train_dataloaders=self.dataloader)
+        self.train_encoder()
         print("Training flow model")
-        self.trainer_sccfm.fit(self.flow_model,
-                    train_dataloaders=self.dataloader)
+        self.train_flow_model()
         
 
-    def generate(self):
-        pass
+    def generate(self): # TODO add parameters and implement, so far this is just a dummy implementation
+        return self.flow_model.batched_sample(100, 
+                                            1,
+                                            2, 
+                                            self.theta_covariate,
+                                            self.size_factor_covariate,
+                                            conditioning_covariates=self.flow_model.covariate_list)
 
     def batch_translate(self):
         pass
@@ -232,7 +262,19 @@ class CFGen:
     def save(self):
         pass
 
+    def save_encoder(self):
+        pass
+
+    def save_flow_model(self):
+        pass
+
     def load(self):
+        pass
+
+    def load_encoder(self):
+        pass
+
+    def load_flow_model(self):
         pass
 
     def __repr__(self):

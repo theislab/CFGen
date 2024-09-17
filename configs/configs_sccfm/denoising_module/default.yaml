@@ -1,5 +1,4 @@
 denoising_net: simple_mlp
 out_dim: Null
 w: 512
-model_type: conditional_latent # conditional_latent, factorized_latent, learnt_size_factor
 conditional: True
