@@ -70,7 +70,6 @@ class MLPTimeStep(pl.LightningModule):
                  embedding_dim=128, 
                  normalization="layer", 
                  conditional=False,
-                 multimodal=False, 
                  is_binarized=False, 
                  modality_list=None, 
                  conditioning_probability=0.8, 
@@ -90,7 +89,6 @@ class MLPTimeStep(pl.LightningModule):
         self.embed_size_factor = embed_size_factor 
         self.embedding_dim = embedding_dim
         self.conditional = conditional
-        self.multimodal = multimodal
         self.is_binarized = is_binarized
         self.covariate_list = covariate_list
         self.modality_list = modality_list
@@ -158,7 +156,7 @@ class MLPTimeStep(pl.LightningModule):
     
         # Embed size factor
         if self.embed_size_factor:
-            if self.multimodal and not self.is_binarized:
+            if not self.is_binarized:
                 for mod in self.modality_list:
                     l_mod = l[mod].squeeze()
                     l_mod = (l_mod - self.size_factor_min[mod]) / (self.size_factor_max[mod] - self.size_factor_min[mod])

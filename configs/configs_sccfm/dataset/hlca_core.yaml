@@ -6,7 +6,6 @@ one_hot_encode_features: False
 normalization_type: log_gexp
 split_rates: [0.90, 0.10]
 cov_embedding_dimensions: 100
-multimodal: False
 is_binarized: False 
 theta_covariate: cell_type
 size_factor_covariate: cell_type
