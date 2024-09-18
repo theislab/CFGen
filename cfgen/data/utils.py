@@ -1,4 +1,5 @@
 import torch
+from scipy.sparse import issparse
 
 def normalize_expression(X, size_factor, normalization_type):
     """Normalize gene expression data based on the specified encoder type.
@@ -50,7 +51,8 @@ def compute_size_factor_lognorm(adata, layer, id2cov):
         
         for cov_cat in id2cov[cov_name]:
             adata_cov = adata[adata.obs[cov_name] == cov_cat]
-            log_size_factors_cov = torch.log(torch.tensor(adata_cov.layers[layer].todense().sum(1)))
+            selected_layer = adata_cov.layers[layer]
+            log_size_factors_cov = torch.log(torch.tensor(selected_layer.todense().sum(1) if issparse(selected_layer) else selected_layer.sum(1)))
             mean, sd = log_size_factors_cov.mean(), log_size_factors_cov.std()
             
             log_size_factors_mean_cov.append(mean)

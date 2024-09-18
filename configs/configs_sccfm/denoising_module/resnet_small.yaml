@@ -5,7 +5,6 @@ n_blocks: 3
 embedding_dim: 20
 conditional: True
 normalization: none
-multimodal: False
 is_binarized: False
 embed_size_factor: False
 conditioning_probability: 0.8

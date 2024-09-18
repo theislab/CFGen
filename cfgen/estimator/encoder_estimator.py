@@ -54,12 +54,11 @@ class EncoderEstimator:
         Initialization of the data module.
         """        
         # Initialize the dataset using RNAseqLoader
-        self.dataset = RNAseqLoader(data_path=self.data_path,
+        self.dataset = RNAseqLoader(self.data_path,
                                     layer_key=self.args.dataset.layer_key,
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     normalization_type=self.args.dataset.normalization_type,
-                                    multimodal=self.args.dataset.multimodal, 
                                     is_binarized=self.args.dataset.is_binarized)
         
         # Determine the number of categories for covariate-specific theta
@@ -88,12 +87,8 @@ class EncoderEstimator:
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object.
         """
-        if not self.dataset.multimodal:
-            # Single modality: get the gene dimension from the dataset
-            self.gene_dim = self.dataset.X.shape[1] 
-        else:
-            # Multimodal: get the gene dimensions for each modality
-            self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
+        # get the gene dimensions for each modality
+        self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
 
     def init_trainer(self):
         """
