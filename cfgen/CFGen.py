@@ -126,8 +126,8 @@ class CFGen:
                                     covariate_keys=covariate_keys,
                                     subsample_frac=1, 
                                     normalization_type=normalization_type,
-                                    multimodal=True, # TODO remove
                                     is_binarized=self.is_binarized)
+
 
 
         if self.theta_covariate:
@@ -171,7 +171,6 @@ class CFGen:
                                         embedding_dim=self.cfg_sccfm.denoising_module.embedding_dim,
                                         normalization=self.cfg_sccfm.denoising_module.normalization,
                                         conditional=self.conditional,
-                                        multimodal=True, # TODO remove 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 
                                         guided_conditioning=self.guided_conditioning).to(self.device)
@@ -189,7 +188,6 @@ class CFGen:
             covariate_list=self.dataset.covariate_keys, 
             theta_covariate=self.theta_covariate,
             size_factor_covariate=self.size_factor_covariate,
-            multimodal=True, # TODO remove
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,
             guidance_weights=self.guidance_weights,
@@ -222,7 +220,7 @@ class CFGen:
         self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
         self.modality_list = list(self.gene_dim.keys())
         self.in_dim = {}
-        if not self.cfg_encoder.encoder.encoder_multimodal_joint_layers:  # Optional latent space shared between modalities
+        if not getattr(self.cfg_encoder.encoder, "encoder_multimodal_joint_layers", None):  # Optional latent space shared between modalities
             for mod in self.dataset.X:
                 self.in_dim[mod] = self.cfg_encoder.encoder.encoder_kwargs[mod]["dims"][-1]  # TODO: better naming here instead of in_dim
         else:

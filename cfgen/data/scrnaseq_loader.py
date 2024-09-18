@@ -2,6 +2,8 @@ import numpy as np
 import scanpy as sc
 import muon as mu
 import torch
+import scipy
+from pathlib import Path
 from cfgen.data.utils import normalize_expression, compute_size_factor_lognorm
 
 class RNAseqLoader:
@@ -32,9 +34,8 @@ class RNAseqLoader:
 
         self.covariate_keys = covariate_keys
 
-        # TODO add data path 
-        if type(data) == str:
-            adata_mu = mu.read(data_path)
+        if type(data) == str or isinstance(data, Path):
+            adata_mu = mu.read(str(data))
         else:
             adata_mu = data
     
@@ -58,7 +59,8 @@ class RNAseqLoader:
         # Transform X into a tensor
         self.X = {}
         for mod in self.modality_list:
-            self.X[mod] = torch.Tensor(adata[mod].layers[layer_key].todense())
+            mod_data = adata[mod].layers[layer_key]
+            self.X[mod] = torch.Tensor(mod_data.todense() if scipy.sparse.issparse(mod_data) else mod_data)
 
         # Subsample if required
         if subsample_frac < 1:

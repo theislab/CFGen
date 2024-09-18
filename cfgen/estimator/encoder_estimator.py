@@ -54,7 +54,7 @@ class EncoderEstimator:
         Initialization of the data module.
         """        
         # Initialize the dataset using RNAseqLoader
-        self.dataset = RNAseqLoader(data_path=self.data_path,
+        self.dataset = RNAseqLoader(self.data_path,
                                     layer_key=self.args.dataset.layer_key,
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
