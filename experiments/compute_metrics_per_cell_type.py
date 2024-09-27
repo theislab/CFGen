@@ -48,7 +48,7 @@ def evaluation(args, adata_real, adatas_generated, knn_pca=None, knn_data=None):
 
 def main(args):
     # Read real dataset 
-    adata_real_cont = sc.read_h5ad(f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/processed_full_genome/{args.dataset_name}/{args.dataset_name}_test.h5ad")
+    adata_real_cont = sc.read_h5ad(f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/processed_full_genome/{args.dataset_name}/{args.dataset_name}_test.h5ad")
     # Fixes for when dataset is neurips 
     adata_real_discr = adata_real_cont.copy()
     adata_real_discr.X = adata_real_discr.layers["X_counts"]
@@ -88,18 +88,18 @@ def main(args):
         adatas = {}
         
         # Read fake datasets 
-        adata_generated_path_celldreamer = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
+        adata_generated_path_celldreamer = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
         adatas["celldreamer"] = sc.read_h5ad(adata_generated_path_celldreamer)
         del adata_generated_path_celldreamer
 
-        adata_generated_path_scvi = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/scvi/{args.dataset_name}/generated/{args.dataset_name}_{i}.h5ad"
+        adata_generated_path_scvi = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/scvi/{args.dataset_name}/generated/{args.dataset_name}_{i}.h5ad"
         adata_generated_scvi = sc.read_h5ad(adata_generated_path_scvi)
         adata_generated_scvi.X = sparse.csr_matrix(adata_generated_scvi.X)  # convert to sparse
         adata_generated_scvi = process_labels(adata_real["disc"], adata_generated_scvi, args.category_name, categorical_obs=True)
         adatas["scvi"] = adata_generated_scvi.copy()
         del adata_generated_scvi
        
-        adata_generated_path_scDiffusion = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/scDiffusion/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
+        adata_generated_path_scDiffusion = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/scDiffusion/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
         adata_generated_scDiffusion = sc.read_h5ad(adata_generated_path_scDiffusion)[-n_obs:]
         adata_generated_scDiffusion = process_labels(adata_real["cont"], adata_generated_scDiffusion, args.category_name, categorical_obs=False)
         adatas["scDiffusion"] = adata_generated_scDiffusion.copy()
@@ -159,9 +159,9 @@ def main(args):
     results_scvi_df = pd.DataFrame(results_scvi)
     results_scdiff_df = pd.DataFrame(results_scdiff)
     
-    results_celldreamer_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results_cell_type/{args.dataset_name}/celldreamer_{args.dataset_name}")
-    results_scvi_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results_cell_type/{args.dataset_name}/scvi_{args.dataset_name}")
-    results_scdiff_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results_cell_type/{args.dataset_name}/scdiff_{args.dataset_name}")
+    results_celldreamer_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results_cell_type/{args.dataset_name}/celldreamer_{args.dataset_name}")
+    results_scvi_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results_cell_type/{args.dataset_name}/scvi_{args.dataset_name}")
+    results_scdiff_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results_cell_type/{args.dataset_name}/scdiff_{args.dataset_name}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

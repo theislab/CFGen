@@ -101,7 +101,7 @@ def evaluation(args, adata_real, adatas_generated, n_batches=None):
 
 def main(args):
     # Read real dataset 
-    adata_real = sc.read_h5ad(f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/processed_full_genome/{args.dataset_name}/{args.dataset_name}_test.h5ad")
+    adata_real = sc.read_h5ad(f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/processed_full_genome/{args.dataset_name}/{args.dataset_name}_test.h5ad")
     adata_real.X = adata_real.layers["X_counts"].copy()
     sc.pp.normalize_total(adata_real, target_sum=1e4)
     sc.pp.log1p(adata_real)
@@ -121,20 +121,20 @@ def main(args):
         adatas = {}
         
         # Read fake datasets 
-        adata_generated_path_celldreamer = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/datasets/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
+        adata_generated_path_celldreamer = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/datasets/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
         adatas["celldreamer"] = sc.read_h5ad(adata_generated_path_celldreamer)
 
-        adata_generated_path_activa = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/ACTIVA/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
+        adata_generated_path_activa = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/ACTIVA/generated/{args.dataset_name}/generated_cells_{i}.h5ad"
         adata_generated_activa = sc.read_h5ad(adata_generated_path_activa)
         adatas["activa"] = adata_generated_activa.copy()
         del adata_generated_activa
         
-        adata_generated_path_scgan = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/scgan/model_runs/{args.dataset_name}/{args.dataset_name}_generated_{i}.h5ad"
+        adata_generated_path_scgan = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/scgan/model_runs/{args.dataset_name}/{args.dataset_name}_generated_{i}.h5ad"
         adata_generated_scgan = sc.read_h5ad(adata_generated_path_scgan)
         adatas["scgan"] = adata_generated_scgan
         del adata_generated_scgan
         
-        adata_generated_path_scrdit = f"/home/icb/alessandro.palma/environment/celldreamer/project_folder/baseline_experiments/scRDiT/samples_h5ad/{args.dataset_name}/generated_cells_{i}.h5ad"
+        adata_generated_path_scrdit = f"/home/icb/alessandro.palma/environment/cfgen/project_folder/baseline_experiments/scRDiT/samples_h5ad/{args.dataset_name}/generated_cells_{i}.h5ad"
         adata_generated_scrdit = sc.read_h5ad(adata_generated_path_scrdit)
         adatas["scrdit"] = adata_generated_scrdit
         del adata_generated_scrdit
@@ -173,10 +173,10 @@ def main(args):
     results_scgan_df = pd.DataFrame(results_scgan)
     results_scrdit_df = pd.DataFrame(results_scrdit)
     
-    results_celldreamer_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results/{args.dataset_name}/celldreamer_{args.dataset_name}")
-    results_activa_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results/{args.dataset_name}/activa_{args.dataset_name}")
-    results_scgan_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results/{args.dataset_name}/scgan_{args.dataset_name}")
-    results_scrdit_df.to_csv(f"/home/icb/alessandro.palma/environment/celldreamer/experiments/results/{args.dataset_name}/scrdit_{args.dataset_name}")
+    results_celldreamer_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results/{args.dataset_name}/celldreamer_{args.dataset_name}")
+    results_activa_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results/{args.dataset_name}/activa_{args.dataset_name}")
+    results_scgan_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results/{args.dataset_name}/scgan_{args.dataset_name}")
+    results_scrdit_df.to_csv(f"/home/icb/alessandro.palma/environment/cfgen/experiments/results/{args.dataset_name}/scrdit_{args.dataset_name}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

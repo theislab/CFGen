@@ -17,11 +17,11 @@
 #SBATCH -t 2-00:00
 
 #SBATCH --nice=10000
-c
+
 conda activate celldreamer
 
 export HYDRA_FULL_ERROR=1
 
 python ../compute_metrics.py --dataset_name 'tabula_muris' --category_name 'tissue' --batched \
---batch_size 5000 --n_batches 10 --nn 10
+--batch_size 1000 --n_batches 10 --nn 10
 
