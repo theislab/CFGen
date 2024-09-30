@@ -20,7 +20,8 @@ def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor,
         "1-Wasserstein",
         "2-Wasserstein",
         "Linear_MMD",
-        "Poly_MMD"
+        "Poly_MMD",
+        "RBF_MMD"
     ]
     dists = []
     to_return = []
@@ -30,7 +31,9 @@ def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor,
     true_4_mmd = true[:min_size]
     mmd_linear = linear_mmd2(pred_4_mmd, true_4_mmd).item()
     mmd_poly = poly_mmd2(pred_4_mmd, true_4_mmd).item()
-    dists.append((w1, w2, mmd_linear, mmd_poly))
-
+    rbf_poly = mix_rbf_mmd2(pred_4_mmd, true_4_mmd,sigma_list=[0.01, 0.1, 1, 10, 100]).item()
+    dists.append((w1, w2, mmd_linear, mmd_poly, rbf_poly))
+    
     to_return.extend(np.array(dists).mean(axis=0))
     return dict(zip(names, to_return))
+
