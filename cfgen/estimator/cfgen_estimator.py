@@ -34,7 +34,6 @@ class CfgenEstimator:
         
         # dataset path as Path object 
         self.data_path = Path(self.args.dataset.dataset_path)
-        self.multimodal = self.args.dataset.multimodal
         self.is_binarized = self.args.encoder.is_binarized
         
         # Initialize training directory         
@@ -62,12 +61,11 @@ class CfgenEstimator:
         Initialization of the data module
         """        
         # Initialize dataloaders for the different tasks 
-        self.dataset = RNAseqLoader(data_path=self.data_path,
+        self.dataset = RNAseqLoader(self.data_path,
                                     layer_key=self.args.dataset.layer_key,
                                     covariate_keys=self.args.dataset.covariate_keys,
                                     subsample_frac=self.args.dataset.subsample_frac, 
                                     normalization_type=self.args.dataset.normalization_type,
-                                    multimodal=self.multimodal,
                                     is_binarized=self.is_binarized)
 
         # Initialize the data loaders 
@@ -89,20 +87,14 @@ class CfgenEstimator:
     def get_fixed_rna_model_params(self):
         """Set the model parameters extracted from the data loader object
         """
-        if not self.dataset.multimodal:
-            # If not multimodal, gene dimension and input dimension computed only for RNA
-            self.gene_dim = self.dataset.X.shape[1] 
-            self.in_dim = self.args.encoder.encoder_kwargs["dims"][-1]
-            self.modality_list = None 
+        self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
+        self.modality_list = list(self.gene_dim.keys())
+        self.in_dim = {}
+        if not hasattr(self.args.encoder, "encoder_multimodal_joint_layers") or not self.args.encoder.encoder_multimodal_joint_layers:  # Optional latent space shared between modalities
+            for mod in self.dataset.X:
+                self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
         else:
-            self.gene_dim = {mod: self.dataset.X[mod].shape[1] for mod in self.dataset.X}
-            self.modality_list = list(self.gene_dim.keys())
-            self.in_dim = {}
-            if not self.args.encoder.encoder_multimodal_joint_layers:  # Optional latent space shared between modalities
-                for mod in self.dataset.X:
-                    self.in_dim[mod] = self.args.encoder.encoder_kwargs[mod]["dims"][-1]
-            else:
-                self.in_dim = self.args.encoder.encoder_multimodal_joint_layers["dims"][-1]
+            self.in_dim = self.args.encoder.encoder_multimodal_joint_layers["dims"][-1]
 
     def init_trainer(self):
         """
@@ -150,7 +142,7 @@ class CfgenEstimator:
         """Initialize the (optional) autoencoder and generative model 
         """
         # Initialize denoising model 
-        if not self.dataset.multimodal or (self.dataset.multimodal and self.is_binarized):
+        if self.is_binarized:
             size_factor_statistics = {"mean": self.dataset.log_size_factor_mu, 
                                         "sd": self.dataset.log_size_factor_sd}
         else:
@@ -159,7 +151,7 @@ class CfgenEstimator:
                 
 
         # Initialize the deoising model 
-        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if self.multimodal else self.in_dim, 
+        denoising_model = MLPTimeStep(in_dim=sum(self.in_dim.values()) if type(self.in_dim) == dict else self.in_dim, 
                                         hidden_dim=self.args.denoising_module.hidden_dim,
                                         dropout_prob=self.args.denoising_module.dropout_prob,
                                         n_blocks=self.args.denoising_module.n_blocks, 
@@ -170,7 +162,6 @@ class CfgenEstimator:
                                         embedding_dim=self.args.denoising_module.embedding_dim,
                                         normalization=self.args.denoising_module.normalization,
                                         conditional=self.args.denoising_module.conditional, 
-                                        multimodal=self.dataset.multimodal, 
                                         is_binarized=self.is_binarized, 
                                         modality_list=self.modality_list, 
                                         guided_conditioning=self.args.denoising_module.guided_conditioning).to(self.device)
@@ -205,7 +196,6 @@ class CfgenEstimator:
             covariate_list=self.args.dataset.covariate_keys, 
             theta_covariate=self.args.dataset.theta_covariate,
             size_factor_covariate=self.args.dataset.size_factor_covariate,
-            multimodal=self.dataset.multimodal,
             is_binarized=self.is_binarized,
             modality_list=self.modality_list,
             guidance_weights=self.args.dataset.guidance_weights,
