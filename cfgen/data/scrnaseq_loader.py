@@ -114,8 +114,9 @@ class RNAseqLoader:
         X_norm = {}
         for mod in self.modality_list:
             X[mod] = self.X[mod][i]
-            # Only log-normalization if ATAC not binarized
-            if mod == "atac" and (not self.is_binarized):
+            if mod == "rna":
+                X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.normalization_type)
+            elif mod == "atac" and (not self.is_binarized): # Only log-normalization if ATAC not binarized
                 X_norm[mod] = normalize_expression(X[mod], X[mod].sum(), self.normalization_type)
             else:
                 X_norm[mod] = X[mod]
