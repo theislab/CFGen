@@ -241,7 +241,7 @@ def main(args):
             results_peakvi_atac = add_to_dict(results_peakvi_atac, results_peakvi_atac_ct)
             results_multivi_atac = add_to_dict(results_multivi_atac, results_multivi_atac_ct)
             results_multivi_rna = add_to_dict(results_multivi_rna, results_multivi_rna_ct)
-            results_scvi_rna = add_to_dict(results_scvi_rna, results_diffusion_rna_ct)
+            results_scvi_rna = add_to_dict(results_scvi_rna, results_scvi_rna_ct)
             # REBUTTALS
             results_celldreamer_rna_only = add_to_dict(results_celldreamer_rna_only, results_celldreamer_rna_only_ct)
             results_scdiffusion_rna = add_to_dict(results_scdiffusion_rna, results_diffusion_rna_ct)
