@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Poisson, Bernoulli
 from celldreamer.models.base.utils import MLP
+import time
 
 
 class EncoderModel(pl.LightningModule):
@@ -254,7 +255,7 @@ class EncoderModel(pl.LightningModule):
         if not self.multimodal:
             if self.encoder_type == "learnt_autoencoder":
                 x = self.x_from_x0(x)
-            mu_hat = F.softmax(x, dim=1)
+            mu_hat = F.softmax(x, dim=1)    
             mu_hat = mu_hat * size_factor  # assume single modality is RNA
         else:
             mu_hat = {}

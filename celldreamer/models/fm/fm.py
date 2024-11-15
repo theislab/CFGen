@@ -7,6 +7,7 @@ from torch import nn, linspace
 from torch.distributions import Normal
 
 import pytorch_lightning as pl
+import time 
 
 from scvi.distributions import NegativeBinomial
 from torch.distributions import Poisson, Bernoulli
@@ -540,6 +541,7 @@ class FM(pl.LightningModule):
             self.testing_outputs = []
         else:
             self.testing_outputs = {}
+
 
     @torch.no_grad()
     def compute_metrics_and_plots(self, dataset_type, *arg, **kwargs):
