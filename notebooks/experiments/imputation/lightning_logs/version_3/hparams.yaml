@@ -1,0 +1,19 @@
+in_dim: 2000
+x0_from_x_kwargs:
+  dims:
+  - 100
+  - 256
+  - 512
+  - 2000
+  batch_norm: true
+  dropout: false
+  dropout_p: 0.0
+learning_rate: 0.001
+weight_decay: 1.0e-05
+covariate_specific_theta: false
+encoder_type: learnt_autoencoder
+conditioning_covariate: clusters
+n_cat: null
+multimodal: false
+is_binarized: false
+encoder_multimodal_joint_layers: null
