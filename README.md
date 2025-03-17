@@ -153,10 +153,8 @@ encoder=encoder_multimodal logger.project=your_dataset_name_project
 ```
 
 
-Installation
+Reference
 ------------
-`cfgen` is compatible with Python 3.10.
-
 ```
 @inproceedings{
     palma2025multimodal,
