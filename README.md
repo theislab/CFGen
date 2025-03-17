@@ -12,6 +12,11 @@ Find our paper at:
 [ArXiv](https://arxiv.org/abs/2407.11734) 
 [OpenReview](https://openreview.net/forum?id=3MnMGLctKb)
 
+Data availability
+------------
+
+All the pre-processed data used in the paper is publicly available on Zenodo, accession number [15031364](https://zenodo.org/records/15031364). Checkpoints will be provided soon together with notebook tutorials.
+
 Installation
 ------------
 
