@@ -3,11 +3,6 @@ layer_key: X_counts
 covariate_keys: [tissue]
 subsample_frac: 1
 normalization_type: log_gexp
-one_hot_encode_features: False
-split_rates: [0.90, 0.10]
-cov_embedding_dimensions: 100
 is_binarized: False 
 theta_covariate: tissue
-size_factor_covariate: tissue
-guidance_weights:
-  tissue: 1
+split_rates: [0.90, 0.10]

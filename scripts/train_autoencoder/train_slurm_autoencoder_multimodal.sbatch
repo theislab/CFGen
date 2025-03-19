@@ -20,10 +20,10 @@
 
 #SBATCH --nice=10000
 
-# Train autoencoder with separate latent space    
+# PBMC10K multimodal
 # python ../../cfgen/train_encoder.py dataset=pbmc10k_multimodal encoder=encoder_multimodal \
 # encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k trainer.max_epochs=300
 
-# Train autoencoder with joint latent space  
+# PBMC10K multimodal - joint latent space
 python ../../cfgen/train_encoder.py dataset=pbmc10k_multimodal encoder=encoder_multimodal_joint \
 encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k_multimodal_joint trainer.max_epochs=300

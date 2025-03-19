@@ -2,8 +2,8 @@ dataset_path: ../../project_folder/datasets/processed/atac/pbmc/pbmc10k_multiome
 layer_key: X_counts
 covariate_keys: [cell_type]
 subsample_frac: 1
-one_hot_encode_features: False
 normalization_type: log_gexp
+one_hot_encode_features: False
 split_rates: [0.90, 0.10]
 cov_embedding_dimensions: 100
 is_binarized: True 
