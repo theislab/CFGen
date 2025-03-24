@@ -25,5 +25,5 @@
 # encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k trainer.max_epochs=300
 
 # PBMC10K multimodal - joint latent space
-python ../../cfgen/train_encoder.py dataset=pbmc10k_multimodal encoder=encoder_multimodal_joint \
-encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k_multimodal_joint trainer.max_epochs=300
+# python ../../cfgen/train_encoder.py dataset=pbmc10k_multimodal encoder=encoder_multimodal_joint \
+# encoder.is_binarized=True logger.project=train_autoencoder_pbmc10k_multimodal_joint trainer.max_epochs=300

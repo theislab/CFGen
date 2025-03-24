@@ -1,12 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ../logs/train_autoencoder_dentategyrus.out
+#SBATCH -o ../logs/train_autoencoder_c_elegans.out
 
-#SBATCH -e ../logs/train_autoencoder_dentategyrus.err
+#SBATCH -e ../logs/train_autoencoder_c_elegans.err
 
-#SBATCH -J train_autoencoder_dentategyrus
-
-#SBATCH --exclude=supergpu02
+#SBATCH -J train_autoencoder_c_elegans
 
 #SBATCH -p gpu_p
 
@@ -23,16 +21,16 @@
 #SBATCH --nice=10000
 
 # Dentategyrus
-python ../../cfgen/train_encoder.py dataset=dentategyrus \
-logger.project=train_autoencoder_dentategyrus_final trainer.max_epochs=300
+# python ../../cfgen/train_encoder.py dataset=dentategyrus \
+# logger.project=train_autoencoder_dentategyrus_final trainer.max_epochs=300
 
 # HLCA
-# python ../../cfgen/train_encoder.py dataset=hlca_core \
+# python ../../cfgen/train_encoder.py dataset=hlca_core encoder=encoder_large \
 # logger.project=train_autoencoder_hlca_core_final trainer.max_epochs=300
 
 # HLCA classification
-# python ../../cfgen/train_encoder.py dataset=hlca_core \
-# logger.project=train_autoencoder_hlca_core_final trainer.max_epochs=300
+# python ../../cfgen/train_encoder.py dataset=hlca_core_classification \
+# logger.project=train_autoencoder_hlca_classification_final trainer.max_epochs=300
 
 # NeurIPS
 # python ../../cfgen/train_encoder.py dataset=neurips \
@@ -43,7 +41,7 @@ logger.project=train_autoencoder_dentategyrus_final trainer.max_epochs=300
 # logger.project=train_autoencoder_pbmc3k_final trainer.max_epochs=300
 
 # Tabula Muris
-# python ../../cfgen/train_encoder.py dataset=tabula_muris \
+# python ../../cfgen/train_encoder.py dataset=tabula_muris encoder=encoder_large \
 # logger.project=train_autoencoder_tabula_muris_final trainer.max_epochs=300
 
 # PBMC covid 
@@ -51,5 +49,5 @@ logger.project=train_autoencoder_dentategyrus_final trainer.max_epochs=300
 # logger.project=train_autoencoder_pbmc_covid_final trainer.max_epochs=300
 
 # C. Elegans
-# python ../../cfgen/train_encoder.py dataset=c_elegans \
-# logger.project=train_autoencoder_c_elegans _finaltrainer.max_epochs=300
+python ../../cfgen/train_encoder.py dataset=c_elegans encoder=encoder_large \
+logger.project=train_autoencoder_c_elegans_final trainer.max_epochs=300
