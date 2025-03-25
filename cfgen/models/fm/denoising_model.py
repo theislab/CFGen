@@ -97,14 +97,14 @@ class MLPTimeStep(pl.LightningModule):
         
         # Time embedding network
         self.time_embedder = nn.Sequential(
-            Linear(embedding_dim, embedding_dim),  # Upsample embedding
+            Linear(embedding_dim, embedding_dim),  # Time embedding
             nn.SiLU(),
             Linear(embedding_dim, embedding_dim))
             
         # Size factor embeddings 
         if embed_size_factor:
             self.size_factor_embedder = nn.Sequential(
-                Linear(embedding_dim, embedding_dim),  # Upsample embedding
+                Linear(embedding_dim, embedding_dim),  # Size factor embedding
                 nn.SiLU(),
                 Linear(embedding_dim, embedding_dim))
         
@@ -117,10 +117,10 @@ class MLPTimeStep(pl.LightningModule):
         # Dimensionality preserving Resnet in the bottleneck 
         for _ in range(n_blocks):
             self.blocks.append(ResnetBlock(in_dim=self.hidden_dim,
-                                                out_dim=self.hidden_dim,
-                                                dropout_prob=dropout_prob,
-                                                embedding_dim=embedding_dim,  
-                                                normalization=normalization))
+                                           out_dim=self.hidden_dim,
+                                           dropout_prob=dropout_prob,
+                                           embedding_dim=embedding_dim,  
+                                           normalization=normalization))
         
         # Set up blocks
         self.blocks = nn.ModuleList(self.blocks)
