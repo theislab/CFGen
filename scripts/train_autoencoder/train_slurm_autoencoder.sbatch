@@ -49,5 +49,5 @@
 # logger.project=train_autoencoder_pbmc_covid_final trainer.max_epochs=300
 
 # C. Elegans
-python ../../cfgen/train_encoder.py dataset=c_elegans encoder=encoder_large \
-logger.project=train_autoencoder_c_elegans_final trainer.max_epochs=300
+# python ../../cfgen/train_encoder.py dataset=c_elegans encoder=encoder_large \
+# logger.project=train_autoencoder_c_elegans_final trainer.max_epochs=300
