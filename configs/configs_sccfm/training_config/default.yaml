@@ -1,4 +1,4 @@
 batch_size: 256
 chekpoint_path: Null 
 use_early_stopping: False
-encoder_ckpt: "path/to/encoder_ckpt"
+encoder_ckpt: "path/to/encoder_ckpt"  # modified directly in the scripts
