@@ -98,7 +98,7 @@ The experiment classes for interacting with the encoder and Flow Matching model 
 
 Training
 ------------
-Training scripts are in `scripts` with sub-folders `train_autoencoders` and `train_cfgen`. To retrain the models, first train the autoencoder and then the CFGen model. The scripts by default assume the use of the `slurm` scheduling system. The scripts can be adapted to standard bash commands. 
+Training scripts are in `scripts` with sub-folders `train_autoencoders` and `train_cfgen`. To retrain the models, first create a `logs` folder in the scripts folder of interest. It will be used to dump the slurm error and output files. We first train the autoencoder and then the CFGen model. The scripts by default assume the use of the `slurm` scheduling system. The scripts can be adapted to standard bash commands. 
 
 ### Autoencoder 
 To train the autoencoder, two scripts are available:
