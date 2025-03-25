@@ -23,9 +23,9 @@
 export HYDRA_FULL_ERROR=1
 
 # Dentategyrus
-python ../../cfgen/train_sccfm.py dataset=dentategyrus encoder=default \
-dataset.one_hot_encode_features=False denoising_module=resnet_big denoising_module.embed_size_factor=True launcher=slurm_icb \
-logger.project=cfgen_dentategyrus training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/cfgen/project_folder/experiments/off_train_autoencoder_dentategyrus_whole_genome/feab789d-5b04-45c4-b26a-cbaf0d44755a/checkpoints/epoch_59.ckpt
+# python ../../cfgen/train_sccfm.py dataset=dentategyrus encoder=default \
+# dataset.one_hot_encode_features=False denoising_module=resnet_big denoising_module.embed_size_factor=True launcher=slurm_icb \
+# logger.project=cfgen_dentategyrus training_config.encoder_ckpt=/home/icb/alessandro.palma/environment/cfgen/project_folder/experiments/off_train_autoencoder_dentategyrus_whole_genome/feab789d-5b04-45c4-b26a-cbaf0d44755a/checkpoints/epoch_59.ckpt
 
 # # Hlca_core
 # python ../../cfgen/train_sccfm.py dataset=hlca_core encoder=autoencoder_large \

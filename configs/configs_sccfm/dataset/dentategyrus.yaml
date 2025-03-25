@@ -2,8 +2,8 @@ dataset_path: ../../project_folder/datasets/processed_full_genome/dentategyrus/d
 layer_key: X_counts
 covariate_keys: [clusters]
 subsample_frac: 1
-one_hot_encode_features: False
 normalization_type: log_gexp
+one_hot_encode_features: False
 split_rates: [0.90, 0.10]
 cov_embedding_dimensions: 100
 is_binarized: False 
@@ -11,4 +11,3 @@ theta_covariate: clusters
 size_factor_covariate: clusters
 guidance_weights:
   clusters: 1
-
