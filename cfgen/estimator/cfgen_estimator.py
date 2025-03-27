@@ -178,7 +178,7 @@ class CfgenEstimator:
         if self.args.training_config.encoder_ckpt != None:
             # Load weights 
             print(f"Load checkpoints from {self.args.training_config.encoder_ckpt}")
-            self.encoder_model.load_state_dict(torch.load(self.args.training_config.encoder_ckpt)["state_dict"])
+            self.encoder_model.load_state_dict(torch.load(self.args.training_config.encoder_ckpt,  weights_only=False)["state_dict"])
             # Freeze encoder 
             for param in self.encoder_model.parameters():
                 param.requires_grad = False
