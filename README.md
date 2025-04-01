@@ -15,7 +15,7 @@ Find our paper at:
 Data availability
 ------------
 
-All the pre-processed data used in the paper is publicly available on Zenodo, accession number [15031364](https://zenodo.org/records/15031364). Checkpoints will be provided soon together with notebook tutorials.
+All the pre-processed data used in the paper is publicly available on Zenodo, accession number [15031364](https://zenodo.org/records/15031364). Checkpoints for the autoencoder models are available [here](https://figshare.com/s/14c2ad9163ae794ae506) (updated weights for the CFGen model will be released soon).
 
 Installation
 ------------
