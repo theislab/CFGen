@@ -8,4 +8,4 @@ normalization: none
 is_binarized: False
 embed_size_factor: False
 conditioning_probability: 0.8
-guided_conditioning: True
+guided_conditioning: False
