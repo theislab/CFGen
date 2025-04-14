@@ -15,7 +15,7 @@ Find our paper at:
 Data availability
 ------------
 
-All the pre-processed data used in the paper is publicly available on Zenodo, accession number [15031364](https://zenodo.org/records/15031364). Checkpoints for the autoencoder models are available [here](https://figshare.com/s/14c2ad9163ae794ae506) (updated weights for the CFGen model will be released soon).
+All the pre-processed data used in the paper are publicly available on Zenodo, accession number [15031364](https://zenodo.org/records/15031364). Checkpoints for the autoencoder and latent Flow Matching models are available [here](https://figshare.com/s/14c2ad9163ae794ae506). For the Flow Matching checkpoints, the ones trained with multi-attribute guidance are indicated with `multiattribute` (e.g., `cfgen_c_elegans_final_multiattribute`). 
 
 Installation
 ------------
@@ -52,7 +52,7 @@ cd directory_where_you_have_your_git_repos/cfgen
 ln -s folder_for_experiment_storage project_folder
 ```
 
-5. Create experiment and dataset folder. 
+5. Create `experiment` and `dataset` folder. 
 
 ```
 cd project_folder
@@ -60,13 +60,13 @@ mkdir datasets
 mkdir experiments
 ```
 
-Download the datasets from Zenodo and place them into datasets
+6. Download the datasets from Zenodo and place them in `project_folder/datasets`.
 
+7. Download the checkpoints from FigShare and place them in `project_folder/experiments`.
 
 
 Repository structure
 ------------
-Set up structure of the `project_folder`.  
 
 > Requirements
 
@@ -76,7 +76,7 @@ See `environment.yml` and `requirements.txt` for the required packages.
 > Hydra
 
 Our implementation leverages [hydra](https://hydra.cc/docs/intro/) to handle experiments. The configuration hierarchy can be found in the `configs` folder with two sub-folders:
-* `configs_encoder`: configuration to train the autoencoder model with discrete decoder for each modality. 
+* `configs_encoder`: configuration to train the autoencoder model with a discrete decoder for each modality. 
 * `configs_sccfm`: configuration to train the Flow Matching model leveraging a pre-trained autoencoder.  
 
 
@@ -94,7 +94,7 @@ The training scripts are:
 
 > Experiment class
 
-The experiment classes for interacting with the encoder and Flow Matching model are in `cfgen/models/estimator/encoder_estimator.py` and `cfgen/models/estimator/cfgen_estimator.py`.
+The experiment classes for interacting with the autoencoder and Flow Matching model are in `cfgen/models/estimator/encoder_estimator.py` and `cfgen/models/estimator/cfgen_estimator.py`.
 
 Training
 ------------
@@ -106,7 +106,7 @@ To train the autoencoder, two scripts are available:
 * `train_slurm_autoencoder.sbatch`: scRNA-seq-only dataset. 
 * `train_slurm_autoencoder_multimodal.sbatch`: PBMC10k multi-modal learning. 
 
-To run the autoencoder training on a dataset, uncomment the lines associated to the dataset, and run the following command:
+To run the autoencoder training on a dataset, uncomment the lines associated with the dataset, and run the following command:
 
 ```
 sbatch train_slurm_autoencoder.sbatch
@@ -133,10 +133,10 @@ or
 sbatch train_fm_slurm_autoencoder_multimodal.sbatch
 ```
 
-Training with new dataset
+Training with a new dataset
 ------------
 
-To train with a new data, pre-process the dataset and save it to a storage folder. Then, create a new configuration file in:
+To train with new data, pre-process the dataset and save it to a storage folder. Then, create a new configuration file in:
 
 * `configs/configs_encoder/dataset/your_dataset_of_name`
 * `configs/configs_sccfm/dataset/your_dataset_of_name`
@@ -157,6 +157,9 @@ python ../../cfgen/train_encoder.py dataset=your_dataset_name
 encoder=encoder_multimodal logger.project=your_dataset_name_project 
 ```
 
+Notebook
+------------
+We provide example notebooks for uni- and multi-modal generation with CFGen in the `notebook` folder. We also provide examples of performing batch correction on the NeurIPS and C.Elegans datasets.
 
 Reference
 ------------
