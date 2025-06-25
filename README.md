@@ -38,21 +38,21 @@ conda env create -f environment.yml
 conda activate cfgen
 ```
 
-3. Install the CFGen package in development mode:
+4. Install the CFGen package in development mode:
 
 ```
 cd directory_where_you_have_your_git_repos/cfgen
 pip install -e . 
 ```
 
-4. Create symlink to the storage folder for experiments:
+5. Create symlink to the storage folder for experiments:
 
 ```
 cd directory_where_you_have_your_git_repos/cfgen
 ln -s folder_for_experiment_storage project_folder
 ```
 
-5. Create `experiment` and `dataset` folder. 
+6. Create `experiment` and `dataset` folder. 
 
 ```
 cd project_folder
@@ -60,9 +60,9 @@ mkdir datasets
 mkdir experiments
 ```
 
-6. Download the datasets from Zenodo and place them in `project_folder/datasets`.
+7. Download the datasets from Zenodo and place them in `project_folder/datasets`.
 
-7. Download the checkpoints from FigShare and place them in `project_folder/experiments`.
+8. Download the checkpoints from FigShare and place them in `project_folder/experiments`.
 
 
 Repository structure
