@@ -5,8 +5,6 @@ import numpy as np
 import torch
 import sklearn 
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import f1_score
 
 from cfgen.eval.mmd import linear_mmd2, mix_rbf_mmd2
