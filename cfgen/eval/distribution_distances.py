@@ -9,7 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import f1_score
 
-from cfgen.eval.mmd import linear_mmd2, poly_mmd2
+from cfgen.eval.mmd import linear_mmd2, mix_rbf_mmd2
 from cfgen.eval.optimal_transport import wasserstein
 
 
@@ -30,7 +30,7 @@ def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor,
         "1-Wasserstein",
         "2-Wasserstein",
         "Linear_MMD",
-        "Poly_MMD"
+        "RBF_MMD"
     ]
     dists = []
     to_return = []
@@ -39,8 +39,8 @@ def compute_distribution_distances(pred: torch.Tensor, true: Union[torch.Tensor,
     pred_4_mmd = pred[:min_size]
     true_4_mmd = true[:min_size]
     mmd_linear = linear_mmd2(pred_4_mmd, true_4_mmd).item()
-    mmd_poly = poly_mmd2(pred_4_mmd, true_4_mmd).item()
-    dists.append((w1, w2, mmd_linear, mmd_poly))
+    mmd_rbf = mix_rbf_mmd2(pred_4_mmd, true_4_mmd,sigma_list=[0.01, 0.1, 1, 10, 100]).item()
+    dists.append((w1, w2, mmd_linear, mmd_rbf))
 
     to_return.extend(np.array(dists).mean(axis=0))
     return dict(zip(names, to_return))

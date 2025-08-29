@@ -3,17 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 import scanpy as sc
-from cfgen.eval.distribution_distances import (compute_distribution_distances, 
-                                                     compute_knn_real_fake, 
-                                                     compute_prdc)
-
-# Conditional dictionary for models
-CONDITIONAL = {"scDiffusion": True, 
-               "scgan": False, 
-               "scvi": True, 
-               "cfgen": True, 
-               "activa": False, 
-               "scrdit": False}
+from cfgen.eval.distribution_distances import compute_distribution_distances
 
 def process_labels(adata_original, adata_generated, category_field, categorical_obs=False):
     """
@@ -72,39 +62,5 @@ def compute_evaluation_metrics(adata_real,
                                                      torch.tensor(adata_generated.obsm["X_pca"]).float())
     for metric in mmd_wasserstein:
         cell_type_metrics[metric + "_PCA"] = mmd_wasserstein[metric]
-    
-    # Compute KNN identity metrics
-    auc_real_fake = compute_knn_real_fake(adata_real.X.A, 
-                                          adata_generated.X.A, n_neighbors=nn)
-    auc_real_fake_pca = compute_knn_real_fake(adata_real.obsm["X_pca"], 
-                                              adata_generated.obsm["X_pca"], n_neighbors=nn)
-    cell_type_metrics["KNN identity"] = auc_real_fake
-    cell_type_metrics["KNN identity PCA"] = auc_real_fake_pca
-     
-    # Compute PRDC metrics in original space
-    density_and_coverage = compute_prdc(adata_real.X.A, 
-                                        adata_generated.X.A, 
-                                        nearest_k=nn)
-    for metric in density_and_coverage:
-        cell_type_metrics[metric] = density_and_coverage[metric]
-
-    # Compute PRDC metrics in PCA space
-    density_and_coverage_pca = compute_prdc(adata_real.obsm["X_pca"], 
-                                            adata_generated.obsm["X_pca"], 
-                                            nearest_k=nn)
-    for metric in density_and_coverage_pca:
-        cell_type_metrics[metric + "_PCA"] = density_and_coverage_pca[metric]
-    
-    # Train and evaluate KNN classifier for cell type classification on original data
-    if knn_data:
-        y_pred = knn_data.predict(adata_generated.X.A)    
-        accuracy = f1_score(np.array(adata_generated.obs[category_field]), y_pred, average="macro")
-        cell_type_metrics["KNN category"] = accuracy
-    
-    # Train and evaluate KNN classifier for cell type classification on PCA data
-    if knn_pca:
-        y_pred = knn_pca.predict(adata_generated.obsm["X_pca"])
-        accuracy = f1_score(adata_generated.obs[category_field], y_pred, average="macro")
-        cell_type_metrics["KNN category PCA"] = accuracy
     
     return cell_type_metrics
