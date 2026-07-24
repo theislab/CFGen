@@ -133,4 +133,3 @@ def evaluate_unimodal_generation(
  
     return results_df, summary
  
-    
