@@ -28,12 +28,7 @@ def process_labels(adata_original, adata_generated, category_field, categorical_
 
 def compute_evaluation_metrics(adata_real, 
                                adata_generated, 
-                               category_field,
-                               model_name,
-                               nn=10, 
-                               original_space=True, 
-                               knn_pca=None, 
-                               knn_data=None):  
+                               model_name):  
     """
     Computes various evaluation metrics for generated data compared to real data.
 
