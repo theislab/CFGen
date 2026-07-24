@@ -25,7 +25,7 @@ setup(
     author="Alessandro Palma, Till Richter",
     author_email="alessandro.palma@helmholtz-munich.de",
     description="A package for generative modeling of single-cell data.",
-    long_description=read("README.rst"),
+    long_description=read("README.md"),
     packages=find_packages(exclude=('tests',)),
     install_requires=requirements,
     classifiers=[
