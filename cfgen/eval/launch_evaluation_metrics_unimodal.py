@@ -114,6 +114,10 @@ def _compare_real_generated(
 
     adata_generated = adata_generated.copy()
     adata_generated.var = vars_rna
+    # Same total-count normalization as the real data, computed on the full
+    # gene panel (before HVG subsetting) so size factors are comparable.
+    sc.pp.normalize_total(adata_generated, target_sum=target_sum)
+    sc.pp.log1p(adata_generated)
     adata_generated = adata_generated[:, adata_generated.var.highly_variable]
     adata_generated.obsm["X_pca"] = (
         adata_generated.X.toarray().dot(adata_real.varm["PCs"])
@@ -211,7 +215,7 @@ def _generate_n_cells_for_class(
     class_tensor = torch.full((total,), class_id, dtype=torch.long)
 
     covariate_indices = {cluster_key: class_tensor}
-    log_size_factor = {"rna": log_sf_padded.to(device)}
+    log_size_factor = {"rna": log_sf_padded.to(device).view(-1, 1)}
 
     X_generated = generative_model.batched_sample(
         batch_size=eff_batch_size,
