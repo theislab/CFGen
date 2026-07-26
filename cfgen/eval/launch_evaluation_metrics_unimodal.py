@@ -404,10 +404,19 @@ def generate_and_evaluate_unimodal(
     celltype_unique = np.unique(adata_real.obs[cluster_key])
     X_generated_chunks = []
     classes_str: List[str] = []
+    skipped_celltypes: List[str] = []
 
     for ct in celltype_unique:
         mask = (adata_real.obs[cluster_key] == ct).values
         n_ct = int(mask.sum())
+
+        # A single test cell can't support a distributional comparison
+        # (Wasserstein/MMD degenerate to a point-to-point distance), and a
+        # batch size of 1 breaks the ODE sampler's timestep embedding, so
+        # skip these cell types entirely rather than generating for them.
+        if n_ct <= 1:
+            skipped_celltypes.append(ct)
+            continue
 
         log_size_factors_ct = torch.log(
             torch.tensor(np.asarray(adata_real.layers[counts_layer][mask].sum(1)).ravel())
@@ -429,6 +438,13 @@ def generate_and_evaluate_unimodal(
         )
         X_generated_chunks.append(X_ct.numpy())
         classes_str.extend([ct] * n_ct)
+
+    if skipped_celltypes:
+        print(
+            f"Skipping {len(skipped_celltypes)} cell type(s) with <= 1 test "
+            f"cell (no distributional comparison possible): {skipped_celltypes}"
+        )
+        adata_real = adata_real[~adata_real.obs[cluster_key].isin(skipped_celltypes)].copy()
 
     X_generated = np.concatenate(X_generated_chunks, axis=0)
 
