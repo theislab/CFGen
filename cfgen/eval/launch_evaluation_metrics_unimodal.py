@@ -68,9 +68,14 @@ def _preprocess_real(
 ):
     """Restore counts, compute HVGs, normalize/log1p, run PCA on the real data.
 
-    Returns the processed (HVG-subset) adata_real and the full var table
+    Returns the processed (HVG-subset) adata_real, the full var table
     (with the `highly_variable` column) so it can be copied onto the
-    generated data.
+    generated data, and the per-gene mean (on the same HVG-subset,
+    log-normalized expression `sc.tl.pca` was fit on). `sc.tl.pca` uses
+    `zero_center=True` by default, i.e. it mean-centers each gene before
+    computing PCs, but `adata.varm["PCs"]` only stores the rotation
+    matrix -- projecting new data via a plain dot product requires
+    subtracting this same mean first.
     """
     adata_real = adata_real.copy()
     adata_real.X = adata_real.layers[counts_layer].copy()
@@ -89,7 +94,8 @@ def _preprocess_real(
     sc.tl.pca(adata_real, n_comps=n_pcs)
 
     adata_real = adata_real[:, adata_real.var.highly_variable]
-    return adata_real, vars_rna
+    real_gene_mean = np.asarray(adata_real.X.mean(axis=0)).ravel()
+    return adata_real, vars_rna, real_gene_mean
 
 
 def _compare_real_generated(
@@ -107,7 +113,7 @@ def _compare_real_generated(
     Both `evaluate_unimodal_generation` (loads from disk) and
     `generate_and_evaluate_unimodal` (generates in memory) call this.
     """
-    adata_real, vars_rna = _preprocess_real(
+    adata_real, vars_rna, real_gene_mean = _preprocess_real(
         adata_real, counts_layer, n_top_genes, n_pcs, target_sum
     )
     celltype_unique = np.unique(adata_real.obs[cluster_key])
@@ -119,8 +125,12 @@ def _compare_real_generated(
     sc.pp.normalize_total(adata_generated, target_sum=target_sum)
     sc.pp.log1p(adata_generated)
     adata_generated = adata_generated[:, adata_generated.var.highly_variable]
+    # Subtract the real data's per-gene mean before projecting: sc.tl.pca
+    # mean-centers before computing PCs, but varm["PCs"] only holds the
+    # rotation matrix, so a plain dot product here would leave real and
+    # generated cells in two different (offset) coordinate systems.
     adata_generated.obsm["X_pca"] = (
-        adata_generated.X.toarray().dot(adata_real.varm["PCs"])
+        (adata_generated.X.toarray() - real_gene_mean).dot(adata_real.varm["PCs"])
     )
 
     results: dict = {}
