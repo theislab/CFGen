@@ -37,13 +37,15 @@
 # than the generic process_labels() (which assumes sorted-alphabetical
 # order and would silently mislabel classes if the convention differs).
 #
-# Only 2 of 3 replicate generations exist for hlca_core as of writing.
 # Replicate files are auto-discovered (glob) rather than assuming exactly 3
-# exist, so this runs cleanly now on whatever is available and picks up the
-# 3rd automatically once it's generated, with no script changes needed.
+# exist, so this also runs cleanly against datasets with fewer generated
+# replicates than expected.
 # --mem is higher here since hlca_core is the largest of the four datasets.
 
-/home/icb/alessandro.palma/miniconda3/envs/celldreamer/bin/python -u - <<'PYEOF'
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate cfgen
+
+python -u - <<'PYEOF'
 import glob
 import os
 import re
@@ -54,9 +56,9 @@ import scanpy as sc
 from cfgen.eval.launch_evaluation_metrics_unimodal import _compare_real_generated
 
 REAL_PATH = "../../project_folder/datasets/processed_full_genome/hlca_core/hlca_core_test.h5ad"
-GEN_DIR = "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/baseline_experiments/scvi/hlca_core/generated"
+GEN_DIR = "../../project_folder/baselines/scvi/hlca_core/generated"
 GEN_GLOB = "hlca_core_*.h5ad"
-CHECKPOINT_ADATA_PATH = "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/baseline_experiments/scvi/hlca_core/checkpoints/adata.h5ad"
+CHECKPOINT_ADATA_PATH = "../../project_folder/baselines/scvi/hlca_core/checkpoints/adata.h5ad"
 OUT_DIR = "../../project_folder/experiments/eval_scvi/hlca_core"
 CLUSTER_KEY = "cell_type"
 

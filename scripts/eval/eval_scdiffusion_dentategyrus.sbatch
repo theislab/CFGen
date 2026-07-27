@@ -18,9 +18,6 @@
 
 #SBATCH --nice=10000
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate celldreamer
-
 # Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_scdiffusion_dentategyrus.sbatch`)
 # so the relative paths below resolve against the repo root.
 #
@@ -32,7 +29,10 @@ conda activate celldreamer
 # same {0: sorted_label_0, 1: sorted_label_1, ...} convention used to
 # condition the baseline.
 
-/home/icb/alessandro.palma/miniconda3/envs/celldreamer/bin/python -u - <<'PYEOF'
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate cfgen
+
+python -u - <<'PYEOF'
 import os
 
 import numpy as np
@@ -41,7 +41,7 @@ import pandas as pd
 from cfgen.eval.launch_evaluation_metrics_unimodal import evaluate_unimodal_generation
 
 REAL_PATH = "../../project_folder/datasets/processed_full_genome/dentategyrus/dentategyrus_test.h5ad"
-GEN_DIR = "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/baseline_experiments/scDiffusion/generated/dentategyrus"
+GEN_DIR = "../../project_folder/baselines/scDiffusion/dentategyrus"
 OUT_DIR = "../../project_folder/experiments/eval_scdiffusion/dentategyrus"
 CLUSTER_KEY = "clusters"
 N_REPLICATES = 3

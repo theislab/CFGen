@@ -42,7 +42,10 @@
 # exist, so this also runs cleanly against datasets with fewer generated
 # replicates so far (e.g. hlca_core).
 
-/home/icb/alessandro.palma/miniconda3/envs/celldreamer/bin/python -u - <<'PYEOF'
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate cfgen
+
+python -u - <<'PYEOF'
 import glob
 import os
 import re
@@ -53,9 +56,9 @@ import scanpy as sc
 from cfgen.eval.launch_evaluation_metrics_unimodal import _compare_real_generated
 
 REAL_PATH = "../../project_folder/datasets/processed_full_genome/pbmc3k/pbmc3k_test.h5ad"
-GEN_DIR = "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/baseline_experiments/scvi/pbmc3k/generated"
+GEN_DIR = "../../project_folder/baselines/scvi/pbmc3k/generated"
 GEN_GLOB = "pbmc3k_*.h5ad"
-CHECKPOINT_ADATA_PATH = "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/baseline_experiments/scvi/pbmc3k/checkpoints/adata.h5ad"
+CHECKPOINT_ADATA_PATH = "../../project_folder/baselines/scvi/pbmc3k/checkpoints/adata.h5ad"
 OUT_DIR = "../../project_folder/experiments/eval_scvi/pbmc3k"
 CLUSTER_KEY = "cell_type"
 
