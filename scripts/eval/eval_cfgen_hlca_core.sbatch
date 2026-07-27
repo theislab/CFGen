@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ../logs/eval_hlca_core.out
+#SBATCH -o ../logs/eval_cfgen_hlca_core.out
 
-#SBATCH -e ../logs/eval_hlca_core.err
+#SBATCH -e ../logs/eval_cfgen_hlca_core.err
 
-#SBATCH -J eval_hlca_core
+#SBATCH -J eval_cfgen_hlca_core
 
 #SBATCH -p gpu_p
 
@@ -20,7 +20,7 @@
 
 #SBATCH --nice=10000
 
-# Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_hlca_core.sbatch`)
+# Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_cfgen_hlca_core.sbatch`)
 # so the relative config paths below resolve against the repo root, matching
 # the other sbatch launchers in scripts/train_autoencoder and scripts/train_cfgen.
 #

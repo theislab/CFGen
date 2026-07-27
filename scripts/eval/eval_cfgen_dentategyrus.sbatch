@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ../logs/eval_dentategyrus.out
+#SBATCH -o ../logs/eval_cfgen_dentategyrus.out
 
-#SBATCH -e ../logs/eval_dentategyrus.err
+#SBATCH -e ../logs/eval_cfgen_dentategyrus.err
 
-#SBATCH -J eval_dentategyrus
+#SBATCH -J eval_cfgen_dentategyrus
 
 #SBATCH -p gpu_p
 
@@ -20,7 +20,7 @@
 
 #SBATCH --nice=10000
 
-# Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_dentategyrus.sbatch`)
+# Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_cfgen_dentategyrus.sbatch`)
 # so the relative config paths below resolve against the repo root, matching
 # the other sbatch launchers in scripts/train_autoencoder and scripts/train_cfgen.
 #

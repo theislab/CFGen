@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -o ../logs/eval_pbmc3k.out
+#SBATCH -o ../logs/eval_cfgen_pbmc3k.out
 
-#SBATCH -e ../logs/eval_pbmc3k.err
+#SBATCH -e ../logs/eval_cfgen_pbmc3k.err
 
-#SBATCH -J eval_pbmc3k
+#SBATCH -J eval_cfgen_pbmc3k
 
 #SBATCH -p gpu_p
 
@@ -20,7 +20,7 @@
 
 #SBATCH --nice=10000
 
-# Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_pbmc3k.sbatch`)
+# Submit from within scripts/eval/ (`cd scripts/eval && sbatch eval_cfgen_pbmc3k.sbatch`)
 # so the relative config paths below resolve against the repo root, matching
 # the other sbatch launchers in scripts/train_autoencoder and scripts/train_cfgen.
 #
