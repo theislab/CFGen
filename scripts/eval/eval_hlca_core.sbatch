@@ -29,7 +29,10 @@
 # reported as mean +/- SEM and are directly comparable. A single replicate
 # took ~21 min previously, so 3 comfortably fit the 4h budget.
 
-/home/icb/alessandro.palma/miniconda3/envs/celldreamer/bin/python -u - <<'PYEOF'
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate cfgen
+
+python -u - <<'PYEOF'
 import os
 
 import pandas as pd
@@ -47,8 +50,8 @@ for rep in range(N_REPLICATES):
         dataset_conf_path="../../configs/configs_sccfm/dataset/hlca_core.yaml",
         encoder_conf_path="../../configs/configs_encoder/encoder/encoder_large.yaml",
         generative_model_conf_path="../../configs/configs_sccfm/generative_model/default.yaml",
-        autoencoder_ckpt_path="/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/experiments/autoencoder_ckpt/train_autoencoder_hlca_core_final/checkpoints/last.ckpt",
-        fm_ckpt_path="/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/experiments/cfgen_ckpt/train_fm_hlca_core_final/last.ckpt",
+        autoencoder_ckpt_path="../../project_folder/experiments/autoencoder_ckpt/train_autoencoder_hlca_core_final/checkpoints/last.ckpt",
+        fm_ckpt_path="../../project_folder/experiments/cfgen_ckpt/train_fm_hlca_core_final/last.ckpt",
         cluster_key="cell_type",
         theta_covariate="cell_type",
         size_factor_covariate="cell_type",
