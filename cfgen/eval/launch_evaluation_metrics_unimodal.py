@@ -39,7 +39,7 @@ import torch
 from anndata import AnnData
 from omegaconf import OmegaConf
 
-from cfgen.eval.compute_evaluation_metrics import compute_evaluation_metrics
+from cfgen.eval.compute_evaluation_metrics import compute_evaluation_metrics, process_labels
 from cfgen.data.scrnaseq_loader import RNAseqLoader
 from cfgen.models.base.encoder_model import EncoderModel
 from cfgen.models.fm.fm import FM
@@ -107,11 +107,21 @@ def _compare_real_generated(
     n_top_genes: int = 2000,
     n_pcs: int = 30,
     target_sum: float = 1e4,
+    generated_is_normalized: bool = False,
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """Core comparison logic, operating on in-memory AnnData objects.
 
     Both `evaluate_unimodal_generation` (loads from disk) and
     `generate_and_evaluate_unimodal` (generates in memory) call this.
+
+    `generated_is_normalized` should be set when `adata_generated.X` is
+    already total-count-normalized and log1p-transformed (e.g. baselines
+    such as scDiffusion that generate directly in that space), so it isn't
+    double-normalized before projecting into the real data's PCA space.
+    Whatever total-count scale the baseline's own output actually lands on
+    is left as-is -- if its decoder doesn't reconstruct the normalized
+    scale well, that's the baseline's own generative quality, not something
+    for this eval code to correct.
     """
     adata_real, vars_rna, real_gene_mean = _preprocess_real(
         adata_real, counts_layer, n_top_genes, n_pcs, target_sum
@@ -120,10 +130,12 @@ def _compare_real_generated(
 
     adata_generated = adata_generated.copy()
     adata_generated.var = vars_rna
-    # Same total-count normalization as the real data, computed on the full
-    # gene panel (before HVG subsetting) so size factors are comparable.
-    sc.pp.normalize_total(adata_generated, target_sum=target_sum)
-    sc.pp.log1p(adata_generated)
+    if not generated_is_normalized:
+        # Same total-count normalization as the real data, computed on the
+        # full gene panel (before HVG subsetting) so size factors are
+        # comparable.
+        sc.pp.normalize_total(adata_generated, target_sum=target_sum)
+        sc.pp.log1p(adata_generated)
     adata_generated = adata_generated[:, adata_generated.var.highly_variable]
     # Subtract the real data's per-gene mean before projecting: sc.tl.pca
     # mean-centers before computing PCs, but varm["PCs"] only holds the
@@ -139,6 +151,16 @@ def _compare_real_generated(
         adata_generated_ct = adata_generated[
             adata_generated.obs[cluster_key] == ct
         ]
+
+        # A single real (or generated) cell can't support a distributional
+        # comparison -- Wasserstein/MMD would degenerate to a point-to-point
+        # distance rather than measure distribution overlap -- so skip it.
+        if adata_real_ct.n_obs <= 1 or adata_generated_ct.n_obs <= 1:
+            print(
+                f"Skipping cell type {ct!r}: {adata_real_ct.n_obs} real / "
+                f"{adata_generated_ct.n_obs} generated cell(s) (need > 1 on both sides)"
+            )
+            continue
 
         metrics_ct = compute_evaluation_metrics(
             adata_real_ct, adata_generated_ct, modality_name
@@ -164,16 +186,33 @@ def evaluate_unimodal_generation(
     n_top_genes: int = 2000,
     n_pcs: int = 30,
     target_sum: float = 1e4,
+    generated_is_normalized: bool = False,
+    generated_labels_are_codes: bool = False,
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """
     Compute per-cell-type and aggregate generation-quality metrics
     (Wasserstein distances, MMD, etc.) between a real and a generated
     AnnData object loaded from disk.
 
+    `generated_is_normalized` should be set for baselines (e.g.
+    scDiffusion) that generate directly in normalized+log1p space, so
+    that space isn't re-normalized before PCA projection.
+
+    `generated_labels_are_codes` should be set when
+    `adata_generated.obs[cluster_key]` holds integer class codes rather
+    than the real string labels (again, e.g. scDiffusion) -- codes are
+    decoded via `process_labels`, assuming the same
+    `{0: label0, 1: label1, ...}` convention (sorted unique real labels)
+    used when the baseline was conditioned on these classes.
+
     See module docstring for parameter details.
     """
     adata_real = sc.read_h5ad(real_path)
     adata_generated = sc.read_h5ad(generated_path)
+    if generated_labels_are_codes:
+        adata_generated = process_labels(
+            adata_real, adata_generated, cluster_key, categorical_obs=False
+        )
     return _compare_real_generated(
         adata_real,
         adata_generated,
@@ -183,6 +222,7 @@ def evaluate_unimodal_generation(
         n_top_genes=n_top_genes,
         n_pcs=n_pcs,
         target_sum=target_sum,
+        generated_is_normalized=generated_is_normalized,
     )
 
 
